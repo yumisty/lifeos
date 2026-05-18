@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据导入 · Visual Life OS</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #FFFBEB;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 28px;
+            padding: 48px 40px;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.07);
+        }
+
+        .logo {
+            width: 48px;
+            height: 48px;
+            background: #1e293b;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #fff;
+            font-weight: 900;
+            margin-bottom: 28px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 900;
+            color: #1e293b;
+            margin-bottom: 6px;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: #94a3b8;
+            font-weight: 500;
+            margin-bottom: 36px;
+            line-height: 1.6;
+        }
+
+        /* 上传区域 */
+        .upload-zone {
+            border: 2px dashed #fcd34d;
+            border-radius: 20px;
+            background: #FFFBF0;
+            padding: 36px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 20px;
+        }
+        .upload-zone:hover, .upload-zone.drag-over {
+            border-color: #e6b422;
+            background: #fef3c7;
+        }
+
+        .upload-icon {
+            font-size: 36px;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .upload-label {
+            font-size: 15px;
+            font-weight: 700;
+            color: #92400e;
+            margin-bottom: 4px;
+        }
+
+        .upload-hint {
+            font-size: 12px;
+            color: #b45309;
+            font-weight: 500;
+        }
+
+        #fileInput { display: none; }
+
+        /* 主按钮 */
+        .btn-primary {
+            width: 100%;
+            padding: 16px;
+            background: #e6b422;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 700;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            letter-spacing: 0.3px;
+        }
+        .btn-primary:hover { background: #d4a11e; transform: translateY(-1px); }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-primary:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; transform: none; }
+
+        /* 状态区 */
+        .status { margin-top: 20px; display: none; }
+        .status.visible { display: block; }
+
+        .status-success {
+            background: #f0fdf4;
+            border: 1.5px solid #86efac;
+            border-radius: 16px;
+            padding: 18px 20px;
+        }
+        .status-error {
+            background: #fff1f2;
+            border: 1.5px solid #fca5a5;
+            border-radius: 16px;
+            padding: 18px 20px;
+        }
+
+        .status-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .status-success .status-title { color: #15803d; }
+        .status-error .status-title { color: #dc2626; }
+
+        .status-detail {
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            line-height: 1.9;
+        }
+        .status-detail span {
+            display: inline-block;
+            background: #fff;
+            border-radius: 8px;
+            padding: 1px 8px;
+            margin: 1px 0;
+            font-weight: 700;
+        }
+        .status-success .status-detail span { color: #15803d; }
+        .status-error .status-detail span { color: #dc2626; }
+
+        /* 返回按钮 */
+        .btn-back {
+            display: none;
+            width: 100%;
+            margin-top: 12px;
+            padding: 14px;
+            background: #f8fafc;
+            color: #475569;
+            font-size: 14px;
+            font-weight: 700;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 16px;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            transition: all 0.15s ease;
+        }
+        .btn-back:hover { background: #f1f5f9; border-color: #cbd5e1; }
+        .btn-back.visible { display: block; }
+
+        /* 文件名预览 */
+        .file-preview {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            background: #fef3c7;
+            border: 1.5px solid #fcd34d;
+            border-radius: 14px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+        }
+        .file-preview.visible { display: flex; }
+        .file-icon { font-size: 20px; flex-shrink: 0; }
+        .file-name { font-size: 13px; font-weight: 700; color: #92400e; word-break: break-all; flex: 1; }
+        .file-clear {
+            width: 24px; height: 24px;
+            background: #fcd34d;
+            border: none; border-radius: 50%;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 900;
+            color: #92400e;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .file-clear:hover { background: #f59e0b; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="logo">💰</div>
+    <h1>导入备份数据</h1>
+    <p class="subtitle">选择从记账 App 导出的 JSON 备份文件，<br>数据将写入 Visual Life OS 本地存储。</p>
+
+    <!-- 拖拽上传区 -->
+    <div class="upload-zone" id="uploadZone">
+        <span class="upload-icon">📂</span>
+        <p class="upload-label">点击选择 JSON 文件</p>
+        <p class="upload-hint">或将文件拖拽到此处</p>
+        <input type="file" id="fileInput" accept=".json,application/json">
+    </div>
+
+    <!-- 已选文件预览 -->
+    <div class="file-preview" id="filePreview">
+        <span class="file-icon">📄</span>
+        <span class="file-name" id="fileName"></span>
+        <button class="file-clear" id="fileClear" title="清除">×</button>
+    </div>
+
+    <!-- 导入按钮 -->
+    <button class="btn-primary" id="importBtn" disabled>选择文件后导入</button>
+
+    <!-- 状态提示 -->
+    <div class="status" id="statusBox"></div>
+
+    <!-- 返回按钮 -->
+    <a class="btn-back" id="backBtn" href="index.html">← 返回 Life OS</a>
+</div>
+
+<script>
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput  = document.getElementById('fileInput');
+    const filePreview = document.getElementById('filePreview');
+    const fileNameEl  = document.getElementById('fileName');
+    const fileClear   = document.getElementById('fileClear');
+    const importBtn  = document.getElementById('importBtn');
+    const statusBox  = document.getElementById('statusBox');
+    const backBtn    = document.getElementById('backBtn');
+
+    const STORAGE_KEY = 'visualLifeOS_data';
+    let selectedFile = null;
+
+    // ── 文件选择 ──
+    uploadZone.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (file) setFile(file);
+    });
+
+    fileClear.addEventListener('click', e => {
+        e.stopPropagation();
+        clearFile();
+    });
+
+    // ── 拖拽支持 ──
+    uploadZone.addEventListener('dragover', e => {
+        e.preventDefault();
+        uploadZone.classList.add('drag-over');
+    });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+    uploadZone.addEventListener('drop', e => {
+        e.preventDefault();
+        uploadZone.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file && file.name.endsWith('.json')) setFile(file);
+        else showStatus('error', '❌ 格式错误', ['请选择 .json 格式的备份文件']);
+    });
+
+    function setFile(file) {
+        selectedFile = file;
+        fileNameEl.textContent = file.name;
+        filePreview.classList.add('visible');
+        importBtn.disabled = false;
+        importBtn.textContent = '开始导入';
+        clearStatus();
+    }
+
+    function clearFile() {
+        selectedFile = null;
+        fileInput.value = '';
+        filePreview.classList.remove('visible');
+        importBtn.disabled = true;
+        importBtn.textContent = '选择文件后导入';
+        clearStatus();
+    }
+
+    // ── 导入逻辑 ──
+    importBtn.addEventListener('click', () => {
+        if (!selectedFile) return;
+
+        importBtn.disabled = true;
+        importBtn.textContent = '解析中…';
+
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const raw = JSON.parse(e.target.result);
+                doImport(raw);
+            } catch (err) {
+                importBtn.disabled = false;
+                importBtn.textContent = '重新导入';
+                showStatus('error', '❌ 文件解析失败', ['JSON 格式不正确：' + err.message]);
+            }
+        };
+        reader.onerror = () => {
+            importBtn.disabled = false;
+            importBtn.textContent = '重新导入';
+            showStatus('error', '❌ 文件读取失败', ['请重新选择文件']);
+        };
+        reader.readAsText(selectedFile, 'utf-8');
+    });
+
+    function doImport(raw) {
+        const transactions     = raw.transactions     || [];
+        const categories       = raw.categories       || [];
+        const fixedItemsByMonth = raw.fixedItemsByMonth || {};
+        const wishlist         = raw.wishlist         || [];
+        const inventory        = raw.inventory        || [];
+        const exchangeRate     = raw.exchangeRate     || 0.05;
+        const monthlyRates     = raw.monthlyRates     || {};
+
+        let existing = {};
+        try { existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+        catch { existing = {}; }
+
+        const merged = {
+            ...existing,
+            transactions,
+            categories,
+            fixedItemsByMonth,
+            wishlist,
+            inventory,
+            exchangeRate,
+            monthlyRates,
+            migratedAt: new Date().toISOString(),
+        };
+
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        } catch (err) {
+            importBtn.disabled = false;
+            importBtn.textContent = '重新导入';
+            showStatus('error', '❌ 写入失败', ['localStorage 空间不足：' + err.message]);
+            return;
+        }
+
+        importBtn.textContent = '✓ 已导入';
+        backBtn.classList.add('visible');
+
+        showStatus('success',
+            '✅ 导入完成！共导入 ' + transactions.length + ' 条记录',
+            [
+                '📊 交易记录：' + transactions.length + ' 条',
+                '🏷️ 分类：' + categories.length + ' 个',
+                '📅 固定收支月份：' + Object.keys(fixedItemsByMonth).length + ' 个',
+                '💝 心愿单：' + wishlist.length + ' 条',
+                '📦 库存：' + inventory.length + ' 条',
+            ]
+        );
+    }
+
+    function showStatus(type, title, lines) {
+        statusBox.innerHTML =
+            '<div class="status-' + type + '">' +
+            '<p class="status-title">' + title + '</p>' +
+            '<div class="status-detail">' +
+            lines.map(l => '<span>' + l + '</span><br>').join('') +
+            '</div></div>';
+        statusBox.classList.add('visible');
+    }
+
+    function clearStatus() {
+        statusBox.innerHTML = '';
+        statusBox.classList.remove('visible');
+        backBtn.classList.remove('visible');
+    }
+</script>
+</body>
+</html>

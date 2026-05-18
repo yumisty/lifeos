@@ -1,0 +1,2421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Visual Life OS</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Life OS">
+    <meta name="theme-color" content="#E6B422">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Noto+Serif+SC:wght@700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['"Noto Serif SC"', 'serif'] // 用于AI报告的杂志排版感
+                    },
+                    colors: {
+                        'os-bg': '#FFFBEB',       // 全局底色
+                        'os-yellow': '#FEF3C7',   // 暖黄
+                        'os-purple': '#E9D5FF',   // 紫罗兰
+                        'os-pink': '#FDF2F8',     // 浅粉
+                        'os-green': '#ECFDF5',    // 薄荷绿
+                        'os-blue': '#DBEAFE',     // 婴儿蓝
+                        'os-text': '#475569',     // 深灰文本
+                    },
+                    borderRadius: { 'os-xl': '1.5rem' }, // 24px 平滑圆角
+                    animation: {
+                        'fade-in': 'fadeIn 0.2s ease-out',
+                        'slide-up': 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                        'wiggle': 'wiggle 0.3s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                        wiggle: { '0%, 100%': { transform: 'rotate(-1deg)' }, '50%': { transform: 'rotate(1deg)' } },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root { --theme-bg: #FFFBEB; --theme-accent: #E6B422; --theme-text: #475569; --accent: #E6B422; --finance-bg: #FFFBF0; --finance-border: #e6dcc0; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--theme-bg); -webkit-tap-highlight-color: transparent; transition: background-color 0.3s; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .glass-panel { background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid rgba(255,255,255,0.8); }
+        .glass-overlay { background: rgba(0, 0, 0, 0.25); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+        .dragging { opacity: 0.5; transform: scale(1.05); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+        @keyframes musicBar { 0%,100%{transform:scaleY(0.25)} 50%{transform:scaleY(1)} }
+        .music-bar { display:inline-block; width:3px; border-radius:2px; background:#a78bfa; transform-origin:bottom; animation:musicBar 0.7s ease-in-out infinite; }
+        .music-bar:nth-child(2){ animation-delay:0.2s; }
+        .music-bar:nth-child(3){ animation-delay:0.4s; }
+        /* 深夜主题覆盖 */
+        [data-theme="dark"] .bg-white { background-color: #334155 !important; }
+        [data-theme="dark"] .bg-gray-50 { background-color: #1e293b !important; }
+        [data-theme="dark"] .bg-gray-100 { background-color: #334155 !important; }
+        [data-theme="dark"] .glass-panel { background: rgba(15,23,42,0.85) !important; border-color: rgba(255,255,255,0.1) !important; }
+        [data-theme="dark"] .text-gray-700, [data-theme="dark"] .text-gray-800 { color: #e2e8f0 !important; }
+        [data-theme="dark"] .text-gray-400, [data-theme="dark"] .text-gray-500, [data-theme="dark"] .text-gray-600 { color: #94a3b8 !important; }
+        [data-theme="dark"] .border-gray-50, [data-theme="dark"] .border-gray-100, [data-theme="dark"] .border-gray-200 { border-color: #475569 !important; }
+        [data-theme="dark"] .divide-gray-50 > * + * { border-color: #475569 !important; }
+        [data-theme="dark"] .shadow-sm, [data-theme="dark"] .shadow-md { box-shadow: 0 1px 4px rgba(0,0,0,0.5) !important; }
+        [data-theme="dark"] .bg-os-bg { background-color: #1e293b !important; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // 获取当前周的日期数组 (周日到周六)
+        const getWeekDates = (date = new Date()) => {
+            const d = new Date(date);
+            const day = d.getDay();
+            const diff = d.getDate() - day;
+            return Array.from({length: 7}).map((_, i) => {
+                const newDate = new Date(d.setDate(diff + i));
+                return newDate.toISOString().split('T')[0];
+            });
+        };
+
+        const TODAY_STR = new Date().toISOString().split('T')[0];
+        const CURRENT_WEEK_DATES = getWeekDates(new Date());
+
+        const getWeek = (date) => {
+            const d = new Date(date);
+            d.setHours(0, 0, 0, 0);
+            d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+            const yearStart = new Date(d.getFullYear(), 0, 1);
+            const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+            return `${d.getFullYear()}-w${weekNo}`;
+        };
+
+        const CATEGORIES = [
+            { id: 'sport', icon: '🩰', label: '运动', color: 'bg-pink-400' },
+            { id: 'food', icon: '🥩', label: '饮食', color: 'bg-yellow-400' },
+            { id: 'movie', icon: '🎬', label: '影视', color: 'bg-purple-400' },
+            { id: 'create', icon: '🎨', label: '创作', color: 'bg-blue-400' },
+            { id: 'game', icon: '🎮', label: '游戏', color: 'bg-green-400' },
+            { id: 'location', icon: '📍', label: '足迹', color: 'bg-orange-400' }
+        ];
+
+        const INITIAL_EVENTS = [
+            { id: 1, catId: 'food', title: '临时决定的烤肉', date: '2026-05-12', rating: 5, review: '非常好吃，补充了能量。' },
+            { id: 2, catId: 'sport', title: '25分钟芭杆', date: '2026-05-12', rating: 4, review: '右边有点烫，发热感 6级。' },
+            { id: 3, catId: 'create', title: '海报网格系统初稿', date: '2026-05-12', rating: 3, review: '还有些问题需要调。' },
+            { id: 4, catId: 'movie', title: '重温沙丘', date: '2026-05-10', rating: 5, review: '视听依然震撼。' },
+            { id: 5, catId: 'food', title: '做了椒麻鸡', date: '2026-05-13', rating: 4, review: '味道不错，明天带饭。' }
+        ];
+
+        const INITIAL_TODOS = [
+            { id: 1, title: '周三课题排版与检查', date: '2026-05-13', done: false },
+            { id: 2, title: '新海报出图', date: '2026-05-14', done: false },
+            { id: 3, title: '买芭蕾袜', date: '2026-05-12', done: true }
+        ];
+
+        const INITIAL_SHOPPING = [
+            { id: 1, text: '无菌纱布 (补旧伤用)', type: 'need', done: false },
+            { id: 2, text: '新色号马卡龙色票', type: 'want', done: false },
+            { id: 3, text: 'Aesop 洗手液', type: 'need', done: true }
+        ];
+
+        const INITIAL_WIDGETS = [
+            { id: 'weekly', size: 'large' },     // 2x2
+            { id: 'clock', size: '1x1' },        // 1x1
+            { id: 'countdown', size: '1x1' },    // 1x1
+            { id: 'weather', size: '2x1' },      // 2x1
+            { id: 'habits', size: '2x1' },       // 2x1
+            { id: 'quote', size: '2x1' },        // 2x1
+            { id: 'music', size: '2x1' },        // 2x1
+            { id: 'photo', size: 'large' },      // 2x2
+            { id: 'health', size: 'medium' },    // 2x1
+            { id: 'deadline', size: 'medium' },  // 2x1
+            { id: 'period', size: '2x1' },       // 2x1
+            { id: 'finance', size: 'large' },    // 2x2
+            { id: 'shopping', size: 'large' }    // 2x2
+        ];
+
+        // 从 localStorage 读取迁移后的记账数据，读不到则用空数组
+        const _financeStorage = (() => {
+            try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); }
+            catch { return {}; }
+        })();
+
+        // transactions 格式：{ id, date, name, amount, currency, category }
+        const MOCK_TRANSACTIONS = _financeStorage.transactions || [];
+
+        // 分类颜色映射（关键词匹配，越长越具体的放前面）
+        const FINANCE_CAT_COLOR_MAP = [
+            { keys: ['一日三餐','吃饭','外卖','烤肉','咖啡','饮料','食堂','餐饮'], color: '#e07a5f' },
+            { keys: ['超市','日用品','日用'],                                        color: '#E6B422' },
+            { keys: ['化妆','护肤','美容','美妆','衣服','服饰','芭蕾'],              color: '#f472b6' },
+            { keys: ['氪金','会员','订阅'],                                          color: '#60a5fa' },
+            { keys: ['周边','玩的','游戏','娱乐','景点'],                             color: '#a78bfa' },
+            { keys: ['机票','交通','电车','地铁','出行'],                             color: '#34d399' },
+            { keys: ['医疗','课程','学费','学习','教育'],                             color: '#94a3b8' },
+            { keys: ['礼物','送礼'],                                                  color: '#fb7185' },
+        ];
+        const getCatColor = (cat) => {
+            if (!cat) return '#d1d5db';
+            for (const { keys, color } of FINANCE_CAT_COLOR_MAP) {
+                if (keys.some(k => cat.includes(k))) return color;
+            }
+            return '#d1d5db';
+        };
+
+        // AI 洞察报告模态框 (伴随式出现)
+        const AIReportModal = ({ isOpen, onClose, type, period }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={onClose}>
+                    <div className="bg-[#FAF9F6] w-full max-w-2xl rounded-3xl shadow-2xl p-8 max-h-[85vh] overflow-y-auto relative animate-slide-up" onClick={e=>e.stopPropagation()}>
+                        <button onClick={onClose} className="absolute top-6 right-6 w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-600 hover:bg-gray-300">×</button>
+                        
+                        <div className="text-center mb-8">
+                            <span className="text-3xl mb-2 block">✨</span>
+                            <p className="text-xs font-bold tracking-widest text-gray-400 uppercase mb-1">Gemini AI Insight</p>
+                            <h2 className="text-3xl font-serif text-os-text">{period} 视觉与生活洞察</h2>
+                        </div>
+
+                        <div className="space-y-8 text-os-text">
+                            <section>
+                                <h3 className="font-bold text-lg border-b border-gray-200 pb-2 mb-3 flex items-center gap-2">🩰 身体反馈预警</h3>
+                                <p className="text-sm leading-relaxed text-gray-600">根据这{type==='week'?'周':'段'}的数据，你的旧伤部位在芭杆运动后出现过 <strong>6级发热</strong>。系统检测到连续高热，强烈建议：<span className="bg-pink-100 text-pink-700 px-1 rounded">未来两天将微蹲动作降阶一半</span>，并增加运动后的冰敷时间。</p>
+                            </section>
+                            <section>
+                                <h3 className="font-bold text-lg border-b border-gray-200 pb-2 mb-3 flex items-center gap-2">🎨 创作与排版总结</h3>
+                                <p className="text-sm leading-relaxed text-gray-600">这{type==='week'?'周':'段'}你在排版课题上投入了大量时间。AI 检测到你记录了“网格系统问题”。建议参考 <strong>Müller-Brockmann 的网格系统理论</strong> 来校准你的海报边缘留白，周三的 DDL 冲刺会非常顺利。</p>
+                            </section>
+                            <section>
+                                <h3 className="font-bold text-lg border-b border-gray-200 pb-2 mb-3 flex items-center gap-2">🍷 情绪肯定</h3>
+                                <p className="text-sm leading-relaxed text-gray-600">虽然任务很重，但你灵活地安排了“烤肉”和“椒麻鸡”来犒劳自己。保持这种有弹性的生活节奏，你已经在很好的平衡工作和享受了。干得漂亮！</p>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // AI 生成报告面板（UI 框架，暂不接 API）
+        const AIGeneratePanel = ({ isOpen, onClose, title }) => {
+            const [loading, setLoading] = useState(false);
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={onClose}>
+                    <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl animate-slide-up flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 pt-6 pb-4 border-b border-gray-50 flex items-center justify-between flex-shrink-0">
+                            <div>
+                                <p className="text-[10px] font-black tracking-widest text-gray-400 uppercase mb-1">✨ Gemini AI</p>
+                                <h2 className="font-black text-base text-gray-800">{title}</h2>
+                            </div>
+                            <button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200 flex-shrink-0 ml-4">×</button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto hide-scrollbar px-6 py-5 space-y-5">
+                            {/* 生成按钮 */}
+                            <button
+                                onClick={() => { setLoading(true); setTimeout(() => setLoading(false), 2000); }}
+                                disabled={loading}
+                                className="w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-60"
+                                style={{ background: loading ? '#f1f5f9' : '#1e293b', color: loading ? '#94a3b8' : '#fff' }}>
+                                {loading ? (
+                                    <><span className="animate-spin inline-block">⟳</span> 生成中，请稍候…</>
+                                ) : (
+                                    <><span>✨</span> 生成报告</>
+                                )}
+                            </button>
+
+                            {loading && (
+                                <div className="space-y-3 animate-fade-in">
+                                    {[80, 60, 90, 50, 70].map((w, i) => (
+                                        <div key={i} className="h-3 bg-gray-100 rounded-full animate-pulse" style={{ width: `${w}%` }} />
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* 历史报告 */}
+                            <div>
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">历史报告</h3>
+                                <div className="flex flex-col items-center justify-center py-10 text-center">
+                                    <span className="text-3xl mb-3">📭</span>
+                                    <p className="text-sm font-bold text-gray-400">暂无历史报告</p>
+                                    <p className="text-xs text-gray-300 mt-1">点击上方「生成报告」创建第一份</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 分类筛选器条
+        const FilterBar = ({ activeFilter, setActiveFilter }) => (
+            <div className="flex gap-2 overflow-x-auto hide-scrollbar py-2">
+                <button 
+                    onClick={() => setActiveFilter('all')}
+                    className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${activeFilter === 'all' ? 'bg-os-text text-white shadow-md' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+                >
+                    全部
+                </button>
+                {CATEGORIES.map(cat => (
+                    <button 
+                        key={cat.id} onClick={() => setActiveFilter(cat.id)}
+                        className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap flex items-center gap-1 ${activeFilter === cat.id ? `${cat.color} text-white shadow-md` : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+                    >
+                        <span>{cat.icon}</span> {cat.label}
+                    </button>
+                ))}
+            </div>
+        );
+
+        // 核心组件：周历 (交互式)
+        const WeeklyWidget = ({ events, onOpenReport }) => {
+            const days = ['日', '一', '二', '三', '四', '五', '六'];
+            const [selectedDayIdx, setSelectedDayIdx] = useState(() => new Date().getDay());
+            const [newTodoText, setNewTodoText] = useState('');
+
+            const weekKey = getWeek(new Date(TODAY_STR));
+
+            const [weekTodos, setWeekTodos] = useState(() => {
+                try {
+                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    return stored.allTodos?.[weekKey] || [];
+                } catch { return []; }
+            });
+
+            const historicalTodos = (_financeStorage.urgentTodos || []).map(t => ({ ...t, historical: true }));
+
+            const saveTodos = (todos) => {
+                setWeekTodos(todos);
+                try {
+                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    if (!stored.allTodos) stored.allTodos = {};
+                    stored.allTodos[weekKey] = todos;
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                } catch {}
+            };
+
+            const selectedDate = CURRENT_WEEK_DATES[selectedDayIdx];
+            const dayEvents = events.filter(e => e.date === selectedDate);
+            const dayNewTodos = weekTodos.filter(t => t.date === selectedDate);
+            const dayHistTodos = historicalTodos.filter(t => t.date === selectedDate);
+            const allDayTodos = [...dayHistTodos, ...dayNewTodos];
+
+            const addTodo = () => {
+                if (!newTodoText.trim()) return;
+                saveTodos([...weekTodos, { id: Date.now(), title: newTodoText.trim(), date: selectedDate, done: false }]);
+                setNewTodoText('');
+            };
+            const toggleTodo = (id) => saveTodos(weekTodos.map(t => t.id === id ? { ...t, done: !t.done } : t));
+            const deleteTodo = (id) => saveTodos(weekTodos.filter(t => t.id !== id));
+
+            return (
+                <div className="bg-white p-5 rounded-os-xl shadow-sm h-full flex flex-col gap-3 relative group overflow-hidden">
+                    <button onClick={() => onOpenReport('week')} className="absolute top-4 right-4 text-xl opacity-40 hover:opacity-100 hover:scale-110 transition-all" title="生成本周洞察">✨</button>
+
+                    <h3 className="font-black text-xs text-gray-400 uppercase tracking-widest flex-shrink-0">本周 Todo</h3>
+
+                    {/* 星期选择器 */}
+                    <div className="flex justify-between flex-shrink-0">
+                        {days.map((day, idx) => {
+                            const isSelected = selectedDayIdx === idx;
+                            const dStr = CURRENT_WEEK_DATES[idx];
+                            const hasE = events.some(e => e.date === dStr);
+                            const hasT = weekTodos.some(t => t.date === dStr && !t.done) || historicalTodos.some(t => t.date === dStr && !t.done);
+                            return (
+                                <div key={day} onClick={() => setSelectedDayIdx(idx)} className="flex flex-col items-center gap-1 cursor-pointer">
+                                    <div className="flex gap-0.5 h-1.5">
+                                        {hasE && <span className="w-1.5 h-1.5 rounded-full bg-os-purple"></span>}
+                                        {hasT && <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span>}
+                                    </div>
+                                    <div className={`w-9 h-10 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${isSelected ? 'bg-os-text text-white shadow-md' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>
+                                        <span className="text-[9px] font-bold leading-none">{day}</span>
+                                        <span className="text-[11px] font-black leading-none">{dStr.slice(8)}</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Todo 列表 */}
+                    <div className="flex-1 overflow-y-auto hide-scrollbar space-y-1.5">
+                        {allDayTodos.length === 0 && dayEvents.length === 0 && (
+                            <p className="text-xs text-gray-400 italic py-2">这一天还没有记录...</p>
+                        )}
+                        {dayEvents.map((item, idx) => (
+                            <div key={`e-${idx}`} className="flex items-center gap-2 text-xs py-1">
+                                <span>{CATEGORIES.find(c => c.id === item.catId)?.icon}</span>
+                                <span className="truncate flex-1 font-bold text-gray-700">{item.title}</span>
+                            </div>
+                        ))}
+                        {allDayTodos.map(t => (
+                            <div key={t.id} className="flex items-center gap-2 text-xs py-1 group/item">
+                                <button onClick={() => !t.historical && toggleTodo(t.id)}
+                                    className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-[9px] transition-colors
+                                        ${t.done ? 'bg-green-400 border-green-400 text-white' : 'border-gray-300 hover:border-green-300'}`}>
+                                    {t.done && '✓'}
+                                </button>
+                                <span className={`truncate flex-1 ${t.done ? 'line-through text-gray-400' : 'text-gray-700 font-bold'}`}>{t.title}</span>
+                                {!t.historical && (
+                                    <button onClick={() => deleteTodo(t.id)}
+                                        className="opacity-0 group-hover/item:opacity-100 text-gray-300 hover:text-red-400 transition-all text-sm leading-none flex-shrink-0">×</button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* 添加输入框 */}
+                    <div className="flex gap-2 flex-shrink-0 pt-1 border-t border-gray-50">
+                        <input
+                            value={newTodoText}
+                            onChange={e => setNewTodoText(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && addTodo()}
+                            placeholder="添加待办…"
+                            className="flex-1 text-xs bg-gray-50 rounded-xl px-3 py-2 outline-none border border-transparent focus:border-gray-200 transition-colors placeholder-gray-300 font-medium"
+                        />
+                        <button onClick={addTodo}
+                            className="w-8 h-8 rounded-xl bg-os-text text-white text-lg font-black flex items-center justify-center hover:opacity-80 transition-opacity flex-shrink-0">
+                            +
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const ShoppingWidget = () => {
+            const [activeTab, setActiveTab] = useState('need');
+            const [newText, setNewText] = useState('');
+
+            const [items, setItems] = useState(() => {
+                try {
+                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    const wl = stored.wishlist || [];
+                    // 已有 wishlist 默认归入「想买」
+                    return wl.map(i => ({ ...i, tab: i.tab || 'want', done: i.purchased || false }));
+                } catch { return []; }
+            });
+
+            const saveItems = (next) => {
+                setItems(next);
+                try {
+                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    stored.wishlist = next.map(i => ({ ...i, purchased: i.done }));
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                } catch {}
+            };
+
+            const addItem = () => {
+                if (!newText.trim()) return;
+                saveItems([...items, { id: Date.now(), name: newText.trim(), price: '', currency: 'JPY', category: '', purchased: false, done: false, tab: activeTab }]);
+                setNewText('');
+            };
+            const toggleItem = (id) => saveItems(items.map(i => i.id === id ? { ...i, done: !i.done, purchased: !i.done } : i));
+            const deleteItem = (id) => saveItems(items.filter(i => i.id !== id));
+
+            const tabItems = items.filter(i => i.tab === activeTab);
+            const needCount = items.filter(i => i.tab === 'need' && !i.done).length;
+            const wantCount = items.filter(i => i.tab === 'want' && !i.done).length;
+
+            const tabCfg = {
+                need: { label: '需要买', color: 'text-green-700', activeBg: 'bg-green-500', dot: 'bg-green-400', check: 'bg-green-400 border-green-400' },
+                want: { label: '想买',   color: 'text-pink-700',  activeBg: 'bg-pink-500',  dot: 'bg-pink-400',  check: 'bg-pink-400 border-pink-400'  },
+            };
+            const cfg = tabCfg[activeTab];
+
+            return (
+                <div className="bg-white rounded-os-xl shadow-sm h-full flex flex-col overflow-hidden">
+                    {/* 头部 */}
+                    <div className="px-4 pt-4 pb-3 border-b border-gray-50 flex items-center justify-between flex-shrink-0">
+                        <div className="flex gap-1">
+                            {Object.entries(tabCfg).map(([key, c]) => (
+                                <button key={key} onClick={() => { setActiveTab(key); setNewText(''); }}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5
+                                        ${activeTab === key ? c.activeBg + ' text-white shadow-sm' : 'text-gray-400 hover:bg-gray-50'}`}>
+                                    {c.label}
+                                    {(key === 'need' ? needCount : wantCount) > 0 && (
+                                        <span className={`text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black ${activeTab === key ? 'bg-white/30' : c.dot + ' text-white'}`}>
+                                            {key === 'need' ? needCount : wantCount}
+                                        </span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                        <span className="text-base">🛍️</span>
+                    </div>
+
+                    {/* 列表 */}
+                    <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-3 space-y-2">
+                        {tabItems.length === 0 && (
+                            <p className="text-xs text-gray-300 italic pt-2">空空如也，快来添加吧</p>
+                        )}
+                        {tabItems.map(item => (
+                            <div key={item.id} className="flex items-start gap-2 group/si">
+                                <button onClick={() => toggleItem(item.id)}
+                                    className={`mt-0.5 w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center text-[9px] transition-colors
+                                        ${item.done ? cfg.check + ' text-white' : 'border-gray-300 hover:border-gray-400'}`}>
+                                    {item.done && '✓'}
+                                </button>
+                                <div className="flex-1 min-w-0">
+                                    <span className={`text-xs font-bold leading-tight block truncate ${item.done ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                                        {item.name}
+                                    </span>
+                                    {item.price && (
+                                        <span className="text-[10px] text-gray-400 font-medium">{item.price} {item.currency}</span>
+                                    )}
+                                </div>
+                                <button onClick={() => deleteItem(item.id)}
+                                    className="opacity-0 group-hover/si:opacity-100 text-gray-300 hover:text-red-400 transition-all text-sm leading-none flex-shrink-0 mt-0.5">×</button>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* 添加输入框 */}
+                    <div className="flex gap-2 px-4 pb-4 pt-2 border-t border-gray-50 flex-shrink-0">
+                        <input
+                            value={newText}
+                            onChange={e => setNewText(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && addItem()}
+                            placeholder={activeTab === 'need' ? '添加需要买的…' : '添加心愿…'}
+                            className="flex-1 text-xs bg-gray-50 rounded-xl px-3 py-2 outline-none border border-transparent focus:border-gray-200 transition-colors placeholder-gray-300 font-medium"
+                        />
+                        <button onClick={addItem}
+                            className={`w-8 h-8 rounded-xl text-white text-lg font-black flex items-center justify-center hover:opacity-80 transition-opacity flex-shrink-0 ${cfg.activeBg}`}>
+                            +
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const HealthWidget = () => (
+            <div className="bg-os-pink p-5 rounded-os-xl h-full flex flex-col justify-between">
+                <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-black text-sm text-pink-900">体感监测</h3>
+                    <span className="text-2xl">🩰</span>
+                </div>
+                <div className="bg-white/60 p-3 rounded-xl">
+                    <p className="text-[10px] font-bold text-pink-700 mb-1">今日发热评估 (暂无)</p>
+                    <input type="range" min="1" max="10" defaultValue="1" className="w-full accent-pink-500 h-1.5 bg-pink-200 rounded-full appearance-none" />
+                </div>
+            </div>
+        );
+
+        const DeadlineWidget = () => (
+            <div className="bg-os-yellow p-5 rounded-os-xl border border-orange-100 flex flex-col justify-between h-full relative overflow-hidden">
+                <div className="absolute -right-2 -bottom-4 text-6xl opacity-10 font-black">DDL</div>
+                <div className="flex gap-2 items-center mb-2 z-10">
+                    <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>
+                    <span className="text-[10px] font-black uppercase text-orange-500 tracking-wider">High Priority</span>
+                </div>
+                <h4 className="text-sm font-black leading-tight text-orange-900 z-10">周三课题排版与检查</h4>
+                <div className="text-right mt-2 z-10"><span className="text-2xl font-black text-orange-500 drop-shadow-sm">1<span className="text-xs">D Left</span></span></div>
+            </div>
+        );
+
+        const ClockWidget = () => {
+            const [now, setNow] = useState(new Date());
+            useEffect(() => {
+                const timer = setInterval(() => setNow(new Date()), 1000);
+                return () => clearInterval(timer);
+            }, []);
+            const weekDays = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            const dateStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${weekDays[now.getDay()]}`;
+            return (
+                <div className="h-full flex flex-col items-center justify-center rounded-os-xl" style={{ background: '#475569' }}>
+                    <span className="font-black text-white leading-none tracking-tight" style={{ fontSize: 'clamp(2rem, 5vw, 2.5rem)' }}>{hh}:{mm}</span>
+                    <span className="text-[10px] font-medium mt-2 text-center px-2" style={{ color: '#94a3b8' }}>{dateStr}</span>
+                </div>
+            );
+        };
+
+        const PERIOD_DEFAULT_LOG = [
+            { startDate: '2025-12-03', duration: 5 },
+            { startDate: '2026-01-01', duration: 5 },
+            { startDate: '2026-02-01', duration: 5 },
+            { startDate: '2026-03-02', duration: 5 },
+            { startDate: '2026-04-01', duration: 5 },
+        ];
+
+        const PeriodWidget = () => {
+            const [log, setLog] = useState(() => {
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    return d.periodLog && d.periodLog.length > 0 ? d.periodLog : PERIOD_DEFAULT_LOG;
+                } catch { return PERIOD_DEFAULT_LOG; }
+            });
+
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+
+            const saveLog = (next) => {
+                setLog(next);
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    d.periodLog = next;
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                } catch {}
+            };
+
+            const recordToday = () => {
+                if (log.some(e => e.startDate === todayStr)) return;
+                saveLog([...log, { startDate: todayStr, duration: 5 }]);
+            };
+
+            const sorted = [...log].sort((a, b) => b.startDate.localeCompare(a.startDate));
+            const last = sorted[0];
+            let statusText = '暂无记录';
+            let isActive = false;
+            if (last) {
+                const start = new Date(last.startDate + 'T00:00:00');
+                const daysSince = Math.floor((today - start) / 86400000);
+                const dur = last.duration || 5;
+                if (daysSince >= 0 && daysSince < dur) {
+                    statusText = `进行中 第${daysSince + 1}天`;
+                    isActive = true;
+                } else {
+                    statusText = `距上次 ${daysSince} 天`;
+                }
+            }
+
+            const months = Array.from({ length: 6 }, (_, i) => {
+                const d = new Date(today.getFullYear(), today.getMonth() - 5 + i, 1);
+                return { year: d.getFullYear(), month: d.getMonth() + 1 };
+            });
+            const getRecord = (year, month) => {
+                return log.find(e => {
+                    const d = new Date(e.startDate + 'T00:00:00');
+                    return d.getFullYear() === year && d.getMonth() + 1 === month;
+                }) || null;
+            };
+
+            return (
+                <div className="h-full flex flex-col justify-between p-5 rounded-os-xl" style={{ background: '#FDF2F8', border: '1.5px solid #f0d8ea' }}>
+                    <div>
+                        <h3 className="font-black text-[10px] uppercase tracking-widest mb-1" style={{ color: '#9d174d' }}>经期记录</h3>
+                        <p className="text-sm font-black" style={{ color: isActive ? '#db2777' : '#9d174d' }}>{statusText}</p>
+                    </div>
+                    <div className="flex justify-between">
+                        {months.map(({ year, month }) => {
+                            const rec = getRecord(year, month);
+                            const has = !!rec;
+                            const dayNum = rec ? new Date(rec.startDate + 'T00:00:00').getDate() : null;
+                            return (
+                                <div key={`${year}-${month}`} className="flex flex-col items-center gap-1">
+                                    <div className="w-5 h-5 rounded-full border-2" style={{
+                                        background: has ? '#f472b6' : 'transparent',
+                                        borderColor: has ? '#f472b6' : '#f9a8d4'
+                                    }} />
+                                    <span className="text-[9px] font-bold" style={{ color: '#f472b6' }}>{month}月</span>
+                                    <span className="text-[8px] font-medium" style={{ color: has ? '#f9a8d4' : '#fce7f3' }}>{has ? `${dayNum}日` : '—'}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <button onClick={recordToday}
+                        className="w-full py-2 rounded-xl text-xs font-black text-white transition-opacity hover:opacity-80"
+                        style={{ background: '#f472b6' }}>
+                        记录今天
+                    </button>
+                </div>
+            );
+        };
+
+        // ── 天气 Widget ──
+        const WC_ICON = (code) => {
+            if (code === 0) return '☀️';
+            if (code <= 2) return '⛅';
+            if (code === 3) return '☁️';
+            if (code === 45 || code === 48) return '🌫️';
+            if (code >= 51 && code <= 67) return '🌧️';
+            if (code >= 71 && code <= 77) return '❄️';
+            if (code >= 80 && code <= 82) return '🌦️';
+            if (code === 95) return '⛈️';
+            return '🌈';
+        };
+        const WC_DESC = (code) => {
+            if (code === 0) return '晴';
+            if (code <= 2) return '多云';
+            if (code === 3) return '阴';
+            if (code === 45 || code === 48) return '雾';
+            if (code >= 51 && code <= 67) return '雨';
+            if (code >= 71 && code <= 77) return '雪';
+            if (code >= 80 && code <= 82) return '阵雨';
+            if (code === 95) return '雷雨';
+            return '—';
+        };
+        const WeatherWidget = () => {
+            const [weather, setWeather] = useState(null);
+            const [error, setError] = useState(false);
+            useEffect(() => {
+                fetch('https://api.open-meteo.com/v1/forecast?latitude=34.69&longitude=135.50&current=temperature_2m,weathercode,windspeed_10m&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=Asia%2FTokyo&forecast_days=4')
+                    .then(r => r.json())
+                    .then(d => setWeather(d))
+                    .catch(() => setError(true));
+            }, []);
+            const dayNames = ['日','一','二','三','四','五','六'];
+            return (
+                <div className="h-full flex rounded-os-xl overflow-hidden" style={{ background: '#EFF6FF', border: '1.5px solid #bfdbfe' }}>
+                    {/* 今日 */}
+                    <div className="flex flex-col justify-center items-center px-5 gap-1" style={{ minWidth: '42%' }}>
+                        <h3 className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: '#3b82f6' }}>大阪 天气</h3>
+                        {error ? (
+                            <span className="text-xs text-gray-400">加载失败</span>
+                        ) : !weather ? (
+                            <span className="text-xs text-gray-400 animate-pulse">加载中…</span>
+                        ) : (<>
+                            <span style={{ fontSize: '2.2rem', lineHeight: 1 }}>{WC_ICON(weather.current.weathercode)}</span>
+                            <span className="text-2xl font-black leading-none mt-1" style={{ color: '#1e40af' }}>{Math.round(weather.current.temperature_2m)}°</span>
+                            <span className="text-[10px] font-bold mt-1" style={{ color: '#3b82f6' }}>{WC_DESC(weather.current.weathercode)}</span>
+                            <span className="text-[9px]" style={{ color: '#93c5fd' }}>风 {Math.round(weather.current.windspeed_10m)} km/h</span>
+                        </>)}
+                    </div>
+                    {/* 分割线 */}
+                    <div style={{ width: '1px', background: '#bfdbfe', margin: '16px 0' }} />
+                    {/* 未来3天 */}
+                    <div className="flex-1 flex items-center justify-around px-3">
+                        {!weather ? null : weather.daily.time.slice(1, 4).map((dateStr, i) => {
+                            const d = new Date(dateStr + 'T00:00:00');
+                            return (
+                                <div key={dateStr} className="flex flex-col items-center gap-1">
+                                    <span className="text-[9px] font-bold" style={{ color: '#60a5fa' }}>周{dayNames[d.getDay()]}</span>
+                                    <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>{WC_ICON(weather.daily.weathercode[i + 1])}</span>
+                                    <span className="text-[10px] font-black" style={{ color: '#1e40af' }}>{Math.round(weather.daily.temperature_2m_max[i + 1])}°</span>
+                                    <span className="text-[9px] font-medium" style={{ color: '#93c5fd' }}>{Math.round(weather.daily.temperature_2m_min[i + 1])}°</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        // ── 习惯打卡 Widget ──
+        const DEFAULT_HABITS = ['喝水💧', '运动🏃', '早睡🌙', '维生素💊'];
+        const HabitsWidget = () => {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const [checked, setChecked] = useState(() => {
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    return d.habits?.[todayStr] || [];
+                } catch { return []; }
+            });
+            const saveChecked = (next) => {
+                setChecked(next);
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    if (!d.habits) d.habits = {};
+                    d.habits[todayStr] = next;
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                } catch {}
+            };
+            const toggle = (habit) => {
+                const next = checked.includes(habit) ? checked.filter(h => h !== habit) : [...checked, habit];
+                saveChecked(next);
+            };
+            return (
+                <div className="h-full flex flex-col p-4 rounded-os-xl bg-white shadow-sm">
+                    <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                        <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">今日习惯</h3>
+                        <span className="text-xs font-black" style={{ color: checked.length === DEFAULT_HABITS.length ? '#22c55e' : '#94a3b8' }}>
+                            {checked.length}/{DEFAULT_HABITS.length}
+                        </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 flex-1 content-center">
+                        {DEFAULT_HABITS.map(habit => {
+                            const done = checked.includes(habit);
+                            return (
+                                <button key={habit} onClick={() => toggle(habit)}
+                                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all"
+                                    style={{
+                                        background: done ? '#dcfce7' : '#f8fafc',
+                                        color: done ? '#15803d' : '#64748b',
+                                        border: `1.5px solid ${done ? '#86efac' : '#e2e8f0'}`,
+                                    }}>
+                                    <span className="w-4 h-4 rounded-full border flex items-center justify-center text-[9px] flex-shrink-0"
+                                        style={{ background: done ? '#22c55e' : 'transparent', borderColor: done ? '#22c55e' : '#cbd5e1', color: '#fff' }}>
+                                        {done ? '✓' : ''}
+                                    </span>
+                                    {habit}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        // ── 倒数日 Widget ──
+        const CountdownWidget = () => {
+            const [data, setData] = useState(() => {
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    return d.countdowns || { name: '回国 🛫', date: '2026-08-31' };
+                } catch { return { name: '回国 🛫', date: '2026-08-31' }; }
+            });
+            const [editing, setEditing] = useState(false);
+            const [draft, setDraft] = useState(data);
+            const save = () => {
+                setData(draft);
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    d.countdowns = draft;
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                } catch {}
+                setEditing(false);
+            };
+            const days = Math.ceil((new Date(data.date + 'T00:00:00') - new Date(new Date().toISOString().split('T')[0] + 'T00:00:00')) / 86400000);
+            if (editing) return (
+                <div className="h-full flex flex-col justify-between p-4 rounded-os-xl" style={{ background: '#4c1d95' }}>
+                    <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
+                        className="w-full text-xs font-bold rounded-lg px-2 py-1.5 outline-none bg-white/20 text-white placeholder-white/50 mb-2"
+                        placeholder="事件名称" />
+                    <input type="date" value={draft.date} onChange={e => setDraft(d => ({ ...d, date: e.target.value }))}
+                        className="w-full text-xs font-bold rounded-lg px-2 py-1.5 outline-none bg-white/20 text-white mb-3" />
+                    <button onClick={save} className="w-full py-1.5 rounded-lg text-xs font-black text-purple-900 bg-white">保存</button>
+                </div>
+            );
+            return (
+                <div className="h-full flex flex-col items-center justify-center rounded-os-xl relative cursor-pointer group" style={{ background: '#4c1d95' }} onClick={() => { setDraft(data); setEditing(true); }}>
+                    <span className="text-[9px] font-black uppercase tracking-widest mb-2 opacity-60 text-white">{data.name}</span>
+                    <span className="font-black text-white leading-none" style={{ fontSize: 'clamp(2.5rem, 6vw, 3.5rem)' }}>{days > 0 ? days : 0}</span>
+                    <span className="text-[10px] font-bold text-white opacity-60 mt-1">天后</span>
+                    <span className="absolute bottom-2 right-3 text-[8px] text-white/30 group-hover:text-white/60 transition-colors">点击编辑</span>
+                </div>
+            );
+        };
+
+        // ── 每日一句 Widget ──
+        const QUOTES = [
+            '每一个不曾起舞的日子，都是对生命的辜负。',
+            '你所浪费的今天，是昨天死去的人奢望的明天。',
+            '慢慢来，比较快。',
+            '生活不是等待风暴过去，而是学会在雨中起舞。',
+            '做一个有趣的人比做一个成功的人更难。',
+            '不要等待机会，而要创造机会。',
+            '勇气不是没有恐惧，而是判断有比恐惧更重要的东西。',
+            '你的时间有限，不要浪费在过别人的生活上。',
+            '凡是过去，皆为序章。',
+            '与其诅咒黑暗，不如点亮蜡烛。',
+        ];
+        const QuoteWidget = () => {
+            const todayKey = new Date().toISOString().split('T')[0];
+            const defaultIdx = Math.abs(todayKey.split('-').join('').slice(-4).split('').reduce((a, c) => a + parseInt(c), 0)) % QUOTES.length;
+            const [idx, setIdx] = useState(() => {
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    const saved = d.quoteState;
+                    return (saved && saved.date === todayKey) ? saved.idx : defaultIdx;
+                } catch { return defaultIdx; }
+            });
+            const nextQuote = () => {
+                const next = (idx + 1) % QUOTES.length;
+                setIdx(next);
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    d.quoteState = { date: todayKey, idx: next };
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                } catch {}
+            };
+            return (
+                <div className="h-full flex flex-col justify-between p-5 rounded-os-xl bg-white shadow-sm relative overflow-hidden">
+                    <div className="absolute -top-3 -left-1 text-[6rem] font-serif leading-none select-none pointer-events-none" style={{ color: '#f1f5f9' }}>"</div>
+                    <p className="text-sm font-bold leading-relaxed text-gray-700 z-10 flex-1 flex items-center">{QUOTES[idx]}</p>
+                    <div className="flex items-center justify-between z-10 flex-shrink-0">
+                        <span className="text-[9px] text-gray-300 font-medium">{idx + 1} / {QUOTES.length}</span>
+                        <button onClick={nextQuote} className="text-[10px] font-black text-gray-400 hover:text-gray-600 transition-colors px-2 py-1 rounded-lg hover:bg-gray-50">换一句 →</button>
+                    </div>
+                </div>
+            );
+        };
+
+        // ── 音乐状态 Widget ──
+        const MusicWidget = () => {
+            const [data, setData] = useState(() => {
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    return d.nowPlaying || null;
+                } catch { return null; }
+            });
+            const [editing, setEditing] = useState(false);
+            const [draft, setDraft] = useState({ song: '', artist: '' });
+
+            const openEdit = () => {
+                setDraft({ song: data?.song || '', artist: data?.artist || '' });
+                setEditing(true);
+            };
+            const save = () => {
+                if (!draft.song.trim()) { setEditing(false); return; }
+                const next = { song: draft.song.trim(), artist: draft.artist.trim(), updatedAt: new Date().toISOString() };
+                setData(next);
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    d.nowPlaying = next;
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                } catch {}
+                setEditing(false);
+            };
+
+            return (
+                <div className="h-full flex flex-col rounded-os-xl overflow-hidden relative" style={{ background: '#1e1b4b' }}>
+                    {/* 编辑弹窗 */}
+                    {editing && (
+                        <div className="absolute inset-0 z-20 flex flex-col justify-center gap-2 p-4" style={{ background: '#1e1b4b' }}>
+                            <input value={draft.song} onChange={e => setDraft(d => ({ ...d, song: e.target.value }))}
+                                placeholder="歌曲名称"
+                                className="w-full text-sm font-bold rounded-xl px-3 py-2 outline-none text-white placeholder-white/30"
+                                style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}
+                                autoFocus onKeyDown={e => e.key === 'Enter' && save()} />
+                            <input value={draft.artist} onChange={e => setDraft(d => ({ ...d, artist: e.target.value }))}
+                                placeholder="艺术家"
+                                className="w-full text-sm font-bold rounded-xl px-3 py-2 outline-none text-white placeholder-white/30"
+                                style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}
+                                onKeyDown={e => e.key === 'Enter' && save()} />
+                            <div className="flex gap-2 mt-1">
+                                <button onClick={() => setEditing(false)} className="flex-1 py-2 rounded-xl text-xs font-bold text-white/50 hover:text-white/80 transition-colors">取消</button>
+                                <button onClick={save} className="flex-1 py-2 rounded-xl text-xs font-black text-purple-900" style={{ background: '#a78bfa' }}>保存</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 主内容 */}
+                    <div className="flex-1 flex items-center gap-3 px-4 pt-4 pb-2">
+                        {/* 专辑封面占位 */}
+                        <div className="w-14 h-14 rounded-xl flex-shrink-0 flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                            <span className="text-2xl opacity-40">🎵</span>
+                        </div>
+                        {/* 歌曲信息 */}
+                        <div className="flex-1 min-w-0">
+                            {data ? (<>
+                                <p className="text-sm font-black text-white truncate leading-tight">{data.song}</p>
+                                <p className="text-[11px] font-medium truncate mt-0.5" style={{ color: '#a78bfa' }}>{data.artist || '未知艺术家'}</p>
+                            </>) : (
+                                <p className="text-xs font-medium leading-relaxed" style={{ color: 'rgba(255,255,255,0.35)' }}>点击右上角编辑<br/>添加正在听的歌曲</p>
+                            )}
+                        </div>
+                        {/* 编辑按钮 */}
+                        <button onClick={openEdit} className="text-[10px] font-black px-2 py-1 rounded-lg flex-shrink-0 transition-opacity hover:opacity-80"
+                            style={{ background: 'rgba(167,139,250,0.2)', color: '#a78bfa' }}>编辑</button>
+                    </div>
+
+                    {/* 底部播放动画 */}
+                    <div className="px-4 pb-3 flex items-end gap-2">
+                        {data ? (<>
+                            <div className="flex items-end gap-0.5 h-4">
+                                <div className="music-bar h-4" />
+                                <div className="music-bar h-3" />
+                                <div className="music-bar h-4" />
+                            </div>
+                            <span className="text-[9px] font-medium" style={{ color: 'rgba(255,255,255,0.3)' }}>NOW PLAYING</span>
+                        </>) : (
+                            <span className="text-[9px] font-medium" style={{ color: 'rgba(255,255,255,0.2)' }}>—</span>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // ── 每日照片 Widget ──
+        const PhotoWidget = () => {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const fileRef = React.useRef(null);
+
+            const [photo, setPhoto] = useState(() => {
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    return d.dailyPhotos?.[todayStr] || null;
+                } catch { return null; }
+            });
+
+            const savePhoto = (base64) => {
+                setPhoto(base64);
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    if (!d.dailyPhotos) d.dailyPhotos = {};
+                    d.dailyPhotos[todayStr] = base64;
+                    // 清理7天前的照片
+                    const cutoff = new Date();
+                    cutoff.setDate(cutoff.getDate() - 7);
+                    Object.keys(d.dailyPhotos).forEach(k => {
+                        if (new Date(k + 'T00:00:00') < cutoff) delete d.dailyPhotos[k];
+                    });
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                } catch {}
+            };
+
+            const handleFile = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => savePhoto(ev.target.result);
+                reader.readAsDataURL(file);
+            };
+
+            const [mdy] = todayStr.split('-');
+            const displayDate = todayStr.slice(5).replace('-', '/');
+
+            return (
+                <div className="h-full rounded-os-xl overflow-hidden relative" style={{ background: '#e5e7eb' }}>
+                    <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+
+                    {photo ? (<>
+                        {/* 照片填满 */}
+                        <img src={photo} alt="今日照片" className="w-full h-full object-cover" />
+                        {/* 暗角 */}
+                        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 50%)' }} />
+                        {/* 左下日期 */}
+                        <span className="absolute bottom-3 left-4 text-white text-xs font-black drop-shadow-md">{displayDate}</span>
+                        {/* 右下更换按钮 */}
+                        <button onClick={() => fileRef.current?.click()}
+                            className="absolute bottom-2.5 right-3 w-8 h-8 rounded-full flex items-center justify-center font-black text-base shadow-lg transition-opacity hover:opacity-80"
+                            style={{ background: 'rgba(255,255,255,0.25)', color: '#fff', backdropFilter: 'blur(4px)' }}>+</button>
+                    </>) : (
+                        /* 空状态 */
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-2 cursor-pointer group" onClick={() => fileRef.current?.click()}>
+                            <span className="text-4xl opacity-30 group-hover:opacity-50 transition-opacity">📷</span>
+                            <span className="text-xs font-bold text-gray-400 group-hover:text-gray-500 transition-colors">记录今天</span>
+                            <span className="text-[10px] text-gray-300">{displayDate}</span>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const FinanceWidget = ({ onOpen }) => {
+            const [showAdd, setShowAdd] = useState(false);
+            const [addForm, setAddForm] = useState({ amount: '', currency: 'JPY', category: '', name: '' });
+            const [txKey, setTxKey] = useState(0); // triggers re-read of MOCK_TRANSACTIONS
+
+            const wCategories = _financeStorage.categories || [];
+            const exchRate = _financeStorage.exchangeRate || 0.048;
+            const toJPYw = (amt, cur) => (cur === 'RMB' || cur === 'CNY') ? amt / exchRate : amt;
+            const nowMonth = TODAY_STR.slice(0, 7);
+            const monthTxW = MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(nowMonth));
+            const todayTxW = MOCK_TRANSACTIONS.filter(t => t.date === TODAY_STR);
+            const wMonthTotal = Math.round(monthTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
+            const wTodayTotal = Math.round(todayTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
+            const recentThree = [...monthTxW].reverse().slice(0, 3);
+
+            const saveNewTx = () => {
+                if (!addForm.amount || isNaN(parseFloat(addForm.amount))) return;
+                const tx = {
+                    id: Date.now(),
+                    date: TODAY_STR,
+                    name: addForm.name.trim() || addForm.category || '记账',
+                    amount: parseFloat(addForm.amount),
+                    currency: addForm.currency,
+                    category: addForm.category,
+                };
+                try {
+                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    stored.transactions = [...(stored.transactions || []), tx];
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                } catch {}
+                MOCK_TRANSACTIONS.push(tx);
+                setAddForm({ amount: '', currency: 'JPY', category: '', name: '' });
+                setShowAdd(false);
+                setTxKey(k => k + 1);
+            };
+
+            const wCatMap = {};
+            monthTxW.forEach(t => {
+                const cat = t.category || '其他';
+                wCatMap[cat] = (wCatMap[cat] || 0) + toJPYw(parseFloat(t.amount) || 0, t.currency);
+            });
+            const wCats = Object.entries(wCatMap).map(([n, v]) => ({ name: n, total: v, color: getCatColor(n) })).sort((a, b) => b.total - a.total);
+            const wTotal = wCats.reduce((s, c) => s + c.total, 0) || 1;
+
+            return (
+                <div
+                    className="p-5 rounded-os-xl h-full flex flex-col gap-4 overflow-hidden relative"
+                    style={{ background: 'var(--finance-bg)', border: '1.5px solid var(--accent)' }}
+                >
+                    {/* 背景水印 */}
+                    <div className="absolute -right-4 -bottom-6 text-[7rem] font-black select-none pointer-events-none" style={{ color: 'var(--accent)', opacity: 0.07 }}>¥</div>
+
+                    {/* ① 顶部：左侧统计 + 右侧按钮 */}
+                    <div className="flex items-start justify-between z-10">
+                        <div className="flex gap-4">
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: 'var(--accent)' }}>{nowMonth.slice(5)}月支出</p>
+                                <p className="text-2xl font-black leading-none" style={{ color: '#c2410c' }}>
+                                    ¥{wMonthTotal.toLocaleString()}
+                                </p>
+                            </div>
+                            <div className="border-l pl-4" style={{ borderColor: 'var(--finance-border)' }}>
+                                <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: 'var(--accent)' }}>今日</p>
+                                <p className="text-2xl font-black leading-none" style={{ color: '#c2410c' }}>
+                                    ¥{wTodayTotal.toLocaleString()}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            <button onClick={() => setShowAdd(true)}
+                                className="text-[11px] font-bold rounded-full px-3 py-1.5 transition-colors hover:opacity-80"
+                                style={{ color: '#fff', background: 'var(--accent)' }}>
+                                + 记一笔
+                            </button>
+                            <button onClick={onOpen}
+                                className="text-[11px] font-bold rounded-full px-3 py-1.5 transition-colors hover:opacity-80"
+                                style={{ color: 'var(--accent)', background: 'transparent', border: '1.5px solid var(--accent)' }}>
+                                详情 →
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* ② 最近 3 条记录 */}
+                    <div className="flex-1 flex flex-col justify-center gap-2 z-10">
+                        {recentThree.length > 0 ? recentThree.map(t => {
+                            const col = getCatColor(t.category);
+                            return (
+                                <div key={t.id} className="flex items-center gap-2.5 rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.72)' }}>
+                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full flex-shrink-0 text-white" style={{ background: col }}>
+                                        {t.category}
+                                    </span>
+                                    <span className="text-xs font-bold truncate flex-1" style={{ color: '#78350f' }}>
+                                        {t.name}
+                                    </span>
+                                    <span className="text-[10px] font-medium text-gray-400 flex-shrink-0">
+                                        {t.date.slice(5)}
+                                    </span>
+                                    <span className="text-sm font-black flex-shrink-0" style={{ color: '#ea580c' }}>
+                                        ¥{parseFloat(t.amount).toLocaleString()} {t.currency}
+                                    </span>
+                                </div>
+                            );
+                        }) : (
+                            <p className="text-xs text-center text-amber-400 font-bold py-2">本月暂无记录</p>
+                        )}
+                    </div>
+
+                    {/* ③ 底部分类色条 */}
+                    {wCats.length > 0 && (
+                        <div className="z-10">
+                            <div className="flex h-2 rounded-full overflow-hidden mb-2">
+                                {wCats.map(cat => (
+                                    <div key={cat.name} style={{ width: `${(cat.total / wTotal * 100).toFixed(1)}%`, background: cat.color }} />
+                                ))}
+                            </div>
+                            <div className="flex flex-wrap gap-x-3 gap-y-1">
+                                {wCats.slice(0, 6).map(cat => (
+                                    <span key={cat.name} className="flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: cat.color }}></span>
+                                        <span className="text-[9px] font-bold text-gray-500">{cat.name}</span>
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ⑤ 快速记账弹窗 */}
+                    {showAdd && (
+                        <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowAdd(false)}>
+                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-6" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-between mb-5">
+                                    <h2 className="font-black text-base text-gray-800">记一笔</h2>
+                                    <span className="text-xs font-bold text-gray-400">{TODAY_STR}</span>
+                                </div>
+
+                                {/* 金额（70%）+ 货币（30%）同一行 */}
+                                <div className="flex gap-2 mb-3">
+                                    <input
+                                        type="number" inputMode="decimal" placeholder="金额"
+                                        value={addForm.amount}
+                                        onChange={e => setAddForm(f => ({ ...f, amount: e.target.value }))}
+                                        className="bg-gray-50 rounded-2xl px-4 py-3 text-lg font-black outline-none border-2 border-transparent focus:border-yellow-400 transition-colors"
+                                        style={{ flex: '7' }}
+                                        autoFocus
+                                    />
+                                    <select
+                                        value={addForm.currency}
+                                        onChange={e => setAddForm(f => ({ ...f, currency: e.target.value }))}
+                                        className="bg-gray-50 rounded-2xl px-3 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors text-center"
+                                        style={{ flex: '3', minWidth: '72px' }}>
+                                        <option>JPY</option>
+                                        <option>RMB</option>
+                                    </select>
+                                </div>
+
+                                {/* 分类 */}
+                                <select
+                                    value={addForm.category}
+                                    onChange={e => setAddForm(f => ({ ...f, category: e.target.value }))}
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-3">
+                                    <option value="">选择分类…</option>
+                                    {wCategories.map(c => (
+                                        <option key={c.id || c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                    {wCategories.length === 0 && ['餐饮','日用','交通','娱乐','美容','其他'].map(c => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+
+                                {/* 备注 */}
+                                <input
+                                    type="text" placeholder="备注（可选）"
+                                    value={addForm.name}
+                                    onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
+                                    onKeyDown={e => e.key === 'Enter' && saveNewTx()}
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-4"
+                                />
+
+                                {/* 确认按钮 */}
+                                <button onClick={saveNewTx}
+                                    disabled={!addForm.amount}
+                                    className="w-full py-4 rounded-2xl font-black text-base transition-all disabled:opacity-40"
+                                    style={{ background: 'var(--accent)', color: '#fff' }}>
+                                    确认记账
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // Finance 完整视图
+        const FinanceView = () => {
+            const [tab, setTab] = useState('month');
+            const [displayMonth, setDisplayMonth] = useState(new Date().getMonth() + 1);
+            const [displayYear, setDisplayYear] = useState(new Date().getFullYear());
+            const [selectedDay, setSelectedDay] = useState(null);     // 日历选中日
+            const [displayCurrency, setDisplayCurrency] = useState('JPY'); // 列表货币切换
+            const [detailCurrency, setDetailCurrency] = useState('JPY'); // 当日明细货币切换
+            const [searchTx, setSearchTx] = useState('');             // 记录搜索词
+
+            // 从 localStorage 读取的可编辑状态
+            const [fixedData, setFixedData] = useState(() => ({ ...(_financeStorage.fixedItemsByMonth || {}) }));
+            const [ratesData, setRatesData] = useState(() => ({
+                default: _financeStorage.exchangeRate ?? 0.048,
+                monthly: { ...(_financeStorage.monthlyRates || {}) },
+            }));
+
+            // 弹窗状态
+            const [editingFixed, setEditingFixed] = useState(null);
+            const [showRateModal, setShowRateModal] = useState(false);
+            const [rateInputDefault, setRateInputDefault] = useState('');
+            const [rateInputMonthly, setRateInputMonthly] = useState('');
+            const [aiPanel, setAIPanel] = useState({ isOpen: false, title: '' });
+
+            // localStorage 持久化
+            const saveToStorage = (updates) => {
+                try {
+                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    Object.assign(stored, updates);
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                } catch {}
+            };
+
+            // key 格式：fixedItemsByMonth 用 "2026-4"（月份-1），monthlyRates 用 "2026-05"
+            const fixedKey = `${displayYear}-${displayMonth - 1}`;
+            const rateKey  = `${displayYear}-${String(displayMonth).padStart(2, '0')}`;
+
+            // 当月汇率：优先月度覆盖，否则用默认
+            const currentRate = Number(ratesData.monthly[rateKey]) || Number(ratesData.default) || 0.048;
+
+            // 货币换算辅助
+            const isRMBCur = displayCurrency === 'RMB';
+            const toJPY = (amt, cur) => cur === 'RMB' || cur === 'CNY' ? amt / currentRate : amt;
+            const toRMB = (amt, cur) => cur === 'RMB' || cur === 'CNY' ? amt : amt * currentRate;
+            const fmtJPY = (n) => '¥' + Math.round(n).toLocaleString() + ' JPY';
+            const fmtRMB = (n) => '¥' + (n).toFixed(2) + ' RMB';
+            const fmtAmt = (amt, cur) => isRMBCur ? fmtRMB(toRMB(amt, cur)) : fmtJPY(toJPY(amt, cur));
+
+            // 计算当月固定支出合计（JPY）
+            const fixedItems = fixedData[fixedKey] || [];
+            const fixedTotal = fixedItems
+                .filter(item => item.type === 'expense')
+                .reduce((sum, item) => {
+                    const amt = parseFloat(item.amount) || 0;
+                    return sum + (item.currency === 'RMB' ? amt / currentRate : amt);
+                }, 0);
+
+            // 月份导航
+            const goPrevMonth = () => {
+                setSelectedDay(null);
+                if (displayMonth === 1) { setDisplayMonth(12); setDisplayYear(y => y - 1); }
+                else setDisplayMonth(m => m - 1);
+            };
+            const goNextMonth = () => {
+                setSelectedDay(null);
+                if (displayMonth === 12) { setDisplayMonth(1); setDisplayYear(y => y + 1); }
+                else setDisplayMonth(m => m + 1);
+            };
+
+            // 月度数据（动态计算）
+            const MONTH_NAMES = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+            const monthStr    = `${displayYear}-${String(displayMonth).padStart(2, '0')}`;
+            const monthTx     = MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(monthStr));
+            const monthTotal  = monthTx.reduce((s, t) => s + toJPY(parseFloat(t.amount) || 0, t.currency), 0);
+
+            // 按分类聚合
+            const catMap = {};
+            monthTx.forEach(t => {
+                const cat = t.category || '其他';
+                const jpy = toJPY(parseFloat(t.amount) || 0, t.currency);
+                catMap[cat] = (catMap[cat] || 0) + jpy;
+            });
+            const monthCats = Object.entries(catMap)
+                .map(([name, total]) => ({ name, total, color: getCatColor(name) }))
+                .sort((a, b) => b.total - a.total);
+            // 分类占比只显示流水支出，固定支出单独在顶部显示
+            const allMonthCats = monthCats;
+            const allMonthTotal = monthCats.reduce((s, c) => s + c.total, 0) || 1;
+            const monthCatsTotal = allMonthTotal;
+            const maxMonthCat = Math.max(...allMonthCats.map(c => c.total), 1);
+
+            const daysInMonth = new Date(displayYear, displayMonth, 0).getDate();
+            const firstDay    = new Date(displayYear, displayMonth - 1, 1).getDay();
+            const datesWithTx = new Set(monthTx.map(t => t.date));
+
+            // 当日明细
+            const selectedDayTx    = selectedDay ? MOCK_TRANSACTIONS.filter(t => t.date === selectedDay) : [];
+            const selectedDayTotal = selectedDayTx.reduce((s, t) => s + toJPY(parseFloat(t.amount) || 0, t.currency), 0);
+
+            // 年度数据（动态计算）
+            const yearRows = Array.from({ length: 12 }, (_, i) => {
+                const m = i + 1;
+                const ms = `${displayYear}-${String(m).padStart(2, '0')}`;
+                const txs = MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(ms));
+                const total = Math.round(txs.reduce((s, t) => s + toJPY(parseFloat(t.amount) || 0, t.currency), 0));
+                return { month: m, total };
+            });
+            const yearTotal   = yearRows.reduce((s, m) => s + m.total, 0);
+            const activeMs    = yearRows.filter(m => m.total > 0);
+            const yearAvg     = activeMs.length > 0 ? Math.round(yearTotal / activeMs.length) : 0;
+            const yearCount   = MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(`${displayYear}-`)).length;
+            const maxMonthTotal = Math.max(...yearRows.map(m => m.total), 1);
+
+            // 年度分类 top5
+            const yearCatMap = {};
+            MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(`${displayYear}-`)).forEach(t => {
+                const cat = t.category || '其他';
+                const jpy = toJPY(parseFloat(t.amount) || 0, t.currency);
+                yearCatMap[cat] = (yearCatMap[cat] || 0) + jpy;
+            });
+            const top5 = Object.entries(yearCatMap)
+                .map(([name, total]) => ({ name, total: Math.round(total), color: getCatColor(name) }))
+                .sort((a, b) => b.total - a.total)
+                .slice(0, 5);
+            const maxCatTotal = top5[0]?.total || 1;
+
+            const goldBg = { background: 'var(--finance-bg)', border: '1.5px solid var(--finance-border)' };
+
+            // ── 固定项目弹窗 ──
+            const openFixedModal = () => setEditingFixed((fixedData[fixedKey] || []).map(i => ({ ...i })));
+            const closeFixedModal = () => setEditingFixed(null);
+            const saveFixedModal = () => {
+                const next = { ...fixedData, [fixedKey]: editingFixed };
+                setFixedData(next);
+                saveToStorage({ fixedItemsByMonth: next });
+                setEditingFixed(null);
+            };
+            const updateItem = (idx, field, value) =>
+                setEditingFixed(items => items.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+            const addItem = () =>
+                setEditingFixed(items => [...items, { name: '', amount: '', currency: 'JPY', type: 'expense' }]);
+            const removeItem = (idx) =>
+                setEditingFixed(items => items.filter((_, i) => i !== idx));
+
+            // 弹窗内实时预览合计
+            const editingTotal = (editingFixed || [])
+                .filter(i => i.type === 'expense')
+                .reduce((s, i) => {
+                    const amt = parseFloat(i.amount) || 0;
+                    return s + (i.currency === 'RMB' ? amt / currentRate : amt);
+                }, 0);
+
+            // ── 汇率弹窗 ──
+            const openRateModal = () => {
+                setRateInputDefault(String(ratesData.default));
+                setRateInputMonthly(String(ratesData.monthly[rateKey] || ''));
+                setShowRateModal(true);
+            };
+            const saveRateModal = () => {
+                const def = parseFloat(rateInputDefault) || 0.048;
+                const monthly = { ...ratesData.monthly };
+                const mv = parseFloat(rateInputMonthly);
+                if (mv > 0) monthly[rateKey] = mv; else delete monthly[rateKey];
+                const next = { default: def, monthly };
+                setRatesData(next);
+                saveToStorage({ exchangeRate: def, monthlyRates: monthly });
+                setShowRateModal(false);
+            };
+
+            return (
+                <div className="animate-fade-in flex flex-col">
+
+                    {/* ── Tab 切换 ── */}
+                    <div className="flex gap-2 mb-4">
+                        {['month', 'year'].map(t => (
+                            <button key={t} onClick={() => setTab(t)}
+                                className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${tab === t ? 'text-white shadow-sm' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+                                style={tab === t ? { background: 'var(--accent)' } : {}}>
+                                {t === 'month' ? '月度' : '年度'}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="pb-8">
+
+                        {/* ══ 月度 Tab ══ */}
+                        {tab === 'month' && (
+                            <div className="flex flex-col gap-4 animate-fade-in">
+
+                                <div className="flex flex-col gap-2">
+                                    {/* 第一行：← 年月 → 两端对齐 ¥JPY⇄ 汇率 */}
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={goPrevMonth} className="w-8 h-8 rounded-full bg-white shadow-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors">←</button>
+                                            <span className="font-black text-lg min-w-[90px] text-center">{displayYear}年{displayMonth}月</span>
+                                            <button onClick={goNextMonth} className="w-8 h-8 rounded-full bg-white shadow-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors">→</button>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => setDisplayCurrency(isRMBCur ? 'JPY' : 'RMB')}
+                                                className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors"
+                                                style={{ color: isRMBCur ? '#c2410c' : '#1e293b' }}>
+                                                ¥{isRMBCur ? 'RMB' : 'JPY'} ⇄
+                                            </button>
+                                            <button onClick={openRateModal}
+                                                className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-500 hover:bg-gray-50 transition-colors">
+                                                汇率 {currentRate}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {/* 第二行：总支出 | 固定支出 | 合计 */}
+                                    <div className="flex items-end gap-4 flex-wrap">
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--accent)' }}>本月支出</p>
+                                            <p className="text-2xl font-black" style={{ color: '#c2410c' }}>
+                                                {isRMBCur ? `¥${(monthTotal * currentRate).toFixed(0)} RMB` : `¥${Math.round(monthTotal).toLocaleString()} JPY`}
+                                            </p>
+                                        </div>
+                                        <div className="w-px h-8 bg-gray-200 self-center" />
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--accent)' }}>固定支出</p>
+                                            <p className="text-xl font-black" style={{ color: '#92400e' }}>
+                                                {isRMBCur ? `¥${(fixedTotal * currentRate).toFixed(0)} RMB` : `¥${Math.round(fixedTotal).toLocaleString()} JPY`}
+                                            </p>
+                                        </div>
+                                        <div className="w-px h-8 bg-gray-200 self-center" />
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--accent)' }}>合计</p>
+                                            <p className="text-xl font-black" style={{ color: '#475569' }}>
+                                                {isRMBCur ? `¥${((monthTotal + fixedTotal) * currentRate).toFixed(0)} RMB` : `¥${Math.round(monthTotal + fixedTotal).toLocaleString()} JPY`}
+                                            </p>
+                                        </div>
+                                        <button onClick={openFixedModal} className="text-[10px] font-black underline transition-colors ml-1 self-end mb-1 hover:opacity-70" style={{ color: 'var(--accent)' }}>管理</button>
+                                    </div>
+                                </div>
+
+                                {/* 双卡片：6:4，左边固定高度可滚动，右边日历配合 */}
+                                <div className="flex flex-col md:flex-row gap-4" style={{alignItems:'stretch'}}>
+
+                                    {/* 左：分类占比 60%，固定高度可滚动 */}
+                                    <div className="w-full md:w-[60%] rounded-2xl flex flex-col" style={goldBg}>
+                                        <div className="px-5 pt-5 pb-2 flex-shrink-0">
+                                            <h3 className="font-black text-sm tracking-widest" style={{ color: 'var(--accent)' }}>分类占比</h3>
+                                        </div>
+                                        <div className="px-5 pb-5 flex-1">
+                                        {allMonthCats.length > 0 ? (
+                                            <div className="space-y-3">
+                                                {allMonthCats.map(cat => {
+                                                    const pct = (cat.total / monthCatsTotal * 100);
+                                                    const barPct = Math.max((cat.total / maxMonthCat * 100), 2);
+                                                    const amtLabel = isRMBCur
+                                                        ? '¥' + (cat.total * currentRate).toFixed(0)
+                                                        : '¥' + Math.round(cat.total).toLocaleString();
+                                                    const shortName = cat.name.length > 7 ? cat.name.slice(0, 7) + '…' : cat.name;
+                                                    return (
+                                                        <div key={cat.name} className="flex items-center gap-3">
+                                                            <div className="flex items-center gap-2 flex-shrink-0" style={{ width: '88px' }}>
+                                                                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: cat.color }}></span>
+                                                                <span className="text-sm font-bold text-gray-700 truncate">{shortName}</span>
+                                                            </div>
+                                                            <div className="flex-1 h-2 rounded-full" style={{ background: '#f5ece0' }}>
+                                                                <div style={{ width: `${barPct}%`, height: '100%', borderRadius: '999px', background: cat.color }} />
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 flex-shrink-0" style={{ minWidth: '90px', justifyContent: 'flex-end' }}>
+                                                                <span className="text-sm font-bold text-gray-700">{amtLabel}</span>
+                                                                <span className="text-xs text-gray-400">{pct.toFixed(0)}%</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-gray-400 text-center py-8">暂无数据</p>
+                                        )}
+                                        </div>
+                                    </div>
+
+                                    {/* 右：日历 + 当日明细 40%，配合左边高度 */}
+                                    <div className="w-full md:w-[40%] flex flex-col gap-3" style={{justifyContent:'flex-start'}}>
+
+                                        {/* 迷你日历 */}
+                                        <div className="bg-white p-4 rounded-2xl shadow-sm flex-shrink-0">
+                                            <h3 className="font-black text-xs uppercase tracking-widest text-gray-400 mb-2">{displayMonth} 月日历</h3>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px' }}>
+                                                {['日','一','二','三','四','五','六'].map(d => (
+                                                    <div key={d} style={{ height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: '#9ca3af' }}>{d}</div>
+                                                ))}
+                                                {Array.from({ length: firstDay }).map((_, i) => (
+                                                    <div key={`e-${i}`} style={{ height: '36px' }} />
+                                                ))}
+                                                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+                                                    const ds = `${displayYear}-${String(displayMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                                                    const hasTx = datesWithTx.has(ds);
+                                                    const isToday = ds === TODAY_STR;
+                                                    const isSelected = ds === selectedDay;
+                                                    const dayTxs = MOCK_TRANSACTIONS.filter(t => t.date === ds);
+                                                    const dotColor = dayTxs.length > 0 ? getCatColor(dayTxs[0].category) : null;
+                                                    return (
+                                                        <div key={d}
+                                                            onClick={() => hasTx && setSelectedDay(isSelected ? null : ds)}
+                                                            style={{
+                                                                height: '36px',
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                borderRadius: '6px',
+                                                                fontSize: '10px',
+                                                                fontWeight: 700,
+                                                                cursor: hasTx ? 'pointer' : 'default',
+                                                                outline: isSelected ? '2px solid #fbbf24' : 'none',
+                                                                background: isToday ? '#475569' : hasTx ? (isSelected ? '#fde68a' : '#fef3c7') : 'transparent',
+                                                                color: isToday ? '#fff' : hasTx ? '#78350f' : '#d1d5db',
+                                                            }}>
+                                                            {d}
+                                                            {hasTx && !isToday && <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: dotColor, display: 'block', marginTop: '1px' }} />}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* 当日明细：紧跟日历下方，最高160px可滚动 */}
+                                        {selectedDay && (
+                                            <div className="rounded-2xl overflow-hidden animate-fade-in" style={{ border: '1.5px solid var(--finance-border)', background: 'var(--finance-bg)' }}>
+                                                <div className="px-3 py-2 flex items-center justify-between flex-shrink-0" style={{ borderBottom: '1px solid var(--finance-border)' }}>
+                                                    <div>
+                                                        <span className="font-black text-xs text-amber-900">{selectedDay.slice(5)} 明细</span>
+                                                        <span className="ml-1.5 text-[10px] text-amber-600 font-bold">{selectedDayTx.length} 笔</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button onClick={() => setDetailCurrency(d => d === 'JPY' ? 'RMB' : 'JPY')}
+                                                            className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-white shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors"
+                                                            style={{ color: detailCurrency === 'RMB' ? '#c2410c' : '#1e293b' }}>
+                                                            ¥{detailCurrency} ⇄
+                                                        </button>
+                                                        <span className="text-xs font-black" style={{ color: '#c2410c' }}>
+                                                            {detailCurrency === 'RMB'
+                                                                ? `¥${(selectedDayTotal * currentRate).toFixed(2)} RMB`
+                                                                : `¥${Math.round(selectedDayTotal).toLocaleString()}`}
+                                                        </span>
+                                                        <button onClick={() => setSelectedDay(null)} className="text-amber-400 hover:text-amber-600 font-black text-base leading-none">×</button>
+                                                    </div>
+                                                </div>
+                                                {/* 最高160px，超出滚动 */}
+                                                <div style={{ maxHeight: '160px', overflowY: 'auto' }} className="hide-scrollbar divide-y divide-amber-100">
+                                                    {selectedDayTx.length > 0 ? selectedDayTx.map(t => {
+                                                        const col = getCatColor(t.category);
+                                                        const origAmt = parseFloat(t.amount) || 0;
+                                                        const convertedRMB = toRMB(origAmt, t.currency);
+                                                        const convertedJPY = toJPY(origAmt, t.currency);
+                                                        return (
+                                                            <div key={t.id} className="flex items-center gap-2 px-3 py-2">
+                                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 text-white" style={{ background: col }}>{t.category}</span>
+                                                                <span className="text-xs font-bold truncate flex-1 text-gray-700">{t.name}</span>
+                                                                <div className="flex flex-col items-end flex-shrink-0">
+                                                                    {detailCurrency === 'JPY' ? (
+                                                                        <>
+                                                                            <span className="text-xs font-black" style={{ color: '#ea580c' }}>¥{origAmt.toLocaleString()} {t.currency}</span>
+                                                                            <span className="text-[9px] text-gray-400">
+                                                                                {t.currency === 'JPY' ? `≈¥${convertedRMB.toFixed(1)}RMB` : `≈¥${Math.round(convertedJPY).toLocaleString()}JPY`}
+                                                                            </span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <span className="text-xs font-black" style={{ color: '#ea580c' }}>
+                                                                                {t.currency === 'JPY' ? `¥${(origAmt * currentRate).toFixed(2)} RMB` : `¥${origAmt.toLocaleString()} RMB`}
+                                                                            </span>
+                                                                            <span className="text-[9px] text-gray-400">
+                                                                                {t.currency === 'JPY' ? `原 ¥${origAmt.toLocaleString()} JPY` : `≈¥${Math.round(convertedJPY).toLocaleString()}JPY`}
+                                                                            </span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }) : (
+                                                        <p className="text-center text-gray-400 text-xs py-4">当天没有记录</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* 搜索框 */}
+                                <div className="relative mb-2">
+                                    <input
+                                        value={searchTx}
+                                        onChange={e => setSearchTx(e.target.value)}
+                                        placeholder="搜索名称或分类…"
+                                        className="w-full bg-white rounded-2xl px-4 py-2.5 pr-10 text-sm outline-none border border-gray-100 shadow-sm"
+                                        style={{ fontWeight: 600, color: '#1e293b' }}
+                                    />
+                                    {searchTx && (
+                                        <button onClick={() => setSearchTx('')}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-black text-base leading-none">×</button>
+                                    )}
+                                </div>
+
+                                {/* 当月记录列表 */}
+                                <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                                    <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between">
+                                        <h3 className="font-black text-xs uppercase tracking-widest text-gray-400">当月记录</h3>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex rounded-lg overflow-hidden border border-gray-100 text-[10px] font-black">
+                                                {['JPY','RMB'].map(cur => (
+                                                    <button key={cur} onClick={() => setDisplayCurrency(cur)}
+                                                        className={`px-2.5 py-1 transition-colors ${displayCurrency === cur ? 'text-white' : 'text-gray-400 bg-white'}`}
+                                                        style={displayCurrency === cur ? { background: 'var(--accent)' } : {}}>
+                                                        {cur}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <span className="text-xs font-bold text-gray-400">
+                                                {searchTx.trim() ? (() => { const q = searchTx.toLowerCase(); return [...monthTx].filter(t => (t.name||'').toLowerCase().includes(q)||(t.category||'').toLowerCase().includes(q)).length; })() : monthTx.length} 笔
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="divide-y divide-gray-50">
+                                        {(() => {
+                                            const filteredTx = (() => {
+                                                const reversed = [...monthTx].reverse();
+                                                if (!searchTx.trim()) return reversed;
+                                                const q = searchTx.toLowerCase();
+                                                return reversed.filter(t => (t.name||'').toLowerCase().includes(q)||(t.category||'').toLowerCase().includes(q));
+                                            })();
+                                            return filteredTx.length > 0 ? filteredTx.map(t => {
+                                            const col = getCatColor(t.category);
+                                            const origAmt = parseFloat(t.amount) || 0;
+                                            const displayAmt = isRMBCur
+                                                ? '¥' + toRMB(origAmt, t.currency).toFixed(2) + ' RMB'
+                                                : '¥' + Math.round(toJPY(origAmt, t.currency)).toLocaleString() + ' JPY';
+                                            const origLabel = isRMBCur
+                                                ? (t.currency === 'JPY' ? `原 ¥${origAmt.toLocaleString()} JPY` : null)
+                                                : (t.currency === 'RMB' ? `原 ¥${origAmt} RMB` : null);
+                                            return (
+                                                <div key={t.id} className="flex items-center gap-3 px-5 py-3">
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full flex-shrink-0 text-white" style={{ background: col }}>{t.category}</span>
+                                                    <span className="text-sm font-bold truncate flex-1 text-gray-700">{t.name}</span>
+                                                    <span className="text-xs text-gray-400 flex-shrink-0">{t.date.slice(5)}</span>
+                                                    <div className="flex flex-col items-end flex-shrink-0">
+                                                        <span className="text-sm font-black" style={{ color: '#ea580c' }}>{displayAmt}</span>
+                                                        {origLabel && <span className="text-[10px] text-gray-400">{origLabel}</span>}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }) : (
+                                            <p className="text-center text-gray-400 text-sm py-10">{searchTx.trim() ? '没有匹配的记录' : '这个月没有记录'}</p>
+                                        );
+                                        })()}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ══ 年度 Tab ══ */}
+                        {tab === 'year' && (
+                            <div className="flex flex-col gap-4 animate-fade-in">
+
+                                {/* 年份导航 + 三个统计卡片 */}
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <button onClick={() => setDisplayYear(y => y - 1)} className="w-8 h-8 rounded-full bg-white shadow-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors">←</button>
+                                        <span className="font-black text-lg">{displayYear} 年</span>
+                                        <button onClick={() => setDisplayYear(y => y + 1)} className="w-8 h-8 rounded-full bg-white shadow-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors">→</button>
+                                        <button onClick={() => setDisplayCurrency(isRMBCur ? 'JPY' : 'RMB')}
+                                            className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors"
+                                            style={{ color: isRMBCur ? '#c2410c' : '#1e293b' }}>
+                                            ¥{isRMBCur ? 'RMB' : 'JPY'} ⇄
+                                        </button>
+                                        <button onClick={() => setAIPanel({ isOpen: true, title: `AI 年度总结 · ${displayYear}` })}
+                                            className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1">
+                                            ✨ AI 年度总结
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {[
+                                            { label: '全年支出', value: isRMBCur ? `¥${(yearTotal * currentRate).toFixed(0)} RMB` : `¥${yearTotal.toLocaleString()} JPY` },
+                                            { label: '月均支出', value: isRMBCur ? `¥${(yearAvg * currentRate).toFixed(0)} RMB` : `¥${yearAvg.toLocaleString()} JPY` },
+                                            { label: '记录笔数', value: `${yearCount} 笔` },
+                                        ].map(stat => (
+                                            <div key={stat.label} className="p-4 rounded-2xl" style={goldBg}>
+                                                <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: 'var(--accent)' }}>{stat.label}</p>
+                                                <p className="text-lg font-black leading-tight" style={{ color: '#c2410c' }}>{stat.value}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* 月度走势柱状图 */}
+                                <div className="bg-white p-5 rounded-2xl shadow-sm">
+                                    <h3 className="font-black text-xs uppercase tracking-widest text-gray-400 mb-4">月度走势</h3>
+                                    <div className="flex items-end gap-1.5" style={{ height: '108px' }}>
+                                        {yearRows.map((m, idx) => {
+                                            const isHighlight = m.month === displayMonth;
+                                            const barH = m.total > 0 ? Math.max(Math.round(m.total / maxMonthTotal * 80), 4) : 0;
+                                            return (
+                                                <div key={m.month} className="flex-1 flex flex-col items-center justify-end gap-1.5" style={{ height: '108px' }}>
+                                                    <div className="w-full rounded-t-md transition-all"
+                                                        style={{ height: `${barH}px`, background: m.total === 0 ? 'transparent' : isHighlight ? 'var(--accent)' : 'var(--finance-border)' }} />
+                                                    <span className={`text-[8px] md:text-[9px] font-bold ${isHighlight ? '' : 'text-gray-400'}`} style={isHighlight ? { color: 'var(--accent)' } : {}}>
+                                                        {MONTH_NAMES[idx]}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* 分类 Top 5 */}
+                                <div className="bg-white p-5 rounded-2xl shadow-sm">
+                                    <h3 className="font-black text-xs uppercase tracking-widest text-gray-400 mb-4">分类 Top 5</h3>
+                                    <div className="space-y-3">
+                                        {top5.map((cat, idx) => {
+                                            const barW = (cat.total / maxCatTotal * 100).toFixed(1);
+                                            const pct = yearTotal > 0 ? (cat.total / yearTotal * 100).toFixed(1) : '0.0';
+                                            return (
+                                                <div key={cat.name} className="flex items-center gap-3">
+                                                    <span className="text-[10px] font-black text-gray-400 w-5 flex-shrink-0 text-center">#{idx + 1}</span>
+                                                    <span className="text-xs font-bold text-gray-700 w-8 flex-shrink-0">{cat.name}</span>
+                                                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                                        <div className="h-full rounded-full" style={{ width: `${barW}%`, background: cat.color }} />
+                                                    </div>
+                                                    <span className="text-xs font-bold text-gray-700 flex-shrink-0 w-20 text-right">
+                                                        {isRMBCur ? `¥${(cat.total * currentRate).toFixed(0)}` : `¥${cat.total.toLocaleString()}`}
+                                                    </span>
+                                                    <span className="text-[10px] text-gray-400 flex-shrink-0 w-10 text-right">{pct}%</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ══ 固定支出管理弹窗 ══ */}
+                    {editingFixed !== null && (
+                        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={closeFixedModal}>
+                            <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl animate-slide-up flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+
+                                {/* 弹窗头 */}
+                                <div className="px-6 pt-6 pb-4 border-b border-gray-50 flex items-start justify-between flex-shrink-0">
+                                    <div>
+                                        <h2 className="font-black text-base text-gray-800">{displayYear}年{displayMonth}月 固定项目</h2>
+                                        <p className="text-[11px] text-gray-400 mt-0.5 font-medium">
+                                            支出合计：
+                                            <span className="font-black" style={{ color: '#c2410c' }}>
+                                                ¥{Math.round(editingTotal).toLocaleString()} JPY
+                                            </span>
+                                            <span className="ml-2 text-gray-300">（汇率 {currentRate}）</span>
+                                        </p>
+                                    </div>
+                                    <button onClick={closeFixedModal} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200 flex-shrink-0 ml-4">×</button>
+                                </div>
+
+                                {/* 表头 */}
+                                <div className="grid grid-cols-[1fr_90px_56px_56px_28px] gap-2 text-[10px] font-black text-gray-400 uppercase tracking-wider px-6 pt-3 pb-1 flex-shrink-0">
+                                    <span>名称</span><span className="text-right">金额</span><span className="text-center">货币</span><span className="text-center">类型</span><span></span>
+                                </div>
+
+                                {/* 项目列表（可滚动）*/}
+                                <div className="flex-1 overflow-y-auto hide-scrollbar px-6 pb-2 space-y-1">
+                                    {editingFixed.length === 0 && (
+                                        <p className="text-sm text-gray-400 text-center py-8">还没有固定项目，点击下方「添加项目」</p>
+                                    )}
+                                    {editingFixed.map((item, idx) => (
+                                        <div key={idx} className="grid grid-cols-[1fr_90px_56px_56px_28px] gap-2 items-center py-2 px-2 rounded-xl hover:bg-gray-50 transition-colors">
+                                            <input
+                                                value={item.name}
+                                                onChange={e => updateItem(idx, 'name', e.target.value)}
+                                                placeholder="项目名称"
+                                                className="text-sm font-bold text-gray-700 bg-transparent border-b border-gray-200 focus:border-amber-400 outline-none pb-0.5 w-full transition-colors"
+                                            />
+                                            <input
+                                                value={item.amount}
+                                                onChange={e => updateItem(idx, 'amount', e.target.value)}
+                                                placeholder="0"
+                                                type="number"
+                                                className="text-sm font-black text-right bg-transparent border-b border-gray-200 focus:border-amber-400 outline-none pb-0.5 w-full transition-colors"
+                                                style={{ color: item.type === 'expense' ? '#c2410c' : '#15803d' }}
+                                            />
+                                            <select value={item.currency} onChange={e => updateItem(idx, 'currency', e.target.value)}
+                                                className="text-[11px] font-bold text-center bg-gray-100 rounded-lg border-none outline-none py-1 cursor-pointer">
+                                                <option value="JPY">JPY</option>
+                                                <option value="RMB">RMB</option>
+                                            </select>
+                                            <select value={item.type} onChange={e => updateItem(idx, 'type', e.target.value)}
+                                                className={`text-[11px] font-bold text-center rounded-lg border-none outline-none py-1 cursor-pointer ${item.type === 'expense' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                                                <option value="expense">支出</option>
+                                                <option value="income">收入</option>
+                                            </select>
+                                            <button onClick={() => removeItem(idx)} className="w-6 h-6 rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-500 text-gray-400 flex items-center justify-center font-bold text-xs transition-colors">×</button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* 底部操作 */}
+                                <div className="px-6 pb-6 pt-3 border-t border-gray-50 flex items-center justify-between flex-shrink-0">
+                                    <button onClick={addItem} className="flex items-center gap-1.5 text-sm font-bold transition-colors hover:opacity-70" style={{ color: 'var(--accent)' }}>
+                                        <span className="w-6 h-6 rounded-full flex items-center justify-center font-black text-white flex-shrink-0 text-sm" style={{ background: 'var(--accent)' }}>+</span>
+                                        添加项目
+                                    </button>
+                                    <div className="flex gap-2">
+                                        <button onClick={closeFixedModal} className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 font-bold text-sm hover:bg-gray-200 transition-colors">取消</button>
+                                        <button onClick={saveFixedModal} className="px-5 py-2 rounded-xl text-white font-bold text-sm transition-colors" style={{ background: 'var(--accent)' }}>保存</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ══ 汇率设置弹窗 ══ */}
+                    {showRateModal && (
+                        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowRateModal(false)}>
+                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 animate-slide-up" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-between mb-6">
+                                    <h2 className="font-black text-base text-gray-800">汇率设置</h2>
+                                    <button onClick={() => setShowRateModal(false)} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
+                                </div>
+
+                                <div className="space-y-5">
+                                    {/* 默认汇率 */}
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: 'var(--accent)' }}>默认汇率</label>
+                                        <div className="flex items-center gap-2 bg-amber-50 rounded-xl p-3 border border-amber-100">
+                                            <span className="text-sm font-bold text-gray-500 whitespace-nowrap">1 JPY =</span>
+                                            <input type="number" step="0.001" value={rateInputDefault} onChange={e => setRateInputDefault(e.target.value)}
+                                                className="flex-1 text-sm font-black text-center bg-white rounded-lg px-3 py-1.5 border border-amber-200 outline-none focus:border-amber-400 transition-colors" />
+                                            <span className="text-sm font-bold text-gray-500">RMB</span>
+                                        </div>
+                                        <p className="text-[11px] text-gray-400 mt-1.5 ml-1">
+                                            即 1 RMB ≈ <strong>{rateInputDefault ? (1 / parseFloat(rateInputDefault)).toFixed(2) : '—'}</strong> JPY
+                                        </p>
+                                    </div>
+
+                                    {/* 当月覆盖 */}
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: 'var(--accent)' }}>
+                                            {displayYear}年{displayMonth}月 单独汇率
+                                            <span className="text-gray-400 font-medium ml-1 lowercase normal-case">（留空则使用默认）</span>
+                                        </label>
+                                        <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                            <span className="text-sm font-bold text-gray-500 whitespace-nowrap">1 JPY =</span>
+                                            <input type="number" step="0.001" value={rateInputMonthly} onChange={e => setRateInputMonthly(e.target.value)}
+                                                placeholder={rateInputDefault || '0.048'}
+                                                className="flex-1 text-sm font-black text-center bg-white rounded-lg px-3 py-1.5 border border-gray-200 outline-none focus:border-amber-400 transition-colors" />
+                                            <span className="text-sm font-bold text-gray-500">RMB</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button onClick={saveRateModal} className="w-full mt-6 py-3.5 rounded-2xl text-white font-bold text-sm transition-colors hover:opacity-90" style={{ background: 'var(--accent)' }}>
+                                    保存汇率
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    <AIGeneratePanel isOpen={aiPanel.isOpen} title={aiPanel.title} onClose={() => setAIPanel(p => ({ ...p, isOpen: false }))} />
+                </div>
+            );
+        };
+
+        // 可拖拽与缩放的包装器
+        const WidgetWrapper = ({ children, isEditMode, size, onCycleSize, onMove, index }) => {
+            // 将 size 映射到 Tailwind Grid 跨度
+            const spanClass = (size === 'large' || size === '2x2') ? 'col-span-2 row-span-2' : (size === 'medium' || size === '2x1') ? 'col-span-2 row-span-1' : 'col-span-1 row-span-1';
+            
+            const handleDragStart = (e) => {
+                if (!isEditMode) return e.preventDefault();
+                e.dataTransfer.setData('text/plain', index);
+                e.target.classList.add('opacity-50');
+            };
+            const handleDrop = (e) => {
+                if (!isEditMode) return;
+                const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                if (fromIndex !== index) onMove(fromIndex, index);
+                e.target.classList.remove('opacity-50');
+            };
+
+            return (
+                <div 
+                    draggable={isEditMode} 
+                    onDragStart={handleDragStart} 
+                    onDragOver={(e) => { if(isEditMode) e.preventDefault(); }} 
+                    onDragEnd={(e) => e.target.classList.remove('opacity-50')}
+                    onDrop={handleDrop}
+                    className={`${spanClass} relative transition-all duration-300 w-full h-full ${isEditMode ? 'cursor-grab active:cursor-grabbing animate-wiggle ring-2 ring-dashed ring-gray-300 rounded-os-xl' : ''}`}
+                >
+                    <div className="w-full h-full pointer-events-auto">{children}</div>
+                    
+                    {isEditMode && (
+                        <div className="absolute bottom-2 right-2 glass-panel rounded-full shadow-lg flex items-center p-1 z-20">
+                            <button onClick={(e) => { e.stopPropagation(); onCycleSize(); }} className="w-8 h-8 rounded-full bg-os-text text-white font-bold flex items-center justify-center hover:scale-110 transition-transform">⤡</button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // 双栏备忘录式日历
+        const CalendarView = ({ events, todos, activeFilter, onOpenReport }) => {
+            const [currentDate, setCurrentDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+            const [selectedDate, setSelectedDate] = useState(TODAY_STR);
+            
+            const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+            const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+
+            // 过滤数据
+            const filteredEvents = activeFilter === 'all' ? events : events.filter(e => e.catId === activeFilter);
+            
+            const selectedEvents = filteredEvents.filter(e => e.date === selectedDate);
+            const selectedTodos = todos.filter(t => t.date === selectedDate);
+
+            return (
+                <div className="flex flex-col md:flex-row gap-6 h-full pb-20 md:pb-0 animate-fade-in">
+                    {/* 左侧：大型日历网格 */}
+                    <div className="flex-1 bg-white p-6 rounded-[2rem] shadow-sm">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-black">{currentDate.getFullYear()}年 {currentDate.getMonth()+1}月</h2>
+                            <div className="flex gap-2">
+                                <button onClick={()=>setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()-1, 1))} className="w-10 h-10 rounded-full bg-gray-50 font-bold hover:bg-gray-200">←</button>
+                                <button onClick={()=>setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1))} className="w-10 h-10 rounded-full bg-gray-50 font-bold hover:bg-gray-200">→</button>
+                            </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-7 gap-y-4 gap-x-2 text-center">
+                            {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-xs font-bold text-gray-400 mb-2">{d}</div>)}
+                            {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
+                            
+                            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+                                const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                                const dayEvents = filteredEvents.filter(e => e.date === dateStr);
+                                const isSelected = dateStr === selectedDate;
+
+                                return (
+                                    <div key={d} onClick={() => setSelectedDate(dateStr)} className={`aspect-square flex flex-col items-center justify-start pt-2 rounded-2xl cursor-pointer transition-all ${isSelected ? 'bg-os-text text-white shadow-md' : 'hover:bg-gray-50 text-gray-600'}`}>
+                                        <span className="text-sm font-bold">{d}</span>
+                                        <div className="flex gap-0.5 mt-1 flex-wrap justify-center px-1">
+                                            {dayEvents.slice(0,4).map((e, idx) => {
+                                                const color = CATEGORIES.find(c=>c.id===e.catId)?.color || 'bg-gray-400';
+                                                return <span key={idx} className={`w-1.5 h-1.5 rounded-full ${color}`}></span>
+                                            })}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    {/* 右侧：详情面板 (备忘录式) */}
+                    <div className="w-full md:w-80 flex flex-col gap-4">
+                        <button onClick={() => onOpenReport('month')} className="w-full bg-white/60 hover:bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between transition-colors group">
+                            <span className="font-bold text-sm text-os-text">生成 5月 洞察报告</span>
+                            <span className="text-xl group-hover:scale-125 transition-transform">✨</span>
+                        </button>
+
+                        <div className="bg-white p-6 rounded-[2rem] shadow-sm flex-1 overflow-y-auto">
+                            <h3 className="text-lg font-black mb-4 border-b border-gray-100 pb-2">{selectedDate} 记录</h3>
+                            
+                            {selectedEvents.length === 0 && selectedTodos.length === 0 ? (
+                                <div className="text-center text-gray-400 text-sm mt-10">这一天没有符合条件的记录哦。</div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {/* Todos */}
+                                    {selectedTodos.map(t => (
+                                        <div key={`t-${t.id}`} className="flex items-start gap-3">
+                                            <div className={`mt-1 w-4 h-4 rounded border flex items-center justify-center text-[10px] ${t.done?'bg-green-400 border-green-400 text-white':'border-gray-300'}`}>✓</div>
+                                            <p className={`text-sm ${t.done?'line-through text-gray-400':'font-bold text-os-text'}`}>{t.title}</p>
+                                        </div>
+                                    ))}
+                                    {/* Events */}
+                                    {selectedEvents.map(e => {
+                                        const cat = CATEGORIES.find(c=>c.id===e.catId);
+                                        return (
+                                            <div key={`e-${e.id}`} className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="text-lg">{cat?.icon}</span>
+                                                    <h4 className="font-bold text-sm text-os-text">{e.title}</h4>
+                                                </div>
+                                                {e.rating > 0 && (
+                                                    <div className="flex gap-1 mb-2 text-yellow-400 text-xs">
+                                                        {Array.from({length:5}).map((_,i) => <span key={i} className={i<e.rating?'':'grayscale opacity-30'}>★</span>)}
+                                                    </div>
+                                                )}
+                                                {e.review && <p className="text-xs text-gray-600 leading-relaxed bg-white p-2 rounded-lg">{e.review}</p>}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 真实 3x4 年历视图
+        const YearlyView = ({ events, activeFilter, onOpenReport }) => {
+            const [year, setYear] = useState(new Date().getFullYear());
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            
+            const filteredEvents = activeFilter === 'all' ? events : events.filter(e => e.catId === activeFilter);
+
+            return (
+                <div className="animate-fade-in pb-24 md:pb-6 w-full max-w-5xl mx-auto h-full flex flex-col">
+                    <div className="flex justify-between items-center mb-6 bg-white p-4 rounded-2xl shadow-sm">
+                        <button onClick={() => onOpenReport('year')} className="font-bold text-sm bg-os-purple text-purple-900 px-4 py-2 rounded-xl flex items-center gap-2 hover:opacity-80 transition-opacity">
+                            <span>✨</span> 生成 {year} 年度总结
+                        </button>
+                        <div className="flex gap-4 items-center">
+                            <button onClick={()=>setYear(y=>y-1)} className="font-bold text-gray-400 hover:text-os-text">←</button>
+                            <h2 className="text-2xl font-black">{year} Map.</h2>
+                            <button onClick={()=>setYear(y=>y+1)} className="font-bold text-gray-400 hover:text-os-text">→</button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 flex-1">
+                        {months.map((month, mIdx) => {
+                            const daysInMonth = new Date(year, mIdx + 1, 0).getDate();
+                            return (
+                                <div key={month} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50 flex flex-col">
+                                    <h4 className="text-xs font-black text-gray-400 mb-3 uppercase tracking-widest">{month}</h4>
+                                    <div className="grid grid-cols-7 gap-1 mt-auto">
+                                        {Array.from({ length: daysInMonth }).map((_, dIdx) => {
+                                            const dateStr = `${year}-${String(mIdx + 1).padStart(2, '0')}-${String(dIdx + 1).padStart(2, '0')}`;
+                                            const dayEvents = filteredEvents.filter(e => e.date === dateStr);
+                                            
+                                            // 真实颜色渲染
+                                            const bgColor = dayEvents.length > 0 
+                                                ? CATEGORIES.find(c => c.id === dayEvents[0].catId)?.color.replace('-400', '-500') || 'bg-gray-800'
+                                                : 'bg-gray-50';
+
+                                            return <div key={dIdx} className={`w-full aspect-square rounded-[3px] ${bgColor} transition-colors`} title={`${dateStr}: ${dayEvents.length} records`}></div>
+                                        })}
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        // 深度记录表单 (还原截图2)
+        const DeepLogModal = ({ category, onClose, onSave }) => {
+            if (!category) return null;
+            const [title, setTitle] = useState('');
+            const [date, setDate] = useState(TODAY_STR);
+            const [rating, setRating] = useState(0);
+            const [review, setReview] = useState('');
+
+            const handleSave = () => {
+                onSave({ id: Date.now(), catId: category.id, title: title || `新增${category.label}记录`, date, rating, review });
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={onClose}>
+                    <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-slide-up relative" onClick={e => e.stopPropagation()}>
+                        <button onClick={onClose} className="absolute top-6 right-6 w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
+                        
+                        <div className="flex items-center gap-3 mb-6 pr-8">
+                            <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-3xl border border-gray-100 flex-shrink-0">{category.icon}</div>
+                            <div className="flex-1">
+                                <input type="text" value={title} onChange={(e)=>setTitle(e.target.value)} placeholder={`新增${category.label}记录...`} className="w-full font-black text-lg text-os-text bg-transparent outline-none placeholder-gray-300" autoFocus />
+                                <input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full text-xs text-gray-400 font-bold bg-transparent outline-none mt-1 uppercase" />
+                            </div>
+                        </div>
+
+                        {/* 照片上传占位 */}
+                        <div className="w-full h-20 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 text-xs font-bold hover:bg-gray-100 cursor-pointer transition-colors mb-4">
+                            + 点击上传照片或截图
+                        </div>
+                        
+                        <div className="bg-yellow-50/50 p-4 rounded-2xl border border-yellow-100 mb-4">
+                            <p className="text-xs font-bold text-gray-400 mb-2">打分评级</p>
+                            <div className="flex gap-2">
+                                {[1, 2, 3, 4, 5].map(star => (
+                                    <button key={star} onClick={() => setRating(star)} className={`text-3xl transition-transform hover:scale-110 ${star <= rating ? 'text-yellow-400 drop-shadow-sm' : 'text-gray-200 grayscale'}`}>★</button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="mb-6">
+                            <p className="text-xs font-bold text-gray-400 mb-2">感受与复盘</p>
+                            <textarea value={review} onChange={e => setReview(e.target.value)} placeholder="写点什么吧，AI 以后会帮你整理的..." className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-medium outline-none resize-none h-28 focus:ring-2 focus:ring-os-purple/20 transition-all" />
+                        </div>
+
+                        <button onClick={handleSave} className="w-full bg-os-text text-white py-4 rounded-2xl font-bold shadow-lg hover:scale-[1.02] transition-transform">
+                            保存归档
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const THEMES = [
+            { id: 'cream',    name: '暖奶油', bg: '#FFFBEB', accent: '#E6B422', text: '#475569', financeBg: '#FFFBF0', financeBorder: '#e6dcc0' },
+            { id: 'lavender', name: '薰衣草', bg: '#F5F3FF', accent: '#8B5CF6', text: '#3b0764', financeBg: '#F3F0FF', financeBorder: '#d4c8f8' },
+            { id: 'dark',     name: '深夜',   bg: '#1e293b', accent: '#60a5fa', text: '#f1f5f9', financeBg: '#1e3a5f', financeBorder: '#2d5a8e' },
+            { id: 'matcha',   name: '抹茶',   bg: '#F0FDF4', accent: '#16a34a', text: '#14532d', financeBg: '#F0FDF4', financeBorder: '#bbf7d0' },
+        ];
+
+        const ALL_WIDGETS_DEF = [
+            { id: 'clock',     label: '时钟',    icon: '🕐', defaultSize: '1x1' },
+            { id: 'countdown', label: '倒数日',  icon: '🛫', defaultSize: '1x1' },
+            { id: 'weekly',    label: '本周微距', icon: '📅', defaultSize: 'large' },
+            { id: 'weather',   label: '天气',    icon: '🌤️', defaultSize: '2x1' },
+            { id: 'habits',    label: '习惯打卡', icon: '✅', defaultSize: '2x1' },
+            { id: 'quote',     label: '每日一句', icon: '💬', defaultSize: '2x1' },
+            { id: 'music',     label: '音乐状态', icon: '🎵', defaultSize: '2x1' },
+            { id: 'photo',     label: '每日照片', icon: '📷', defaultSize: 'large' },
+            { id: 'shopping',  label: '购物清单', icon: '🛍️', defaultSize: 'large' },
+            { id: 'health',    label: '体感监测', icon: '🩰', defaultSize: 'medium' },
+            { id: 'deadline',  label: 'DDL提醒',  icon: '⏰', defaultSize: 'medium' },
+            { id: 'finance',   label: 'Finance',  icon: '💰', defaultSize: 'large' },
+            { id: 'period',    label: '月经记录', icon: '🌸', defaultSize: '2x1' },
+        ];
+
+        const App = () => {
+            const [currentView, setCurrentView] = useState('home');
+            const [activeFilter, setActiveFilter] = useState('all');
+            const [isEditMode, setIsEditMode] = useState(false);
+            
+            // 数据状态
+            const [events, setEvents] = useState(INITIAL_EVENTS);
+            const [todos, setTodos] = useState(INITIAL_TODOS);
+            const [widgets, setWidgets] = useState(() => {
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    return d.widgetConfig || INITIAL_WIDGETS;
+                } catch { return INITIAL_WIDGETS; }
+            });
+
+            // 主题
+            const [themeId, setThemeId] = useState(() => {
+                try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}').theme || 'cream'; }
+                catch { return 'cream'; }
+            });
+            const [showThemePicker, setShowThemePicker] = useState(false);
+            const [showWidgetLib, setShowWidgetLib] = useState(false);
+
+            // 弹出层控制
+            const [addingCategory, setAddingCategory] = useState(null);
+            const [showAddCenter, setShowAddCenter] = useState(false);
+            const [reportConfig, setReportConfig] = useState({ isOpen: false, type: '', period: '' });
+            const [aiPanel, setAIPanel] = useState({ isOpen: false, title: '' });
+
+            const navItems = [
+                { id: 'home',     icon: '🏠', label: 'Dashboard' },
+                { id: 'calendar', icon: '📅', label: 'Calendar' },
+                { id: 'year',     icon: '🎨', label: 'Year Map' },
+                { id: 'vault',    icon: '📂', label: 'Vault Library' },
+                { id: 'finance',  icon: '💰', label: 'Finance', desktopOnly: true },
+            ];
+            const mobileNavItems = navItems.filter(i => !i.desktopOnly);
+
+            // 主题 effect
+            const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
+            useEffect(() => {
+                document.documentElement.setAttribute('data-theme', themeId);
+                document.documentElement.style.setProperty('--theme-bg', theme.bg);
+                document.documentElement.style.setProperty('--theme-accent', theme.accent);
+                document.documentElement.style.setProperty('--theme-text', theme.text);
+                document.documentElement.style.setProperty('--accent', theme.accent);
+                document.documentElement.style.setProperty('--finance-bg', theme.financeBg);
+                document.documentElement.style.setProperty('--finance-border', theme.financeBorder);
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    d.theme = themeId;
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                } catch {}
+            }, [themeId]);
+
+            // widgets 持久化
+            useEffect(() => {
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    d.widgetConfig = widgets;
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                } catch {}
+            }, [widgets]);
+
+            // 拖拽逻辑
+            const moveWidget = (fromIdx, toIdx) => {
+                const newW = [...widgets];
+                const [moved] = newW.splice(fromIdx, 1);
+                newW.splice(toIdx, 0, moved);
+                setWidgets(newW);
+            };
+
+            // 调整大小逻辑
+            const cycleWidgetSize = (index) => {
+                const newW = [...widgets];
+                const sizes = ['small', 'medium', 'large'];
+                newW[index].size = sizes[(sizes.indexOf(newW[index].size) + 1) % sizes.length];
+                setWidgets(newW);
+            };
+
+            return (
+                <div className="flex h-screen font-sans" style={{ background: 'var(--theme-bg)', color: 'var(--theme-text)' }}>
+                    
+                    {/* 左侧边栏 - 大屏显示 */}
+                    <aside className="hidden md:flex w-72 flex-col glass-panel border-r border-white/50 p-6 z-40 relative shadow-xl">
+                        <div className="mb-8 flex items-center gap-3">
+                            <div className="w-10 h-10 bg-os-text text-white rounded-xl flex items-center justify-center font-bold">( •̀ ω •́ )</div>
+                            <h1 className="font-black text-xl tracking-tight">Visual OS.</h1>
+                        </div>
+
+                        {/* 搜索框 */}
+                        <div className="mb-8 relative group">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-os-purple transition-colors">🔍</span>
+                            <input type="text" placeholder="Search insights..." className="w-full bg-white/60 rounded-full py-2.5 pl-10 pr-4 text-sm font-medium outline-none border border-white focus:border-os-purple focus:bg-white transition-all shadow-sm" />
+                        </div>
+
+                        {/* 导航 */}
+                        <nav className="flex-1 space-y-2">
+                            {navItems.map(item => (
+                                <button key={item.id} onClick={() => setCurrentView(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${currentView === item.id ? 'bg-white shadow-sm font-bold text-os-text' : 'text-gray-500 hover:bg-white/50 font-medium'}`}>
+                                    <span className="text-xl">{item.icon}</span> <span>{item.label}</span>
+                                </button>
+                            ))}
+                        </nav>
+
+                        {/* 主题切换按钮 */}
+                        <button onClick={() => setShowThemePicker(true)}
+                            className="mt-auto w-full bg-white/60 py-3 rounded-2xl font-bold text-sm text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2">
+                            🎨 主题
+                        </button>
+
+                        {/* 大屏居中悬浮添加按钮 */}
+                        <button onClick={() => setShowAddCenter(true)} className="w-full bg-os-text text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-2">
+                            <span className="text-xl">+</span> Quick Log
+                        </button>
+                    </aside>
+
+                    {/* 主内容区 */}
+                    <main className="flex-1 overflow-y-auto p-4 md:p-8 relative w-full hide-scrollbar">
+                        
+                        {/* 顶部过滤区 & 动作栏 */}
+                        <header className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                            <div>
+                                <h1 className="text-3xl font-black capitalize tracking-tight mb-2">{currentView}.</h1>
+                                {(currentView === 'calendar' || currentView === 'year' || currentView === 'vault') && (
+                                    <FilterBar activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
+                                )}
+                            </div>
+                            
+                            <div className="flex gap-2 self-end md:self-auto">
+                                <button className="md:hidden w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-xl border border-gray-100">🔍</button>
+                                {currentView === 'home' && (<>
+                                    <button onClick={() => setAIPanel({ isOpen: true, title: 'AI 周报 · 2026年5月第2周' })}
+                                        className="px-4 h-10 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1.5">
+                                        ✨ AI 周报
+                                    </button>
+                                    <button onClick={() => setShowWidgetLib(true)}
+                                        className="px-4 h-10 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1">
+                                        + Widget
+                                    </button>
+                                    <button onClick={() => setIsEditMode(!isEditMode)} className={`px-4 h-10 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 transition-colors ${isEditMode ? 'bg-os-text text-white' : 'bg-white hover:bg-gray-50'}`}>
+                                        {isEditMode ? 'Done' : 'Edit Layout'}
+                                    </button>
+                                </>)}
+                                {currentView === 'finance' && (
+                                    <button onClick={() => setCurrentView('home')} className="px-4 h-10 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1">
+                                        ← Dashboard
+                                    </button>
+                                )}
+                            </div>
+                        </header>
+
+                        {/* 视图路由 */}
+                        <div>
+                            {currentView === 'home' && (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[160px] pb-32 md:pb-8" style={{ gridAutoFlow: 'dense' }}>
+                                    {widgets.map((widget, index) => (
+                                        <WidgetWrapper key={widget.id} size={widget.size} isEditMode={isEditMode} index={index} onMove={moveWidget} onCycleSize={() => cycleWidgetSize(index)}>
+                                            {widget.id === 'weekly' && <WeeklyWidget events={events} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026年5月第2周'})} />}
+                                            {widget.id === 'clock' && <ClockWidget />}
+                                            {widget.id === 'countdown' && <CountdownWidget />}
+                                            {widget.id === 'weather' && <WeatherWidget />}
+                                            {widget.id === 'habits' && <HabitsWidget />}
+                                            {widget.id === 'quote' && <QuoteWidget />}
+                                            {widget.id === 'music' && <MusicWidget />}
+                                            {widget.id === 'photo' && <PhotoWidget />}
+                                            {widget.id === 'shopping' && <ShoppingWidget />}
+                                            {widget.id === 'health' && <HealthWidget />}
+                                            {widget.id === 'deadline' && <DeadlineWidget />}
+                                            {widget.id === 'period' && <PeriodWidget />}
+                                            {widget.id === 'finance' && <FinanceWidget onOpen={() => setCurrentView('finance')} />}
+                                        </WidgetWrapper>
+                                    ))}
+                                </div>
+                            )}
+                            
+                            {currentView === 'finance' && <FinanceView />}
+                            {currentView === 'calendar' && <CalendarView events={events} todos={todos} activeFilter={activeFilter} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026年 5月'})} />}
+                            {currentView === 'year' && <YearlyView events={events} activeFilter={activeFilter} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026 年度'})} />}
+                            {currentView === 'vault' && (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-24">
+                                    {(activeFilter==='all'?events:events.filter(e=>e.catId===activeFilter)).map(e => (
+                                        <div key={e.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-50">
+                                            <span className="text-3xl block mb-2">{CATEGORIES.find(c=>c.id===e.catId)?.icon}</span>
+                                            <h4 className="font-bold text-sm truncate">{e.title}</h4>
+                                            <p className="text-[10px] text-gray-400 font-bold mt-1">{e.date}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </main>
+
+                    {/* 手机端底部导航 */}
+                    <nav className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-xl h-16 rounded-full flex justify-between items-center shadow-2xl px-6 w-[90%] max-w-sm border border-white z-50">
+                        {mobileNavItems.slice(0, 2).map(item => <button key={item.id} onClick={() => setCurrentView(item.id)} className={`text-2xl transition-transform ${currentView === item.id ? 'scale-110 drop-shadow-md' : 'opacity-40 grayscale'}`}>{item.icon}</button>)}
+                        <button onClick={() => setShowAddCenter(true)} className="w-14 h-14 bg-os-text text-white rounded-full flex items-center justify-center text-3xl mb-8 shadow-xl hover:scale-105 active:scale-95 transition-transform border-4 border-os-bg">+</button>
+                        {mobileNavItems.slice(2).map(item => <button key={item.id} onClick={() => setCurrentView(item.id)} className={`text-2xl transition-transform ${currentView === item.id ? 'scale-110 drop-shadow-md' : 'opacity-40 grayscale'}`}>{item.icon}</button>)}
+                    </nav>
+
+                    {/* 中央悬浮添加控制台 (Center Add Modal) */}
+                    {showAddCenter && (
+                        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center glass-overlay animate-fade-in" onClick={() => setShowAddCenter(false)}>
+                            <div className="bg-white/90 backdrop-blur-2xl w-full max-w-lg rounded-t-[2rem] md:rounded-[2rem] p-6 shadow-2xl border border-white animate-slide-up" onClick={e => e.stopPropagation()}>
+                                <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6 md:hidden"></div>
+                                <h3 className="text-center font-black text-sm text-gray-400 tracking-widest uppercase mb-6">What's on your mind?</h3>
+                                
+                                <div className="grid grid-cols-3 gap-3">
+                                    {CATEGORIES.map(cat => (
+                                        <button 
+                                            key={cat.id} 
+                                            onClick={() => { setShowAddCenter(false); setAddingCategory(cat); }}
+                                            className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-col items-center hover:shadow-md hover:-translate-y-1 transition-all"
+                                        >
+                                            <span className="text-3xl mb-2">{cat.icon}</span>
+                                            <span className="font-bold text-xs text-os-text">{cat.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 深层表单 & AI报告层 */}
+                    <DeepLogModal category={addingCategory} onClose={() => setAddingCategory(null)} onSave={(newEvent) => setEvents([newEvent, ...events])} />
+                    <AIReportModal {...reportConfig} onClose={() => setReportConfig({...reportConfig, isOpen: false})} />
+                    <AIGeneratePanel isOpen={aiPanel.isOpen} title={aiPanel.title} onClose={() => setAIPanel(p => ({ ...p, isOpen: false }))} />
+
+                    {/* ── 主题选择器 ── */}
+                    {showThemePicker && (
+                        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowThemePicker(false)}>
+                            <div className="bg-white w-full max-w-xs rounded-3xl shadow-2xl p-6 animate-slide-up" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-between mb-5">
+                                    <h2 className="font-black text-base text-gray-800">🎨 选择主题</h2>
+                                    <button onClick={() => setShowThemePicker(false)} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {THEMES.map(t => (
+                                        <button key={t.id} onClick={() => { setThemeId(t.id); setShowThemePicker(false); }}
+                                            className="flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all hover:scale-105"
+                                            style={{ borderColor: themeId === t.id ? t.accent : '#e5e7eb', background: t.bg }}>
+                                            <div className="w-8 h-8 rounded-full" style={{ background: t.accent }} />
+                                            <span className="text-xs font-black" style={{ color: t.text }}>{t.name}</span>
+                                            {themeId === t.id && <span className="text-[9px] font-bold" style={{ color: t.accent }}>✓ 当前</span>}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Widget 库 ── */}
+                    {showWidgetLib && (
+                        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowWidgetLib(false)}>
+                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                                <div className="px-6 pt-6 pb-4 border-b border-gray-50 flex items-center justify-between flex-shrink-0">
+                                    <h2 className="font-black text-base text-gray-800">+ Widget 库</h2>
+                                    <button onClick={() => setShowWidgetLib(false)} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto hide-scrollbar px-6 py-4 space-y-3">
+                                    {ALL_WIDGETS_DEF.map(def => {
+                                        const isOn = widgets.some(w => w.id === def.id);
+                                        return (
+                                            <div key={def.id} className="flex items-center justify-between py-2">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-xl">{def.icon}</span>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-gray-700">{def.label}</p>
+                                                        <p className="text-[10px] text-gray-400 font-medium">{def.defaultSize}</p>
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => {
+                                                    if (isOn) {
+                                                        setWidgets(ws => ws.filter(w => w.id !== def.id));
+                                                    } else {
+                                                        setWidgets(ws => [...ws, { id: def.id, size: def.defaultSize }]);
+                                                    }
+                                                }}
+                                                    className="relative w-12 h-6 rounded-full transition-colors flex-shrink-0"
+                                                    style={{ background: isOn ? '#475569' : '#e5e7eb' }}>
+                                                    <span className="absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all"
+                                                        style={{ left: isOn ? '26px' : '2px' }} />
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <div className="px-6 pb-5 pt-3 border-t border-gray-50 flex-shrink-0">
+                                    <button onClick={() => setShowWidgetLib(false)} className="w-full py-3 rounded-2xl font-bold text-white text-sm" style={{ background: '#475569' }}>完成</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(r => console.log('SW registered:', r.scope))
+                    .catch(e => console.log('SW failed:', e));
+            });
+        }
+    </script>
+</body>
+</html>

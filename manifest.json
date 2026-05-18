@@ -1,0 +1,14 @@
+{
+  "name": "Visual Life OS",
+  "short_name": "Life OS",
+  "description": "我的生活管理中心",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFBEB",
+  "theme_color": "#E6B422",
+  "orientation": "any",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
