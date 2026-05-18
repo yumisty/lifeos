@@ -10,6 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="Life OS">
     <meta name="theme-color" content="#E6B422">
     
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -78,6 +79,21 @@
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
+
+        // ── Supabase 初始化 ──
+        const SUPABASE_URL = 'https://aiyflmkzzuiwmamvoils.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpeWZsbWt6enVpd21hbXZvaWxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMzQ0OTksImV4cCI6MjA5NDYxMDQ5OX0.1L59zixF4zg1yCahqo44h41kOiBfrWvtAGYvhGpRKAs';
+        const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const getDeviceId = () => {
+            let id = localStorage.getItem('lifeos_device_id');
+            if (!id) {
+                id = 'user_' + Math.random().toString(36).slice(2, 10);
+                localStorage.setItem('lifeos_device_id', id);
+            }
+            return id;
+        };
+        let DEVICE_ID = getDeviceId();
 
         // 获取当前周的日期数组 (周日到周六)
         const getWeekDates = (date = new Date()) => {
@@ -305,6 +321,7 @@
                     stored.allTodos[weekKey] = todos;
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
                 } catch {}
+                syncToCloud();
             };
 
             const selectedDate = CURRENT_WEEK_DATES[selectedDayIdx];
@@ -414,6 +431,7 @@
                     stored.wishlist = next.map(i => ({ ...i, purchased: i.done }));
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
                 } catch {}
+                syncToCloud();
             };
 
             const addItem = () => {
@@ -568,6 +586,7 @@
                     d.periodLog = next;
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
                 } catch {}
+                syncToCloud();
             };
 
             const recordToday = () => {
@@ -721,6 +740,7 @@
                     d.habits[todayStr] = next;
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
                 } catch {}
+                syncToCloud();
             };
             const toggle = (habit) => {
                 const next = checked.includes(habit) ? checked.filter(h => h !== habit) : [...checked, habit];
@@ -775,6 +795,7 @@
                     d.countdowns = draft;
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
                 } catch {}
+                syncToCloud();
                 setEditing(false);
             };
             const days = Math.ceil((new Date(data.date + 'T00:00:00') - new Date(new Date().toISOString().split('T')[0] + 'T00:00:00')) / 86400000);
@@ -866,6 +887,7 @@
                     d.nowPlaying = next;
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
                 } catch {}
+                syncToCloud();
                 setEditing(false);
             };
 
@@ -1024,6 +1046,7 @@
                     stored.transactions = [...(stored.transactions || []), tx];
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
                 } catch {}
+                syncToCloud();
                 MOCK_TRANSACTIONS.push(tx);
                 setAddForm({ amount: '', currency: 'JPY', category: '', name: '' });
                 setShowAdd(false);
@@ -1217,6 +1240,7 @@
                     Object.assign(stored, updates);
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
                 } catch {}
+                syncToCloud();
             };
 
             // key 格式：fixedItemsByMonth 用 "2026-4"（月份-1），monthlyRates 用 "2026-05"
@@ -2107,6 +2131,69 @@
             { id: 'period',    label: '月经记录', icon: '🌸', defaultSize: '2x1' },
         ];
 
+        // ── 云同步函数 ──
+        const syncFromCloud = async () => {
+            try {
+                const { data, error } = await _supabase
+                    .from('lifeos_data')
+                    .select('*')
+                    .eq('id', DEVICE_ID)
+                    .single();
+                if (error || !data) return null;
+                const local = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                const merged = {
+                    ...local,
+                    transactions:      data.transactions        || local.transactions        || [],
+                    categories:        data.categories          || local.categories          || [],
+                    fixedItemsByMonth: data.fixed_items_by_month|| local.fixedItemsByMonth   || {},
+                    wishlist:          data.wishlist            || local.wishlist            || [],
+                    allTodos:          data.todos               || local.allTodos            || {},
+                    habits:            data.habits              || local.habits              || {},
+                    periodLog:         data.period_log          || local.periodLog           || [],
+                    countdowns:        data.countdowns          || local.countdowns          || [],
+                    nowPlaying:        data.now_playing         || local.nowPlaying          || {},
+                    exchangeRate:      data.exchange_rate       || local.exchangeRate        || 0.048,
+                    monthlyRates:      data.monthly_rates       || local.monthlyRates        || {},
+                    theme:             data.theme               || local.theme               || 'cream',
+                };
+                localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
+                return merged;
+            } catch(e) {
+                console.log('sync from cloud failed:', e);
+                return null;
+            }
+        };
+
+        const syncToCloud = async () => {
+            try {
+                const local = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                const { error } = await _supabase
+                    .from('lifeos_data')
+                    .upsert({
+                        id:                    DEVICE_ID,
+                        transactions:          local.transactions        || [],
+                        categories:            local.categories          || [],
+                        fixed_items_by_month:  local.fixedItemsByMonth   || {},
+                        wishlist:              local.wishlist            || [],
+                        todos:                 local.allTodos            || {},
+                        habits:                local.habits              || {},
+                        period_log:            local.periodLog           || [],
+                        countdowns:            local.countdowns          || [],
+                        now_playing:           local.nowPlaying          || {},
+                        exchange_rate:         local.exchangeRate        || 0.048,
+                        monthly_rates:         local.monthlyRates        || {},
+                        theme:                 local.theme               || 'cream',
+                        updated_at:            new Date().toISOString(),
+                    });
+                if (error) console.log('sync to cloud failed:', error);
+                else console.log('✅ 已同步到云端');
+                return !error;
+            } catch(e) {
+                console.log('sync to cloud failed:', e);
+                return false;
+            }
+        };
+
         const App = () => {
             const [currentView, setCurrentView] = useState('home');
             const [activeFilter, setActiveFilter] = useState('all');
@@ -2129,6 +2216,11 @@
             });
             const [showThemePicker, setShowThemePicker] = useState(false);
             const [showWidgetLib, setShowWidgetLib] = useState(false);
+
+            // 同步状态
+            const [syncStatus, setSyncStatus] = useState('idle'); // idle | syncing | done | error
+            const [showSyncModal, setShowSyncModal] = useState(false);
+            const [deviceIdInput, setDeviceIdInput] = useState('');
 
             // 弹出层控制
             const [addingCategory, setAddingCategory] = useState(null);
@@ -2170,6 +2262,50 @@
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
                 } catch {}
             }, [widgets]);
+
+            // 启动时从云端拉取数据
+            useEffect(() => {
+                setSyncStatus('syncing');
+                syncFromCloud().then(data => {
+                    if (data) {
+                        // 用云端数据刷新主题
+                        if (data.theme) setThemeId(data.theme);
+                        setSyncStatus('done');
+                        setTimeout(() => setSyncStatus('idle'), 3000);
+                    } else {
+                        setSyncStatus('idle');
+                    }
+                });
+            }, []);
+
+            // 同步状态指示器文本/样式
+            const syncIndicator = syncStatus === 'syncing'
+                ? { text: '⟳ 同步中…', color: '#94a3b8' }
+                : syncStatus === 'done'
+                ? { text: '✓ 已同步',  color: '#22c55e' }
+                : syncStatus === 'error'
+                ? { text: '✗ 同步失败', color: '#ef4444' }
+                : null;
+
+            // 切换设备 ID
+            const applyDeviceId = async () => {
+                const newId = deviceIdInput.trim();
+                if (!newId) return;
+                localStorage.setItem('lifeos_device_id', newId);
+                DEVICE_ID = newId;
+                setDeviceIdInput('');
+                setShowSyncModal(false);
+                setSyncStatus('syncing');
+                const data = await syncFromCloud();
+                if (data) {
+                    if (data.theme) setThemeId(data.theme);
+                    setSyncStatus('done');
+                    setTimeout(() => setSyncStatus('idle'), 3000);
+                } else {
+                    setSyncStatus('error');
+                    setTimeout(() => setSyncStatus('idle'), 4000);
+                }
+            };
 
             // 拖拽逻辑
             const moveWidget = (fromIdx, toIdx) => {
@@ -2218,6 +2354,12 @@
                             🎨 主题
                         </button>
 
+                        {/* 多端同步按钮 */}
+                        <button onClick={() => setShowSyncModal(true)}
+                            className="w-full bg-white/60 py-3 rounded-2xl font-bold text-sm text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2">
+                            🔗 多端同步
+                        </button>
+
                         {/* 大屏居中悬浮添加按钮 */}
                         <button onClick={() => setShowAddCenter(true)} className="w-full bg-os-text text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-2">
                             <span className="text-xl">+</span> Quick Log
@@ -2236,7 +2378,12 @@
                                 )}
                             </div>
                             
-                            <div className="flex gap-2 self-end md:self-auto">
+                            <div className="flex gap-2 self-end md:self-auto items-center">
+                                {syncIndicator && (
+                                    <span className="text-[11px] font-bold transition-all" style={{ color: syncIndicator.color }}>
+                                        {syncIndicator.text}
+                                    </span>
+                                )}
                                 <button className="md:hidden w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-xl border border-gray-100">🔍</button>
                                 {currentView === 'home' && (<>
                                     <button onClick={() => setAIPanel({ isOpen: true, title: 'AI 周报 · 2026年5月第2周' })}
@@ -2396,6 +2543,56 @@
                                 </div>
                                 <div className="px-6 pb-5 pt-3 border-t border-gray-50 flex-shrink-0">
                                     <button onClick={() => setShowWidgetLib(false)} className="w-full py-3 rounded-2xl font-bold text-white text-sm" style={{ background: '#475569' }}>完成</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── 多端同步弹窗 ── */}
+                    {showSyncModal && (
+                        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowSyncModal(false)}>
+                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 animate-slide-up" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-between mb-5">
+                                    <h2 className="font-black text-base text-gray-800">🔗 多端同步</h2>
+                                    <button onClick={() => setShowSyncModal(false)} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
+                                </div>
+
+                                {/* 当前设备 ID */}
+                                <div className="mb-5">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">当前设备 ID</p>
+                                    <div className="flex items-center gap-2 bg-gray-50 rounded-2xl px-4 py-3 border border-gray-100">
+                                        <code className="flex-1 text-xs font-bold text-gray-700 break-all">{getDeviceId()}</code>
+                                        <button onClick={() => navigator.clipboard?.writeText(getDeviceId())}
+                                            className="text-[10px] font-black px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-500 hover:bg-gray-100 flex-shrink-0">复制</button>
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">把此 ID 复制到另一台设备，两台设备即可共享数据。</p>
+                                </div>
+
+                                {/* 切换 ID */}
+                                <div className="mb-5">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">切换到其他设备的 ID</p>
+                                    <input
+                                        value={deviceIdInput}
+                                        onChange={e => setDeviceIdInput(e.target.value)}
+                                        placeholder="粘贴另一台设备的 ID…"
+                                        className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-medium outline-none border-2 border-transparent focus:border-gray-300 transition-colors"
+                                        onKeyDown={e => e.key === 'Enter' && applyDeviceId()}
+                                    />
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => { setSyncStatus('syncing'); setShowSyncModal(false); syncToCloud().then(ok => { setSyncStatus(ok ? 'done' : 'error'); setTimeout(() => setSyncStatus('idle'), ok ? 3000 : 4000); }); }}
+                                        className="flex-1 py-3 rounded-2xl font-bold text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                                        立即上传
+                                    </button>
+                                    <button
+                                        onClick={applyDeviceId}
+                                        disabled={!deviceIdInput.trim()}
+                                        className="flex-1 py-3 rounded-2xl font-bold text-sm text-white transition-colors disabled:opacity-40"
+                                        style={{ background: '#475569' }}>
+                                        使用此 ID
+                                    </button>
                                 </div>
                             </div>
                         </div>
