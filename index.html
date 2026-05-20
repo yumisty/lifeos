@@ -1654,7 +1654,9 @@
             const [addForm, setAddForm] = useState({ amount: '', currency: 'JPY', category: '', name: '' });
             const [txKey, setTxKey] = useState(0); // triggers re-read of MOCK_TRANSACTIONS
 
-            const wCategories = _financeStorage.categories || [];
+            const _DEFAULT_FINANCE_CATS = ['一日三餐','吃饭','购物/超市','购物/日用品','购物/化妆护肤品','购物/周边','购物/吃的','购物/衣服','购物/玩的','氪金','机票','交通','礼物','医疗','会员','课程'];
+            const _wCatsRaw = _financeStorage.categories;
+            const wCategories = (_wCatsRaw && _wCatsRaw.length > 0) ? _wCatsRaw : _DEFAULT_FINANCE_CATS.map(n => ({ name: n }));
             const exchRate = _financeStorage.exchangeRate || 0.048;
             const toJPYw = (amt, cur) => (cur === 'RMB' || cur === 'CNY') ? amt / exchRate : amt;
             const nowMonth = TODAY_STR.slice(0, 7);
@@ -1814,9 +1816,6 @@
                                     {wCategories.map(c => (
                                         <option key={c.id || c.name} value={c.name}>{c.name}</option>
                                     ))}
-                                    {wCategories.length === 0 && ['餐饮','日用','交通','娱乐','美容','其他'].map(c => (
-                                        <option key={c} value={c}>{c}</option>
-                                    ))}
                                 </select>
 
                                 {/* 备注 */}
@@ -1847,7 +1846,7 @@
             const [tab, setTab] = useState('month');
             const [displayMonth, setDisplayMonth] = useState(new Date().getMonth() + 1);
             const [displayYear, setDisplayYear] = useState(new Date().getFullYear());
-            const [selectedDay, setSelectedDay] = useState(null);     // 日历选中日
+            const [selectedDay, setSelectedDay] = useState(() => TODAY_STR); // 日历选中日，默认今天
             const [displayCurrency, setDisplayCurrency] = useState('JPY'); // 列表货币切换
             const [detailCurrency, setDetailCurrency] = useState('JPY'); // 当日明细货币切换
             const [searchTx, setSearchTx] = useState('');             // 记录搜索词
@@ -2149,7 +2148,7 @@
                                                     const dotColor = dayTxs.length > 0 ? getCatColor(dayTxs[0].category) : null;
                                                     return (
                                                         <div key={d}
-                                                            onClick={() => hasTx && setSelectedDay(isSelected ? null : ds)}
+                                                            onClick={() => setSelectedDay(ds)}
                                                             style={{
                                                                 height: '36px',
                                                                 display: 'flex',
@@ -2159,7 +2158,7 @@
                                                                 borderRadius: '6px',
                                                                 fontSize: '10px',
                                                                 fontWeight: 700,
-                                                                cursor: hasTx ? 'pointer' : 'default',
+                                                                cursor: 'pointer',
                                                                 outline: isSelected ? '2px solid #fbbf24' : 'none',
                                                                 background: isToday ? '#475569' : hasTx ? (isSelected ? '#fde68a' : '#fef3c7') : 'transparent',
                                                                 color: isToday ? '#fff' : hasTx ? '#78350f' : '#d1d5db',
@@ -2174,7 +2173,7 @@
 
                                         {/* 当日明细：紧跟日历下方，最高160px可滚动 */}
                                         {selectedDay && (
-                                            <div className="rounded-2xl overflow-hidden animate-fade-in" style={{ border: '1.5px solid var(--finance-border)', background: 'var(--finance-bg)' }}>
+                                            <div className="rounded-2xl overflow-hidden" style={{ border: '1.5px solid var(--finance-border)', background: 'var(--finance-bg)' }}>
                                                 <div className="px-3 py-2 flex items-center justify-between flex-shrink-0" style={{ borderBottom: '1px solid var(--finance-border)' }}>
                                                     <div>
                                                         <span className="font-black text-xs text-amber-900">{selectedDay.slice(5)} 明细</span>
@@ -2191,7 +2190,7 @@
                                                                 ? `¥${(selectedDayTotal * currentRate).toFixed(2)} RMB`
                                                                 : `¥${Math.round(selectedDayTotal).toLocaleString()}`}
                                                         </span>
-                                                        <button onClick={() => setSelectedDay(null)} className="text-amber-400 hover:text-amber-600 font-black text-base leading-none">×</button>
+                                                        <button onClick={() => setSelectedDay(TODAY_STR)} className="text-amber-400 hover:text-amber-600 font-black text-[10px] leading-none px-1.5 py-0.5 rounded-full border border-amber-200">今天</button>
                                                     </div>
                                                 </div>
                                                 {/* 最高160px，超出滚动 */}
@@ -2997,6 +2996,7 @@
             const [reportConfig, setReportConfig] = useState({ isOpen: false, type: '', period: '' });
             const [aiPanel, setAIPanel] = useState({ isOpen: false, title: '', type: '', data: null });
             const [showSettings, setShowSettings] = useState(false);
+            const [showProfile, setShowProfile] = useState(false);
             const [toast, setToast] = useState(null);
             const importFileRef = useRef(null);
 
@@ -3005,9 +3005,12 @@
                 { id: 'calendar', icon: '📅', label: 'Calendar' },
                 { id: 'year',     icon: '🎨', label: 'Year Map' },
                 { id: 'vault',    icon: '📂', label: 'Vault Library' },
-                { id: 'finance',  icon: '💰', label: 'Finance', desktopOnly: true },
+                { id: 'finance',  icon: '💰', label: 'Finance' },
             ];
             const mobileNavItems = navItems.filter(i => !i.desktopOnly);
+            // 手机端导航：左2 + [+] + 右2（💰 和 👤）
+            const mobileLeftItems  = [{ id: 'home', icon: '🏠' }, { id: 'calendar', icon: '📅' }];
+            const mobileRightItems = [{ id: 'finance', icon: '💰' }, { id: 'profile', icon: '👤' }];
 
             // 主题 effect
             const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
@@ -3320,9 +3323,21 @@
 
                     {/* 手机端底部导航 */}
                     <nav className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-xl h-16 rounded-full flex justify-between items-center shadow-2xl px-6 w-[90%] max-w-sm border border-white z-50">
-                        {mobileNavItems.slice(0, 2).map(item => <button key={item.id} onClick={() => setCurrentView(item.id)} className={`text-2xl transition-transform ${currentView === item.id ? 'scale-110 drop-shadow-md' : 'opacity-40 grayscale'}`}>{item.icon}</button>)}
+                        {mobileLeftItems.map(item => (
+                            <button key={item.id} onClick={() => setCurrentView(item.id)}
+                                className={`text-2xl transition-transform ${currentView === item.id ? 'scale-110 drop-shadow-md' : 'opacity-40 grayscale'}`}>
+                                {item.icon}
+                            </button>
+                        ))}
                         <button onClick={() => setShowAddCenter(true)} className="w-14 h-14 bg-os-text text-white rounded-full flex items-center justify-center text-3xl mb-8 shadow-xl hover:scale-105 active:scale-95 transition-transform border-4 border-os-bg">+</button>
-                        {mobileNavItems.slice(2).map(item => <button key={item.id} onClick={() => setCurrentView(item.id)} className={`text-2xl transition-transform ${currentView === item.id ? 'scale-110 drop-shadow-md' : 'opacity-40 grayscale'}`}>{item.icon}</button>)}
+                        <button onClick={() => setCurrentView('finance')}
+                            className={`text-2xl transition-transform ${currentView === 'finance' ? 'scale-110 drop-shadow-md' : 'opacity-40 grayscale'}`}>
+                            💰
+                        </button>
+                        <button onClick={() => setShowProfile(true)}
+                            className={`text-2xl transition-transform ${showProfile ? 'scale-110 drop-shadow-md' : 'opacity-40 grayscale'}`}>
+                            👤
+                        </button>
                     </nav>
 
                     {/* 中央悬浮添加控制台 (Center Add Modal) */}
@@ -3417,6 +3432,55 @@
                                 </div>
                                 <div className="px-5 pb-5 pt-3 border-t border-gray-50 flex-shrink-0">
                                     <button onClick={() => setShowWidgetLib(false)} className="w-full py-3 rounded-2xl font-bold text-white text-sm" style={{ background: '#475569' }}>完成</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── 手机端「我的」面板 ── */}
+                    {showProfile && (
+                        <div className="fixed inset-0 z-[110] flex items-end justify-center glass-overlay animate-fade-in md:hidden" onClick={() => setShowProfile(false)}>
+                            <div className="bg-white w-full max-w-sm rounded-t-3xl shadow-2xl p-6 animate-slide-up pb-10" onClick={e => e.stopPropagation()}>
+                                <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-5" />
+                                <h2 className="font-black text-base text-gray-800 mb-4">👤 我的</h2>
+
+                                {/* 邮箱 */}
+                                <div className="bg-gray-50 rounded-2xl px-4 py-3 mb-3">
+                                    <p className="text-[10px] text-gray-400 mb-0.5">已登录账号</p>
+                                    <p className="text-sm font-bold text-gray-700 truncate">{user?.email}</p>
+                                </div>
+
+                                {/* 同步状态 */}
+                                {syncIndicator && (
+                                    <p className="text-xs font-bold px-1 mb-3" style={{ color: syncIndicator.color }}>{syncIndicator.text}</p>
+                                )}
+
+                                {/* 主题选择 */}
+                                <div className="mb-4">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">🎨 主题</p>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {THEMES.map(t => (
+                                            <button key={t.id} onClick={() => setThemeId(t.id)}
+                                                className="flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 transition-all"
+                                                style={{ borderColor: themeId === t.id ? t.accent : '#e5e7eb', background: t.bg }}>
+                                                <div className="w-5 h-5 rounded-full" style={{ background: t.accent }} />
+                                                <span className="text-[9px] font-black" style={{ color: t.text }}>{t.name}</span>
+                                                {themeId === t.id && <span className="text-[8px]" style={{ color: t.accent }}>✓</span>}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* 设置 & 退出 */}
+                                <div className="flex gap-2">
+                                    <button onClick={() => { setShowProfile(false); setShowSettings(true); }}
+                                        className="flex-1 py-3 rounded-2xl font-bold text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors">
+                                        ⚙️ 设置
+                                    </button>
+                                    <button onClick={() => _supabase.auth.signOut()}
+                                        className="flex-1 py-3 rounded-2xl font-bold text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors">
+                                        退出登录
+                                    </button>
                                 </div>
                             </div>
                         </div>
