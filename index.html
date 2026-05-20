@@ -2798,24 +2798,37 @@
                     .single();
                 if (error || !data) return null;
                 const local = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                // 合并策略：哪边数据多用哪边，不用空数组覆盖有数据的本地
+                const mergeArr = (cloud, loc) => {
+                    if (!cloud || cloud.length === 0) return loc || [];
+                    if (!loc || loc.length === 0) return cloud;
+                    return cloud.length >= loc.length ? cloud : loc;
+                };
+                const mergeObj = (cloud, loc) => {
+                    if (!cloud || Object.keys(cloud).length === 0) return loc || {};
+                    if (!loc || Object.keys(loc).length === 0) return cloud;
+                    return Object.keys(cloud).length >= Object.keys(loc).length ? cloud : loc;
+                };
                 const merged = {
                     ...local,
-                    transactions:      data.transactions        || local.transactions        || [],
-                    categories:        data.categories          || local.categories          || [],
-                    fixedItemsByMonth: data.fixed_items_by_month|| local.fixedItemsByMonth   || {},
-                    wishlist:          data.wishlist            || local.wishlist            || [],
-                    allTodos:          data.todos               || local.allTodos            || {},
-                    habits:            data.habits              || local.habits              || {},
-                    periodLog:         data.period_log          || local.periodLog           || [],
-                    countdowns:        data.countdowns          || local.countdowns          || [],
+                    transactions:      mergeArr(data.transactions,         local.transactions),
+                    categories:        mergeArr(data.categories,           local.categories),
+                    fixedItemsByMonth: mergeObj(data.fixed_items_by_month, local.fixedItemsByMonth),
+                    wishlist:          mergeArr(data.wishlist,              local.wishlist),
+                    allTodos:          mergeObj(data.todos,                 local.allTodos),
+                    habits:            mergeObj(data.habits,                local.habits),
+                    periodLog:         mergeArr(data.period_log,            local.periodLog),
+                    countdowns:        mergeArr(data.countdowns,            local.countdowns),
                     nowPlaying:        data.now_playing         || local.nowPlaying          || {},
                     exchangeRate:      data.exchange_rate       || local.exchangeRate        || 0.048,
-                    monthlyRates:      data.monthly_rates       || local.monthlyRates        || {},
+                    monthlyRates:      mergeObj(data.monthly_rates,         local.monthlyRates),
                     theme:             data.theme               || local.theme               || 'cream',
-                    smokingLog:        data.smoking_log         || local.smokingLog          || {},
+                    smokingLog:        mergeObj(data.smoking_log,           local.smokingLog),
                     smokingGoal:       data.smoking_goal        || local.smokingGoal         || 20,
                 };
                 localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
+                // 立即把合并后的数据推回云端
+                await syncToCloud();
                 return merged;
             } catch(e) {
                 console.log('sync from cloud failed:', e);
@@ -3101,8 +3114,17 @@
                             migratedAt: new Date().toISOString(),
                         };
                         localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
-                        await syncToCloud();
-                        setToast({ ok: true, msg: `✅ 导入完成！共 ${transactions.length} 条记录，已同步到云端` });
+
+                        // 确保拿到登录用户再上传
+                        const { data: { session } } = await _supabase.auth.getSession();
+                        const uid = session?.user?.id;
+                        if (uid) {
+                            CURRENT_USER_ID = uid;
+                            const ok = await syncToCloud();
+                            setToast({ ok: true, msg: `✅ 导入完成！共 ${transactions.length} 条记录，${ok ? '已同步到云端' : '本地保存成功（云端同步失败）'}` });
+                        } else {
+                            setToast({ ok: true, msg: `✅ 导入完成！共 ${transactions.length} 条记录（请登录后数据会自动同步到云端）` });
+                        }
                         setTimeout(() => window.location.reload(), 3000);
                     } catch (err) {
                         setToast({ ok: false, msg: `❌ 导入失败：${err.message}` });
