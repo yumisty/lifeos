@@ -386,7 +386,13 @@
         ];
 
         try {
-            const { data: { user } } = await _supabase.auth.getUser();
+            const { data: { session } } = await _supabase.auth.getSession();
+            let user = session?.user;
+
+            if (!user) {
+                const { data } = await _supabase.auth.refreshSession();
+                user = data?.user;
+            }
 
             if (!user) {
                 importBtn.textContent = '✓ 已导入';
