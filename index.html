@@ -2837,6 +2837,10 @@
         };
 
         const syncToCloud = async () => {
+            if (!CURRENT_USER_ID) {
+                const { data: { session } } = await _supabase.auth.getSession();
+                CURRENT_USER_ID = session?.user?.id ?? null;
+            }
             if (!CURRENT_USER_ID) return false;
             try {
                 const local = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
