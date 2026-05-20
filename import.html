@@ -23,7 +23,7 @@
             border-radius: 28px;
             padding: 48px 40px;
             width: 100%;
-            max-width: 480px;
+            max-width: 440px;
             box-shadow: 0 8px 40px rgba(0,0,0,0.07);
         }
 
@@ -35,14 +35,12 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
-            color: #fff;
-            font-weight: 900;
+            font-size: 20px;
             margin-bottom: 28px;
         }
 
         h1 {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 900;
             color: #1e293b;
             margin-bottom: 6px;
@@ -53,48 +51,56 @@
             font-size: 13px;
             color: #94a3b8;
             font-weight: 500;
-            margin-bottom: 36px;
+            margin-bottom: 32px;
             line-height: 1.6;
         }
 
-        /* 上传区域 */
-        .upload-zone {
-            border: 2px dashed #fcd34d;
-            border-radius: 20px;
-            background: #FFFBF0;
-            padding: 36px 24px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            margin-bottom: 20px;
+        /* ── 步骤指示 ── */
+        .steps {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 32px;
         }
-        .upload-zone:hover, .upload-zone.drag-over {
-            border-color: #e6b422;
-            background: #fef3c7;
+        .step-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #e2e8f0;
+            transition: background 0.2s;
         }
+        .step-dot.active { background: #e6b422; }
+        .step-dot.done   { background: #22c55e; }
 
-        .upload-icon {
-            font-size: 36px;
-            margin-bottom: 12px;
+        /* ── 输入框 ── */
+        .field {
+            margin-bottom: 14px;
+        }
+        .field label {
             display: block;
-        }
-
-        .upload-label {
-            font-size: 15px;
+            font-size: 11px;
             font-weight: 700;
-            color: #92400e;
-            margin-bottom: 4px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 6px;
         }
-
-        .upload-hint {
-            font-size: 12px;
-            color: #b45309;
-            font-weight: 500;
+        .field input {
+            width: 100%;
+            padding: 14px 16px;
+            background: #f8fafc;
+            border: 2px solid transparent;
+            border-radius: 14px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #1e293b;
+            outline: none;
+            transition: border-color 0.15s;
         }
+        .field input:focus { border-color: #fcd34d; background: #fff; }
+        .field input::placeholder { color: #cbd5e1; font-weight: 500; }
 
-        #fileInput { display: none; }
-
-        /* 主按钮 */
+        /* ── 按钮 ── */
         .btn-primary {
             width: 100%;
             padding: 16px;
@@ -106,75 +112,13 @@
             border-radius: 16px;
             cursor: pointer;
             transition: all 0.15s ease;
-            letter-spacing: 0.3px;
+            margin-top: 6px;
         }
-        .btn-primary:hover { background: #d4a11e; transform: translateY(-1px); }
-        .btn-primary:active { transform: translateY(0); }
-        .btn-primary:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; transform: none; }
+        .btn-primary:hover:not(:disabled) { background: #d4a11e; transform: translateY(-1px); }
+        .btn-primary:active:not(:disabled) { transform: translateY(0); }
+        .btn-primary:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
 
-        /* 状态区 */
-        .status { margin-top: 20px; display: none; }
-        .status.visible { display: block; }
-
-        .status-success {
-            background: #f0fdf4;
-            border: 1.5px solid #86efac;
-            border-radius: 16px;
-            padding: 18px 20px;
-        }
-        .status-error {
-            background: #fff1f2;
-            border: 1.5px solid #fca5a5;
-            border-radius: 16px;
-            padding: 18px 20px;
-        }
-
-        .status-title {
-            font-size: 15px;
-            font-weight: 700;
-            margin-bottom: 10px;
-        }
-        .status-success .status-title { color: #15803d; }
-        .status-error .status-title { color: #dc2626; }
-
-        .status-detail {
-            font-size: 12px;
-            font-weight: 600;
-            color: #64748b;
-            line-height: 1.9;
-        }
-        .status-detail span {
-            display: inline-block;
-            background: #fff;
-            border-radius: 8px;
-            padding: 1px 8px;
-            margin: 1px 0;
-            font-weight: 700;
-        }
-        .status-success .status-detail span { color: #15803d; }
-        .status-error .status-detail span { color: #dc2626; }
-
-        .status-warning {
-            background: #fff7ed;
-            border: 1.5px solid #fdba74;
-            border-radius: 16px;
-            padding: 18px 20px;
-        }
-        .status-warning .status-title { color: #c2410c; }
-        .status-warning .status-detail span { color: #c2410c; }
-
-        .status-caution {
-            background: #fefce8;
-            border: 1.5px solid #fde047;
-            border-radius: 16px;
-            padding: 18px 20px;
-        }
-        .status-caution .status-title { color: #854d0e; }
-        .status-caution .status-detail span { color: #854d0e; }
-
-        /* 返回按钮 */
         .btn-back {
-            display: none;
             width: 100%;
             margin-top: 12px;
             padding: 14px;
@@ -187,69 +131,182 @@
             cursor: pointer;
             text-align: center;
             text-decoration: none;
+            display: block;
             transition: all 0.15s ease;
         }
         .btn-back:hover { background: #f1f5f9; border-color: #cbd5e1; }
-        .btn-back.visible { display: block; }
 
-        /* 文件名预览 */
-        .file-preview {
+        /* ── 错误提示 ── */
+        .error-msg {
+            background: #fff1f2;
+            border: 1.5px solid #fca5a5;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #dc2626;
+            margin-bottom: 16px;
             display: none;
+        }
+        .error-msg.visible { display: block; }
+
+        /* ── 已登录徽章 ── */
+        .user-badge {
+            display: flex;
             align-items: center;
             gap: 10px;
-            background: #fef3c7;
-            border: 1.5px solid #fcd34d;
+            background: #f0fdf4;
+            border: 1.5px solid #86efac;
             border-radius: 14px;
             padding: 12px 16px;
-            margin-bottom: 16px;
+            margin-bottom: 24px;
         }
-        .file-preview.visible { display: flex; }
-        .file-icon { font-size: 20px; flex-shrink: 0; }
-        .file-name { font-size: 13px; font-weight: 700; color: #92400e; word-break: break-all; flex: 1; }
-        .file-clear {
-            width: 24px; height: 24px;
-            background: #fcd34d;
-            border: none; border-radius: 50%;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 900;
-            color: #92400e;
-            display: flex; align-items: center; justify-content: center;
+        .user-badge .avatar {
+            width: 32px;
+            height: 32px;
+            background: #22c55e;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
             flex-shrink: 0;
         }
-        .file-clear:hover { background: #f59e0b; }
+        .user-badge .email {
+            font-size: 13px;
+            font-weight: 700;
+            color: #15803d;
+            word-break: break-all;
+        }
+        .user-badge .label {
+            font-size: 10px;
+            font-weight: 600;
+            color: #86efac;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* ── 文件上传区 ── */
+        .upload-zone {
+            border: 2px dashed #fcd34d;
+            border-radius: 20px;
+            background: #FFFBF0;
+            padding: 36px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 16px;
+        }
+        .upload-zone:hover, .upload-zone.drag-over {
+            border-color: #e6b422;
+            background: #fef3c7;
+        }
+        .upload-zone .icon { font-size: 36px; margin-bottom: 10px; display: block; }
+        .upload-zone .label { font-size: 15px; font-weight: 700; color: #92400e; margin-bottom: 4px; }
+        .upload-zone .hint  { font-size: 12px; color: #b45309; font-weight: 500; }
+        #fileInput { display: none; }
+
+        /* ── 结果卡片 ── */
+        .result {
+            border-radius: 16px;
+            padding: 18px 20px;
+            margin-top: 16px;
+            display: none;
+        }
+        .result.visible { display: block; }
+        .result.success  { background: #f0fdf4; border: 1.5px solid #86efac; }
+        .result.warning  { background: #fff7ed; border: 1.5px solid #fdba74; }
+        .result.caution  { background: #fefce8; border: 1.5px solid #fde047; }
+        .result.error    { background: #fff1f2; border: 1.5px solid #fca5a5; }
+
+        .result-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .result.success .result-title { color: #15803d; }
+        .result.warning .result-title { color: #c2410c; }
+        .result.caution .result-title { color: #854d0e; }
+        .result.error   .result-title { color: #dc2626; }
+
+        .result-lines {
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            line-height: 2;
+        }
+        .result-lines span {
+            display: inline-block;
+            background: #fff;
+            border-radius: 8px;
+            padding: 1px 8px;
+            margin: 1px 0;
+            font-weight: 700;
+        }
+        .result.success .result-lines span { color: #15803d; }
+        .result.warning .result-lines span { color: #c2410c; }
+        .result.caution .result-lines span { color: #854d0e; }
+        .result.error   .result-lines span { color: #dc2626; }
+
+        /* ── 页面切换 ── */
+        .page { display: none; }
+        .page.active { display: block; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <div class="logo">💰</div>
-    <h1>导入备份数据</h1>
-    <p class="subtitle">选择从记账 App 导出的 JSON 备份文件，<br>数据将写入 Visual Life OS 本地存储。</p>
 
-    <!-- 拖拽上传区 -->
-    <div class="upload-zone" id="uploadZone">
-        <span class="upload-icon">📂</span>
-        <p class="upload-label">点击选择 JSON 文件</p>
-        <p class="upload-hint">或将文件拖拽到此处</p>
-        <input type="file" id="fileInput" accept=".json,application/json">
+    <!-- 步骤指示 -->
+    <div class="steps">
+        <div class="step-dot active" id="dot1"></div>
+        <div class="step-dot" id="dot2"></div>
     </div>
 
-    <!-- 已选文件预览 -->
-    <div class="file-preview" id="filePreview">
-        <span class="file-icon">📄</span>
-        <span class="file-name" id="fileName"></span>
-        <button class="file-clear" id="fileClear" title="清除">×</button>
+    <!-- ── 第一步：登录 ── -->
+    <div class="page active" id="pageLogin">
+        <h1>登录账户</h1>
+        <p class="subtitle">导入前请先登录，数据将同步到你的云端账户。</p>
+
+        <div class="error-msg" id="loginError"></div>
+
+        <div class="field">
+            <label>邮箱</label>
+            <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email" />
+        </div>
+        <div class="field">
+            <label>密码</label>
+            <input type="password" id="passwordInput" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+
+        <button class="btn-primary" id="loginBtn">登录</button>
     </div>
 
-    <!-- 导入按钮 -->
-    <button class="btn-primary" id="importBtn" disabled>选择文件后导入</button>
+    <!-- ── 第二步：导入 ── -->
+    <div class="page" id="pageImport">
+        <h1>导入备份数据</h1>
+        <p class="subtitle">选择从记账 App 导出的 JSON 备份文件，将自动同步到云端。</p>
 
-    <!-- 状态提示 -->
-    <div class="status" id="statusBox"></div>
+        <div class="user-badge">
+            <div class="avatar">✓</div>
+            <div>
+                <div class="label">已登录</div>
+                <div class="email" id="userEmail">—</div>
+            </div>
+        </div>
 
-    <!-- 返回按钮 -->
-    <a class="btn-back" id="backBtn" href="index.html">← 返回 Life OS</a>
+        <div class="upload-zone" id="uploadZone">
+            <span class="icon">📂</span>
+            <p class="label">点击选择 JSON 文件</p>
+            <p class="hint">或将文件拖拽到此处</p>
+            <input type="file" id="fileInput" accept=".json,application/json">
+        </div>
+
+        <div class="result" id="resultBox"></div>
+
+        <a class="btn-back" href="index.html">← 返回 Life OS</a>
+    </div>
 </div>
 
 <script>
@@ -257,32 +314,71 @@
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpeWZsbWt6enVpd21hbXZvaWxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMzQ0OTksImV4cCI6MjA5NDYxMDQ5OX0.1L59zixF4zg1yCahqo44h41kOiBfrWvtAGYvhGpRKAs';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    const uploadZone = document.getElementById('uploadZone');
-    const fileInput  = document.getElementById('fileInput');
-    const filePreview = document.getElementById('filePreview');
-    const fileNameEl  = document.getElementById('fileName');
-    const fileClear   = document.getElementById('fileClear');
-    const importBtn  = document.getElementById('importBtn');
-    const statusBox  = document.getElementById('statusBox');
-    const backBtn    = document.getElementById('backBtn');
-
     const STORAGE_KEY = 'visualLifeOS_data';
-    let selectedFile = null;
 
-    // ── 文件选择 ──
+    // ── DOM refs ──
+    const pageLogin  = document.getElementById('pageLogin');
+    const pageImport = document.getElementById('pageImport');
+    const dot1       = document.getElementById('dot1');
+    const dot2       = document.getElementById('dot2');
+
+    const emailInput    = document.getElementById('emailInput');
+    const passwordInput = document.getElementById('passwordInput');
+    const loginBtn      = document.getElementById('loginBtn');
+    const loginError    = document.getElementById('loginError');
+
+    const userEmailEl = document.getElementById('userEmail');
+    const uploadZone  = document.getElementById('uploadZone');
+    const fileInput   = document.getElementById('fileInput');
+    const resultBox   = document.getElementById('resultBox');
+
+    // ── 检查是否已有 session ──
+    _supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) goToImport(session.user);
+    });
+
+    // ── 登录 ──
+    loginBtn.addEventListener('click', doLogin);
+    passwordInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+    async function doLogin() {
+        const email    = emailInput.value.trim();
+        const password = passwordInput.value;
+        if (!email || !password) return;
+
+        loginBtn.disabled = true;
+        loginBtn.textContent = '登录中…';
+        loginError.classList.remove('visible');
+
+        const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+
+        if (error || !data.user) {
+            loginError.textContent = error?.message || '登录失败，请重试';
+            loginError.classList.add('visible');
+            loginBtn.disabled = false;
+            loginBtn.textContent = '登录';
+        } else {
+            goToImport(data.user);
+        }
+    }
+
+    function goToImport(user) {
+        userEmailEl.textContent = user.email;
+        pageLogin.classList.remove('active');
+        pageImport.classList.add('active');
+        dot1.classList.remove('active');
+        dot1.classList.add('done');
+        dot2.classList.add('active');
+    }
+
+    // ── 文件上传 ──
     uploadZone.addEventListener('click', () => fileInput.click());
 
     fileInput.addEventListener('change', e => {
         const file = e.target.files[0];
-        if (file) setFile(file);
+        if (file) readAndImport(file);
     });
 
-    fileClear.addEventListener('click', e => {
-        e.stopPropagation();
-        clearFile();
-    });
-
-    // ── 拖拽支持 ──
     uploadZone.addEventListener('dragover', e => {
         e.preventDefault();
         uploadZone.classList.add('drag-over');
@@ -292,53 +388,27 @@
         e.preventDefault();
         uploadZone.classList.remove('drag-over');
         const file = e.dataTransfer.files[0];
-        if (file && file.name.endsWith('.json')) setFile(file);
-        else showStatus('error', '❌ 格式错误', ['请选择 .json 格式的备份文件']);
+        if (file && file.name.endsWith('.json')) {
+            readAndImport(file);
+        } else {
+            showResult('error', '❌ 格式错误', ['请选择 .json 格式的备份文件']);
+        }
     });
 
-    function setFile(file) {
-        selectedFile = file;
-        fileNameEl.textContent = file.name;
-        filePreview.classList.add('visible');
-        importBtn.disabled = false;
-        importBtn.textContent = '开始导入';
-        clearStatus();
-    }
-
-    function clearFile() {
-        selectedFile = null;
-        fileInput.value = '';
-        filePreview.classList.remove('visible');
-        importBtn.disabled = true;
-        importBtn.textContent = '选择文件后导入';
-        clearStatus();
-    }
-
-    // ── 导入逻辑 ──
-    importBtn.addEventListener('click', () => {
-        if (!selectedFile) return;
-
-        importBtn.disabled = true;
-        importBtn.textContent = '解析中…';
-
+    function readAndImport(file) {
+        showResult('caution', '⏳ 解析中…', ['正在读取文件：' + file.name]);
         const reader = new FileReader();
-        reader.onload = e => {
+        reader.onload = async e => {
             try {
                 const raw = JSON.parse(e.target.result);
-                doImport(raw);
+                await doImport(raw);
             } catch (err) {
-                importBtn.disabled = false;
-                importBtn.textContent = '重新导入';
-                showStatus('error', '❌ 文件解析失败', ['JSON 格式不正确：' + err.message]);
+                showResult('error', '❌ 文件解析失败', ['JSON 格式不正确：' + err.message]);
             }
         };
-        reader.onerror = () => {
-            importBtn.disabled = false;
-            importBtn.textContent = '重新导入';
-            showStatus('error', '❌ 文件读取失败', ['请重新选择文件']);
-        };
-        reader.readAsText(selectedFile, 'utf-8');
-    });
+        reader.onerror = () => showResult('error', '❌ 文件读取失败', ['请重新选择文件']);
+        reader.readAsText(file, 'utf-8');
+    }
 
     async function doImport(raw) {
         const transactions      = raw.transactions      || [];
@@ -349,115 +419,81 @@
         const exchangeRate      = raw.exchangeRate      || 0.05;
         const monthlyRates      = raw.monthlyRates      || {};
 
+        // 写入 localStorage
         let existing = {};
-        try { existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
-        catch { existing = {}; }
+        try { existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch {}
 
         const merged = {
             ...existing,
-            transactions,
-            categories,
-            fixedItemsByMonth,
-            wishlist,
-            inventory,
-            exchangeRate,
-            monthlyRates,
+            transactions, categories, fixedItemsByMonth,
+            wishlist, inventory, exchangeRate, monthlyRates,
             migratedAt: new Date().toISOString(),
         };
 
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
         } catch (err) {
-            importBtn.disabled = false;
-            importBtn.textContent = '重新导入';
-            showStatus('error', '❌ 写入失败', ['localStorage 空间不足：' + err.message]);
+            showResult('error', '❌ 写入本地失败', ['localStorage 空间不足：' + err.message]);
             return;
         }
-
-        // 本地写入成功，开始云端同步
-        importBtn.textContent = '同步中…';
 
         const detailLines = [
             '📊 交易记录：' + transactions.length + ' 条',
             '🏷️ 分类：' + categories.length + ' 个',
-            '📅 固定收支月份：' + Object.keys(fixedItemsByMonth).length + ' 个',
+            '📅 固定收支：' + Object.keys(fixedItemsByMonth).length + ' 个月',
             '💝 心愿单：' + wishlist.length + ' 条',
             '📦 库存：' + inventory.length + ' 条',
         ];
 
-        try {
-            const { data: { session } } = await _supabase.auth.getSession();
-            let user = session?.user;
+        // 获取当前登录用户
+        const { data: { session } } = await _supabase.auth.getSession();
+        const user = session?.user;
 
-            if (!user) {
-                const { data } = await _supabase.auth.refreshSession();
-                user = data?.user;
-            }
+        if (!user) {
+            showResult('warning',
+                '✅ 本地导入完成！但未检测到登录状态，请重新登录后导入',
+                detailLines
+            );
+            return;
+        }
 
-            if (!user) {
-                importBtn.textContent = '✓ 已导入';
-                backBtn.classList.add('visible');
-                showStatus('warning',
-                    '✅ 导入完成！但未检测到登录状态，请先在主页登录后再导入',
-                    detailLines
-                );
-                return;
-            }
+        // 上传到 Supabase
+        showResult('caution', '☁️ 同步中…', detailLines);
 
-            const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-            const { error } = await _supabase.from('lifeos_data').upsert({
-                id:                   user.id,
-                transactions:         local.transactions      || [],
-                categories:           local.categories        || [],
-                fixed_items_by_month: local.fixedItemsByMonth || {},
-                wishlist:             local.wishlist          || [],
-                todos:                local.allTodos          || {},
-                habits:               local.habits            || {},
-                period_log:           local.periodLog         || [],
-                exchange_rate:        local.exchangeRate      || 0.048,
-                monthly_rates:        local.monthlyRates      || {},
-                updated_at:           new Date().toISOString(),
-            });
+        const { error } = await _supabase.from('lifeos_data').upsert({
+            id:                   user.id,
+            transactions:         merged.transactions      || [],
+            categories:           merged.categories        || [],
+            fixed_items_by_month: merged.fixedItemsByMonth || {},
+            wishlist:             merged.wishlist          || [],
+            todos:                merged.allTodos          || {},
+            habits:               merged.habits            || {},
+            period_log:           merged.periodLog         || [],
+            exchange_rate:        merged.exchangeRate      || 0.048,
+            monthly_rates:        merged.monthlyRates      || {},
+            updated_at:           new Date().toISOString(),
+        });
 
-            if (error) {
-                importBtn.textContent = '✓ 已导入';
-                backBtn.classList.add('visible');
-                showStatus('caution',
-                    '✅ 本地导入成功，但云端同步失败，请手动同步',
-                    [...detailLines, '⚠️ 错误：' + error.message]
-                );
-            } else {
-                importBtn.textContent = '✓ 已导入并同步';
-                backBtn.classList.add('visible');
-                showStatus('success',
-                    '✅ 导入完成！共导入 ' + transactions.length + ' 条记录，已同步到云端',
-                    detailLines
-                );
-            }
-        } catch (err) {
-            importBtn.textContent = '✓ 已导入';
-            backBtn.classList.add('visible');
-            showStatus('caution',
+        if (error) {
+            showResult('caution',
                 '✅ 本地导入成功，但云端同步失败，请手动同步',
-                [...detailLines, '⚠️ 错误：' + err.message]
+                [...detailLines, '⚠️ 错误：' + error.message]
+            );
+        } else {
+            showResult('success',
+                '✅ 导入完成！共 ' + transactions.length + ' 条记录，已同步到云端',
+                detailLines
             );
         }
     }
 
-    function showStatus(type, title, lines) {
-        statusBox.innerHTML =
-            '<div class="status-' + type + '">' +
-            '<p class="status-title">' + title + '</p>' +
-            '<div class="status-detail">' +
+    function showResult(type, title, lines) {
+        resultBox.className = 'result visible ' + type;
+        resultBox.innerHTML =
+            '<p class="result-title">' + title + '</p>' +
+            '<div class="result-lines">' +
             lines.map(l => '<span>' + l + '</span><br>').join('') +
-            '</div></div>';
-        statusBox.classList.add('visible');
-    }
-
-    function clearStatus() {
-        statusBox.innerHTML = '';
-        statusBox.classList.remove('visible');
-        backBtn.classList.remove('visible');
+            '</div>';
     }
 </script>
 </body>

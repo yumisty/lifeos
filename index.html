@@ -78,7 +78,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
         // ── Supabase 初始化 ──
         const SUPABASE_URL = 'https://aiyflmkzzuiwmamvoils.supabase.co';
@@ -2793,6 +2793,8 @@
             const [showAddCenter, setShowAddCenter] = useState(false);
             const [reportConfig, setReportConfig] = useState({ isOpen: false, type: '', period: '' });
             const [aiPanel, setAIPanel] = useState({ isOpen: false, title: '' });
+            const [toast, setToast] = useState(null);
+            const importFileRef = useRef(null);
 
             const navItems = [
                 { id: 'home',     icon: '🏠', label: 'Dashboard' },
@@ -2886,6 +2888,47 @@
                 setWidgets(newW);
             };
 
+            // 本地 JSON 导入逻辑
+            const handleImport = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                e.target.value = '';
+                const reader = new FileReader();
+                reader.onload = async (ev) => {
+                    try {
+                        const raw = JSON.parse(ev.target.result);
+                        const transactions      = raw.transactions      || [];
+                        const categories        = raw.categories        || [];
+                        const fixedItemsByMonth = raw.fixedItemsByMonth || {};
+                        const wishlist          = raw.wishlist          || [];
+                        const exchangeRate      = raw.exchangeRate      || 0.048;
+                        const monthlyRates      = raw.monthlyRates      || {};
+
+                        const existing = (() => {
+                            try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); } catch { return {}; }
+                        })();
+                        const merged = {
+                            ...existing,
+                            transactions, categories, fixedItemsByMonth,
+                            wishlist, exchangeRate, monthlyRates,
+                            migratedAt: new Date().toISOString(),
+                        };
+                        localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
+                        await syncToCloud();
+                        setToast({ ok: true, msg: `✅ 导入完成！共 ${transactions.length} 条记录，已同步到云端` });
+                        setTimeout(() => window.location.reload(), 3000);
+                    } catch (err) {
+                        setToast({ ok: false, msg: `❌ 导入失败：${err.message}` });
+                        setTimeout(() => setToast(null), 4000);
+                    }
+                };
+                reader.onerror = () => {
+                    setToast({ ok: false, msg: '❌ 文件读取失败，请重试' });
+                    setTimeout(() => setToast(null), 4000);
+                };
+                reader.readAsText(file, 'utf-8');
+            };
+
             if (!authChecked) return (
                 <div className="fixed inset-0 flex items-center justify-center" style={{ background: 'var(--theme-bg)' }}>
                     <div className="text-3xl animate-spin" style={{ color: 'var(--accent)' }}>⟳</div>
@@ -2970,6 +3013,15 @@
                                     <button onClick={() => setIsEditMode(!isEditMode)} className={`px-4 h-10 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 transition-colors ${isEditMode ? 'bg-os-text text-white' : 'bg-white hover:bg-gray-50'}`}>
                                         {isEditMode ? 'Done' : 'Edit Layout'}
                                     </button>
+                                    <div className="relative group">
+                                        <button onClick={() => importFileRef.current?.click()}
+                                            className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors text-base">
+                                            📂
+                                        </button>
+                                        <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold bg-gray-800 text-white px-2.5 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                            导入历史数据
+                                        </span>
+                                    </div>
                                 </>)}
                                 {currentView === 'finance' && (
                                     <button onClick={() => setCurrentView('home')} className="px-4 h-10 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1">
@@ -3112,6 +3164,17 @@
                                     <button onClick={() => setShowWidgetLib(false)} className="w-full py-3 rounded-2xl font-bold text-white text-sm" style={{ background: '#475569' }}>完成</button>
                                 </div>
                             </div>
+                        </div>
+                    )}
+
+                    {/* 隐藏文件 input（导入用） */}
+                    <input ref={importFileRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImport} />
+
+                    {/* Toast 提示 */}
+                    {toast && (
+                        <div className="fixed bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-[200] px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold text-white animate-slide-up whitespace-nowrap"
+                            style={{ background: toast.ok ? '#1e293b' : '#ef4444' }}>
+                            {toast.msg}
                         </div>
                     )}
 
