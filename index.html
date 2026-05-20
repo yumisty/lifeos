@@ -88,6 +88,91 @@
         // 当前登录用户 ID（登录后由 auth 设置）
         let CURRENT_USER_ID = null;
 
+        // ── localStorage 读取（每次调用返回最新数据，不缓存）──
+        const getFinanceStorage = () => {
+            try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); }
+            catch { return {}; }
+        };
+
+        // ── 默认记账分类 ──
+        const _DEFAULT_FINANCE_CATS = ['一日三餐','吃饭','购物/超市','购物/日用品','购物/化妆护肤品','购物/周边','购物/吃的','购物/衣服','购物/玩的','氪金','机票','交通','礼物','医疗','会员','课程'];
+
+        // ── 云同步函数（全局，供所有 Widget 直接调用）──
+        const syncToCloud = async () => {
+            if (!CURRENT_USER_ID) {
+                try {
+                    const { data: { session } } = await _supabase.auth.getSession();
+                    CURRENT_USER_ID = session?.user?.id ?? null;
+                } catch {}
+            }
+            if (!CURRENT_USER_ID) return false;
+            try {
+                const local = getFinanceStorage();
+                const { error } = await _supabase.from('lifeos_data').upsert({
+                    id:                   CURRENT_USER_ID,
+                    transactions:         local.transactions        || [],
+                    categories:           local.categories          || [],
+                    fixed_items_by_month: local.fixedItemsByMonth   || {},
+                    wishlist:             local.wishlist            || [],
+                    todos:                local.allTodos            || {},
+                    habits:               local.habits              || {},
+                    period_log:           local.periodLog           || [],
+                    countdowns:           local.countdowns          || [],
+                    now_playing:          local.nowPlaying          || {},
+                    exchange_rate:        local.exchangeRate        || 0.048,
+                    monthly_rates:        local.monthlyRates        || {},
+                    theme:                local.theme               || 'cream',
+                    smoking_log:          local.smokingLog          || {},
+                    smoking_goal:         local.smokingGoal         || 20,
+                    updated_at:           new Date().toISOString(),
+                });
+                return !error;
+            } catch { return false; }
+        };
+
+        const syncFromCloud = async () => {
+            if (!CURRENT_USER_ID) return null;
+            try {
+                const { data, error } = await _supabase
+                    .from('lifeos_data').select('*').eq('id', CURRENT_USER_ID).single();
+                if (error || !data) return null;
+                const local = getFinanceStorage();
+                const mergeArr = (cloud, loc) => {
+                    if (!cloud || cloud.length === 0) return loc || [];
+                    if (!loc   || loc.length   === 0) return cloud;
+                    return cloud.length >= loc.length ? cloud : loc;
+                };
+                const mergeObj = (cloud, loc) => {
+                    if (!cloud || Object.keys(cloud).length === 0) return loc || {};
+                    if (!loc   || Object.keys(loc).length   === 0) return cloud;
+                    return Object.keys(cloud).length >= Object.keys(loc).length ? cloud : loc;
+                };
+                const merged = {
+                    ...local,
+                    transactions:      mergeArr(data.transactions,         local.transactions),
+                    categories:        mergeArr(data.categories,           local.categories),
+                    fixedItemsByMonth: mergeObj(data.fixed_items_by_month, local.fixedItemsByMonth),
+                    wishlist:          mergeArr(data.wishlist,              local.wishlist),
+                    allTodos:          mergeObj(data.todos,                 local.allTodos),
+                    habits:            mergeObj(data.habits,                local.habits),
+                    periodLog:         mergeArr(data.period_log,            local.periodLog),
+                    countdowns:        mergeArr(data.countdowns,            local.countdowns),
+                    nowPlaying:        data.now_playing         || local.nowPlaying   || {},
+                    exchangeRate:      data.exchange_rate       || local.exchangeRate || 0.048,
+                    monthlyRates:      mergeObj(data.monthly_rates,         local.monthlyRates),
+                    theme:             data.theme               || local.theme        || 'cream',
+                    smokingLog:        mergeObj(data.smoking_log,           local.smokingLog),
+                    smokingGoal:       data.smoking_goal        || local.smokingGoal  || 20,
+                };
+                localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
+                await syncToCloud();
+                return merged;
+            } catch(e) {
+                console.log('sync from cloud failed:', e);
+                return null;
+            }
+        };
+
         // 获取当前周的日期数组 (周日到周六)
         const getWeekDates = (date = new Date()) => {
             const d = new Date(date);
@@ -140,14 +225,8 @@
             { id: 'shopping', size: 'large' }    // 2x2
         ];
 
-        // 从 localStorage 读取迁移后的记账数据，读不到则用空数组
-        const _financeStorage = (() => {
-            try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); }
-            catch { return {}; }
-        })();
-
         // transactions 格式：{ id, date, name, amount, currency, category }
-        const MOCK_TRANSACTIONS = _financeStorage.transactions || [];
+        const MOCK_TRANSACTIONS = getFinanceStorage().transactions || [];
 
         // 分类颜色映射（关键词匹配，越长越具体的放前面）
         const FINANCE_CAT_COLOR_MAP = [
@@ -435,7 +514,7 @@
                 } catch { return []; }
             });
 
-            const historicalTodos = (_financeStorage.urgentTodos || []).map(t => ({ ...t, historical: true }));
+            const historicalTodos = (getFinanceStorage().urgentTodos || []).map(t => ({ ...t, historical: true }));
 
             const saveTodos = (todos) => {
                 setWeekTodos(todos);
@@ -1654,10 +1733,10 @@
             const [addForm, setAddForm] = useState({ amount: '', currency: 'JPY', category: '', name: '' });
             const [txKey, setTxKey] = useState(0); // triggers re-read of MOCK_TRANSACTIONS
 
-            const _DEFAULT_FINANCE_CATS = ['一日三餐','吃饭','购物/超市','购物/日用品','购物/化妆护肤品','购物/周边','购物/吃的','购物/衣服','购物/玩的','氪金','机票','交通','礼物','医疗','会员','课程'];
-            const _wCatsRaw = _financeStorage.categories;
-            const wCategories = (_wCatsRaw && _wCatsRaw.length > 0) ? _wCatsRaw : _DEFAULT_FINANCE_CATS.map(n => ({ name: n }));
-            const exchRate = _financeStorage.exchangeRate || 0.048;
+            const wCategories = getFinanceStorage().categories?.length > 0
+                ? getFinanceStorage().categories
+                : _DEFAULT_FINANCE_CATS.map(n => ({ name: n }));
+            const exchRate = getFinanceStorage().exchangeRate || 0.048;
             const toJPYw = (amt, cur) => (cur === 'RMB' || cur === 'CNY') ? amt / exchRate : amt;
             const nowMonth = TODAY_STR.slice(0, 7);
             const monthTxW = MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(nowMonth));
@@ -1852,10 +1931,10 @@
             const [searchTx, setSearchTx] = useState('');             // 记录搜索词
 
             // 从 localStorage 读取的可编辑状态
-            const [fixedData, setFixedData] = useState(() => ({ ...(_financeStorage.fixedItemsByMonth || {}) }));
+            const [fixedData, setFixedData] = useState(() => ({ ...(getFinanceStorage().fixedItemsByMonth || {}) }));
             const [ratesData, setRatesData] = useState(() => ({
-                default: _financeStorage.exchangeRate ?? 0.048,
-                monthly: { ...(_financeStorage.monthlyRates || {}) },
+                default: getFinanceStorage().exchangeRate ?? 0.048,
+                monthly: { ...(getFinanceStorage().monthlyRates || {}) },
             }));
 
             // 弹窗状态
@@ -2026,9 +2105,9 @@
                     <div className="flex gap-2 mb-4">
                         {['month', 'year'].map(t => (
                             <button key={t} onClick={() => setTab(t)}
-                                className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${tab === t ? 'text-white shadow-sm' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+                                className={`flex-1 md:flex-none px-5 py-3 md:py-2 rounded-2xl md:rounded-full text-base md:text-sm font-black transition-all ${tab === t ? 'text-white shadow-sm' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
                                 style={tab === t ? { background: 'var(--accent)' } : {}}>
-                                {t === 'month' ? '月度' : '年度'}
+                                {t === 'month' ? '📅 月度' : '📊 年度'}
                             </button>
                         ))}
                     </div>
@@ -2037,7 +2116,7 @@
 
                         {/* ══ 月度 Tab ══ */}
                         {tab === 'month' && (
-                            <div className="flex flex-col gap-4 animate-fade-in">
+                            <div className="flex flex-col gap-4 animate-fade-in pb-32 md:pb-8">
 
                                 <div className="flex flex-col gap-2">
                                     {/* 第一行：← 年月 → 两端对齐 ¥JPY⇄ 汇率 */}
@@ -2059,29 +2138,33 @@
                                             </button>
                                         </div>
                                     </div>
-                                    {/* 第二行：总支出 | 固定支出 | 合计 */}
-                                    <div className="flex items-end gap-4 flex-wrap">
+                                    {/* 第二行：手机两行 / 桌面横排 */}
+                                    <div className="flex flex-col md:flex-row md:items-end gap-2 md:gap-4">
+                                        {/* 第一行：本月支出（大字） */}
                                         <div>
                                             <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--accent)' }}>本月支出</p>
                                             <p className="text-2xl font-black" style={{ color: '#c2410c' }}>
                                                 {isRMBCur ? `¥${(monthTotal * currentRate).toFixed(0)} RMB` : `¥${Math.round(monthTotal).toLocaleString()} JPY`}
                                             </p>
                                         </div>
-                                        <div className="w-px h-8 bg-gray-200 self-center" />
-                                        <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--accent)' }}>固定支出</p>
-                                            <p className="text-xl font-black" style={{ color: '#92400e' }}>
-                                                {isRMBCur ? `¥${(fixedTotal * currentRate).toFixed(0)} RMB` : `¥${Math.round(fixedTotal).toLocaleString()} JPY`}
-                                            </p>
+                                        {/* 第二行：固定支出 合计 管理（小字并排） */}
+                                        <div className="flex items-end gap-3">
+                                            <div className="hidden md:block w-px h-8 bg-gray-200 self-center" />
+                                            <div>
+                                                <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--accent)' }}>固定支出</p>
+                                                <p className="text-base font-black" style={{ color: '#92400e' }}>
+                                                    {isRMBCur ? `¥${(fixedTotal * currentRate).toFixed(0)}` : `¥${Math.round(fixedTotal).toLocaleString()}`}
+                                                </p>
+                                            </div>
+                                            <div className="hidden md:block w-px h-8 bg-gray-200 self-center" />
+                                            <div>
+                                                <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--accent)' }}>合计</p>
+                                                <p className="text-base font-black" style={{ color: '#475569' }}>
+                                                    {isRMBCur ? `¥${((monthTotal + fixedTotal) * currentRate).toFixed(0)}` : `¥${Math.round(monthTotal + fixedTotal).toLocaleString()}`}
+                                                </p>
+                                            </div>
+                                            <button onClick={openFixedModal} className="text-[10px] font-black underline transition-colors ml-1 self-end mb-1 hover:opacity-70" style={{ color: 'var(--accent)' }}>管理</button>
                                         </div>
-                                        <div className="w-px h-8 bg-gray-200 self-center" />
-                                        <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--accent)' }}>合计</p>
-                                            <p className="text-xl font-black" style={{ color: '#475569' }}>
-                                                {isRMBCur ? `¥${((monthTotal + fixedTotal) * currentRate).toFixed(0)} RMB` : `¥${Math.round(monthTotal + fixedTotal).toLocaleString()} JPY`}
-                                            </p>
-                                        </div>
-                                        <button onClick={openFixedModal} className="text-[10px] font-black underline transition-colors ml-1 self-end mb-1 hover:opacity-70" style={{ color: 'var(--accent)' }}>管理</button>
                                     </div>
                                 </div>
 
@@ -2307,7 +2390,7 @@
 
                         {/* ══ 年度 Tab ══ */}
                         {tab === 'year' && (
-                            <div className="flex flex-col gap-4 animate-fade-in">
+                            <div className="flex flex-col gap-4 animate-fade-in pb-32 md:pb-8">
 
                                 {/* 年份导航 + 三个统计卡片 */}
                                 <div className="flex flex-col gap-3">
@@ -2785,92 +2868,6 @@
             { id: 'period',    label: '月经记录', icon: '🌸', defaultSize: '2x1' },
             { id: 'smoking',   label: '抽烟记录', icon: '🚬', defaultSize: '2x1' },
         ];
-
-        // ── 云同步函数 ──
-        const syncFromCloud = async () => {
-            if (!CURRENT_USER_ID) return null;
-            try {
-                const { data, error } = await _supabase
-                    .from('lifeos_data')
-                    .select('*')
-                    .eq('id', CURRENT_USER_ID)
-                    .single();
-                if (error || !data) return null;
-                const local = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                // 合并策略：哪边数据多用哪边，不用空数组覆盖有数据的本地
-                const mergeArr = (cloud, loc) => {
-                    if (!cloud || cloud.length === 0) return loc || [];
-                    if (!loc || loc.length === 0) return cloud;
-                    return cloud.length >= loc.length ? cloud : loc;
-                };
-                const mergeObj = (cloud, loc) => {
-                    if (!cloud || Object.keys(cloud).length === 0) return loc || {};
-                    if (!loc || Object.keys(loc).length === 0) return cloud;
-                    return Object.keys(cloud).length >= Object.keys(loc).length ? cloud : loc;
-                };
-                const merged = {
-                    ...local,
-                    transactions:      mergeArr(data.transactions,         local.transactions),
-                    categories:        mergeArr(data.categories,           local.categories),
-                    fixedItemsByMonth: mergeObj(data.fixed_items_by_month, local.fixedItemsByMonth),
-                    wishlist:          mergeArr(data.wishlist,              local.wishlist),
-                    allTodos:          mergeObj(data.todos,                 local.allTodos),
-                    habits:            mergeObj(data.habits,                local.habits),
-                    periodLog:         mergeArr(data.period_log,            local.periodLog),
-                    countdowns:        mergeArr(data.countdowns,            local.countdowns),
-                    nowPlaying:        data.now_playing         || local.nowPlaying          || {},
-                    exchangeRate:      data.exchange_rate       || local.exchangeRate        || 0.048,
-                    monthlyRates:      mergeObj(data.monthly_rates,         local.monthlyRates),
-                    theme:             data.theme               || local.theme               || 'cream',
-                    smokingLog:        mergeObj(data.smoking_log,           local.smokingLog),
-                    smokingGoal:       data.smoking_goal        || local.smokingGoal         || 20,
-                };
-                localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
-                // 立即把合并后的数据推回云端
-                await syncToCloud();
-                return merged;
-            } catch(e) {
-                console.log('sync from cloud failed:', e);
-                return null;
-            }
-        };
-
-        const syncToCloud = async () => {
-            if (!CURRENT_USER_ID) {
-                const { data: { session } } = await _supabase.auth.getSession();
-                CURRENT_USER_ID = session?.user?.id ?? null;
-            }
-            if (!CURRENT_USER_ID) return false;
-            try {
-                const local = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                const { error } = await _supabase
-                    .from('lifeos_data')
-                    .upsert({
-                        id:                    CURRENT_USER_ID,
-                        transactions:          local.transactions        || [],
-                        categories:            local.categories          || [],
-                        fixed_items_by_month:  local.fixedItemsByMonth   || {},
-                        wishlist:              local.wishlist            || [],
-                        todos:                 local.allTodos            || {},
-                        habits:                local.habits              || {},
-                        period_log:            local.periodLog           || [],
-                        countdowns:            local.countdowns          || [],
-                        now_playing:           local.nowPlaying          || {},
-                        exchange_rate:         local.exchangeRate        || 0.048,
-                        monthly_rates:         local.monthlyRates        || {},
-                        theme:                 local.theme               || 'cream',
-                        smoking_log:           local.smokingLog          || {},
-                        smoking_goal:          local.smokingGoal         || 20,
-                        updated_at:            new Date().toISOString(),
-                    });
-                if (error) console.log('sync to cloud failed:', error);
-                else console.log('✅ 已同步到云端');
-                return !error;
-            } catch(e) {
-                console.log('sync to cloud failed:', e);
-                return false;
-            }
-        };
 
         const LoginForm = () => {
             const [email, setEmail] = React.useState('');
