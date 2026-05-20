@@ -38,11 +38,13 @@
                     animation: {
                         'fade-in': 'fadeIn 0.2s ease-out',
                         'slide-up': 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                        'slide-left': 'slideLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
                         'wiggle': 'wiggle 0.3s ease-in-out infinite',
                     },
                     keyframes: {
                         fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
                         slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                        slideLeft: { '0%': { opacity: '0', transform: 'translateX(-24px)' }, '100%': { opacity: '1', transform: 'translateX(0)' } },
                         wiggle: { '0%, 100%': { transform: 'rotate(-1deg)' }, '50%': { transform: 'rotate(1deg)' } },
                     }
                 }
@@ -1729,7 +1731,7 @@
 
         const FinanceWidget = ({ onOpen }) => {
             const [showAdd, setShowAdd] = useState(false);
-            const [addForm, setAddForm] = useState({ amount: '', currency: 'JPY', category: '', name: '' });
+            const [addForm, setAddForm] = useState({ amount: '', currency: 'JPY', category: '', name: '', date: TODAY_STR });
             const [txKey, setTxKey] = useState(0); // triggers re-read of MOCK_TRANSACTIONS
 
             const cats = (() => {
@@ -1753,7 +1755,7 @@
                 if (!addForm.amount || isNaN(parseFloat(addForm.amount))) return;
                 const tx = {
                     id: Date.now(),
-                    date: TODAY_STR,
+                    date: addForm.date || TODAY_STR,
                     name: addForm.name.trim() || addForm.category || '记账',
                     amount: parseFloat(addForm.amount),
                     currency: addForm.currency,
@@ -1766,7 +1768,7 @@
                 } catch {}
                 syncToCloud();
                 MOCK_TRANSACTIONS.push(tx);
-                setAddForm({ amount: '', currency: 'JPY', category: '', name: '' });
+                setAddForm({ amount: '', currency: 'JPY', category: '', name: '', date: TODAY_STR });
                 setShowAdd(false);
                 setTxKey(k => k + 1);
             };
@@ -1882,7 +1884,9 @@
                             <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-6" onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-between mb-5">
                                     <h2 className="font-black text-base text-gray-800">记一笔</h2>
-                                    <span className="text-xs font-bold text-gray-400">{TODAY_STR}</span>
+                                    <input type="date" value={addForm.date} max={TODAY_STR}
+                                        onChange={e => setAddForm(f => ({ ...f, date: e.target.value }))}
+                                        className="text-xs font-bold text-gray-500 bg-gray-50 rounded-xl px-3 py-1.5 border border-gray-200 outline-none" />
                                 </div>
 
                                 {/* 金额（70%）+ 货币（30%）同一行 */}
@@ -3175,10 +3179,14 @@
             // 弹出层控制
             const [addingCategory, setAddingCategory] = useState(null);
             const [showAddCenter, setShowAddCenter] = useState(false);
+            const [showQuickMenu, setShowQuickMenu] = useState(false);
+            const [showQuickTx, setShowQuickTx] = useState(false);
+            const [quickTxForm, setQuickTxForm] = useState({ amount: '', currency: 'JPY', category: '', name: '', date: TODAY_STR });
             const [reportConfig, setReportConfig] = useState({ isOpen: false, type: '', period: '' });
             const [aiPanel, setAIPanel] = useState({ isOpen: false, title: '', type: '', data: null });
             const [showSettings, setShowSettings] = useState(false);
             const [showProfile, setShowProfile] = useState(false);
+            const [showMobileSidebar, setShowMobileSidebar] = useState(false);
             const [toast, setToast] = useState(null);
             const importFileRef = useRef(null);
 
@@ -3190,9 +3198,34 @@
                 { id: 'finance',  icon: '💰', label: 'Finance' },
             ];
             const mobileNavItems = navItems.filter(i => !i.desktopOnly);
-            // 手机端导航：左2 + [+] + 右2（💰 和 👤）
-            const mobileLeftItems  = [{ id: 'home', icon: '🏠' }, { id: 'calendar', icon: '📅' }];
-            const mobileRightItems = [{ id: 'finance', icon: '💰' }, { id: 'profile', icon: '👤' }];
+
+            const saveQuickTx = () => {
+                if (!quickTxForm.amount || isNaN(parseFloat(quickTxForm.amount))) return;
+                const tx = {
+                    id: Date.now(),
+                    date: quickTxForm.date || TODAY_STR,
+                    name: quickTxForm.name.trim() || quickTxForm.category || '记账',
+                    amount: parseFloat(quickTxForm.amount),
+                    currency: quickTxForm.currency,
+                    category: quickTxForm.category,
+                };
+                try {
+                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    stored.transactions = [...(stored.transactions || []), tx];
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                } catch {}
+                syncToCloud();
+                MOCK_TRANSACTIONS.push(tx);
+                setQuickTxForm({ amount: '', currency: 'JPY', category: '', name: '', date: TODAY_STR });
+                setShowQuickTx(false);
+            };
+
+            const quickCats = (() => {
+                try {
+                    const d = getFinanceStorage();
+                    return d.categories?.length > 0 ? d.categories.map(c => typeof c === 'string' ? c : c.name) : _DEFAULT_FINANCE_CATS;
+                } catch { return _DEFAULT_FINANCE_CATS; }
+            })();
 
             // 主题 effect
             const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
@@ -3418,7 +3451,15 @@
                         {/* 顶部过滤区 & 动作栏 */}
                         <header className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
                             <div>
-                                <h1 className="text-3xl font-black capitalize tracking-tight mb-2">{currentView}.</h1>
+                                <div className="flex items-center gap-3 mb-2">
+                                    {/* 手机端头像按钮（点击展开左侧边栏） */}
+                                    <button onClick={() => setShowMobileSidebar(true)}
+                                        className="md:hidden w-9 h-9 rounded-full bg-os-text flex items-center justify-center text-white text-sm font-black shadow-sm flex-shrink-0"
+                                        title="我的">
+                                        {user?.email?.[0]?.toUpperCase() || '?'}
+                                    </button>
+                                    <h1 className="text-3xl font-black capitalize tracking-tight">{currentView}.</h1>
+                                </div>
                                 {(currentView === 'calendar' || currentView === 'year' || currentView === 'vault') && (
                                     <FilterBar activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
                                 )}
@@ -3504,23 +3545,55 @@
                     </main>
 
                     {/* 手机端底部导航 */}
-                    <nav className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-xl h-16 rounded-full flex justify-between items-center shadow-2xl px-6 w-[90%] max-w-sm border border-white z-50">
-                        {mobileLeftItems.map(item => (
-                            <button key={item.id} onClick={() => setCurrentView(item.id)}
-                                className={`text-2xl transition-transform ${currentView === item.id ? 'scale-110 drop-shadow-md' : 'opacity-40 grayscale'}`}>
-                                {item.icon}
-                            </button>
-                        ))}
-                        <button onClick={() => setShowAddCenter(true)} className="w-14 h-14 bg-os-text text-white rounded-full flex items-center justify-center text-3xl mb-8 shadow-xl hover:scale-105 active:scale-95 transition-transform border-4 border-os-bg">+</button>
-                        <button onClick={() => setCurrentView('finance')}
-                            className={`text-2xl transition-transform ${currentView === 'finance' ? 'scale-110 drop-shadow-md' : 'opacity-40 grayscale'}`}>
-                            💰
+                    <nav className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-xl h-16 rounded-full flex justify-between items-center shadow-2xl px-5 w-[92%] max-w-sm border border-white z-50">
+                        {/* 🏠 首页 */}
+                        <button onClick={() => setCurrentView('home')}
+                            className={`flex flex-col items-center gap-0.5 w-10 transition-transform ${currentView === 'home' ? 'scale-110' : 'opacity-40 grayscale'}`}>
+                            <span className="text-xl">🏠</span>
                         </button>
-                        <button onClick={() => setShowProfile(true)}
-                            className={`text-2xl transition-transform ${showProfile ? 'scale-110 drop-shadow-md' : 'opacity-40 grayscale'}`}>
-                            👤
+                        {/* 📅 日历 */}
+                        <button onClick={() => setCurrentView('calendar')}
+                            className={`flex flex-col items-center gap-0.5 w-10 transition-transform ${currentView === 'calendar' ? 'scale-110' : 'opacity-40 grayscale'}`}>
+                            <span className="text-xl">📅</span>
+                        </button>
+                        {/* ＋ 快速记录（中间大按钮）*/}
+                        <div className="relative">
+                            <button onClick={() => setShowQuickMenu(m => !m)}
+                                className="w-14 h-14 bg-os-text text-white rounded-full flex items-center justify-center text-3xl -mt-8 shadow-xl active:scale-95 transition-transform border-4 border-white">
+                                +
+                            </button>
+                            {showQuickMenu && (
+                                <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden animate-slide-up z-[60]" style={{ width: '160px' }}>
+                                    <button onClick={() => { setShowQuickMenu(false); setShowAddCenter(true); }}
+                                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                                        <span className="text-lg">📝</span>
+                                        <span className="text-sm font-bold text-gray-700">记录日志</span>
+                                    </button>
+                                    <div className="h-px bg-gray-100" />
+                                    <button onClick={() => { setShowQuickMenu(false); setShowQuickTx(true); }}
+                                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                                        <span className="text-lg">✏️</span>
+                                        <span className="text-sm font-bold text-gray-700">记一笔</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        {/* 💰 Finance */}
+                        <button onClick={() => setCurrentView('finance')}
+                            className={`flex flex-col items-center gap-0.5 w-10 transition-transform ${currentView === 'finance' ? 'scale-110' : 'opacity-40 grayscale'}`}>
+                            <span className="text-xl">💰</span>
+                        </button>
+                        {/* 📂 Vault */}
+                        <button onClick={() => setCurrentView('vault')}
+                            className={`flex flex-col items-center gap-0.5 w-10 transition-transform ${currentView === 'vault' ? 'scale-110' : 'opacity-40 grayscale'}`}>
+                            <span className="text-xl">📂</span>
                         </button>
                     </nav>
+
+                    {/* 手机端：关闭快速菜单的透明遮罩 */}
+                    {showQuickMenu && (
+                        <div className="fixed inset-0 z-[55] md:hidden" onClick={() => setShowQuickMenu(false)} />
+                    )}
 
                     {/* 中央悬浮添加控制台 (Center Add Modal) */}
                     {showAddCenter && (
@@ -3620,50 +3693,102 @@
                     )}
 
                     {/* ── 手机端「我的」面板 ── */}
-                    {showProfile && (
-                        <div className="fixed inset-0 z-[110] flex items-end justify-center glass-overlay animate-fade-in md:hidden" onClick={() => setShowProfile(false)}>
-                            <div className="bg-white w-full max-w-sm rounded-t-3xl shadow-2xl p-6 animate-slide-up pb-10" onClick={e => e.stopPropagation()}>
-                                <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-5" />
-                                <h2 className="font-black text-base text-gray-800 mb-4">👤 我的</h2>
-
-                                {/* 邮箱 */}
-                                <div className="bg-gray-50 rounded-2xl px-4 py-3 mb-3">
-                                    <p className="text-[10px] text-gray-400 mb-0.5">已登录账号</p>
-                                    <p className="text-sm font-bold text-gray-700 truncate">{user?.email}</p>
+                    {/* 手机端左侧边栏 */}
+                    {showMobileSidebar && (
+                        <div className="fixed inset-0 z-[120] flex md:hidden animate-fade-in" onClick={() => setShowMobileSidebar(false)}>
+                            <div className="w-72 h-full bg-white shadow-2xl flex flex-col animate-slide-left" onClick={e => e.stopPropagation()}>
+                                {/* 用户信息 */}
+                                <div className="px-6 pt-12 pb-6 border-b border-gray-100">
+                                    <div className="w-14 h-14 rounded-full bg-os-text flex items-center justify-center text-white text-xl font-black mb-3">
+                                        {user?.email?.[0]?.toUpperCase() || '?'}
+                                    </div>
+                                    <p className="font-bold text-sm text-gray-800 truncate">{user?.email}</p>
+                                    {syncIndicator && (
+                                        <p className="text-xs font-bold mt-1" style={{ color: syncIndicator.color }}>{syncIndicator.text}</p>
+                                    )}
                                 </div>
 
-                                {/* 同步状态 */}
-                                {syncIndicator && (
-                                    <p className="text-xs font-bold px-1 mb-3" style={{ color: syncIndicator.color }}>{syncIndicator.text}</p>
-                                )}
-
                                 {/* 主题选择 */}
-                                <div className="mb-4">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">🎨 主题</p>
+                                <div className="px-6 py-5 border-b border-gray-100">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">🎨 主题</p>
                                     <div className="grid grid-cols-4 gap-2">
                                         {THEMES.map(t => (
                                             <button key={t.id} onClick={() => setThemeId(t.id)}
-                                                className="flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 transition-all"
+                                                className="flex flex-col items-center gap-1.5 py-2.5 rounded-2xl border-2 transition-all"
                                                 style={{ borderColor: themeId === t.id ? t.accent : '#e5e7eb', background: t.bg }}>
                                                 <div className="w-5 h-5 rounded-full" style={{ background: t.accent }} />
-                                                <span className="text-[9px] font-black" style={{ color: t.text }}>{t.name}</span>
-                                                {themeId === t.id && <span className="text-[8px]" style={{ color: t.accent }}>✓</span>}
+                                                <span className="text-[8px] font-black leading-none" style={{ color: t.text }}>{t.name}</span>
                                             </button>
                                         ))}
                                     </div>
                                 </div>
 
-                                {/* 设置 & 退出 */}
-                                <div className="flex gap-2">
-                                    <button onClick={() => { setShowProfile(false); setShowSettings(true); }}
-                                        className="flex-1 py-3 rounded-2xl font-bold text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors">
-                                        ⚙️ 设置
+                                {/* 导航入口 */}
+                                <div className="flex-1 px-4 py-4 space-y-1">
+                                    <button onClick={() => { setCurrentView('year'); setShowMobileSidebar(false); }}
+                                        className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-gray-50 transition-colors text-left">
+                                        <span className="text-xl">🗺️</span>
+                                        <span className="font-bold text-sm text-gray-700">Year Map</span>
                                     </button>
+                                    <button onClick={() => { setShowMobileSidebar(false); setShowSettings(true); }}
+                                        className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-gray-50 transition-colors text-left">
+                                        <span className="text-xl">⚙️</span>
+                                        <span className="font-bold text-sm text-gray-700">设置</span>
+                                    </button>
+                                </div>
+
+                                {/* 退出登录 */}
+                                <div className="px-6 pb-10">
                                     <button onClick={() => _supabase.auth.signOut()}
-                                        className="flex-1 py-3 rounded-2xl font-bold text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors">
+                                        className="w-full py-3 rounded-2xl font-bold text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors">
                                         退出登录
                                     </button>
                                 </div>
+                            </div>
+                            <div className="flex-1" />
+                        </div>
+                    )}
+
+                    {/* 快速记一笔弹窗 */}
+                    {showQuickTx && (
+                        <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowQuickTx(false)}>
+                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-6" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-between mb-5">
+                                    <h2 className="font-black text-base text-gray-800">✏️ 记一笔</h2>
+                                    <input type="date" value={quickTxForm.date} max={TODAY_STR}
+                                        onChange={e => setQuickTxForm(f => ({ ...f, date: e.target.value }))}
+                                        className="text-xs font-bold text-gray-500 bg-gray-50 rounded-xl px-3 py-1.5 border border-gray-200 outline-none" />
+                                </div>
+                                <div className="flex gap-2 mb-3">
+                                    <input type="number" inputMode="decimal" placeholder="金额"
+                                        value={quickTxForm.amount}
+                                        onChange={e => setQuickTxForm(f => ({ ...f, amount: e.target.value }))}
+                                        className="bg-gray-50 rounded-2xl px-4 py-3 text-lg font-black outline-none border-2 border-transparent focus:border-yellow-400 transition-colors"
+                                        style={{ flex: '7' }} autoFocus />
+                                    <select value={quickTxForm.currency}
+                                        onChange={e => setQuickTxForm(f => ({ ...f, currency: e.target.value }))}
+                                        className="bg-gray-50 rounded-2xl px-3 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors text-center"
+                                        style={{ flex: '3', minWidth: '72px' }}>
+                                        <option>JPY</option>
+                                        <option>RMB</option>
+                                    </select>
+                                </div>
+                                <select value={quickTxForm.category}
+                                    onChange={e => setQuickTxForm(f => ({ ...f, category: e.target.value }))}
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-3">
+                                    <option value="">选择分类…</option>
+                                    {quickCats.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                                <input type="text" placeholder="备注（可选）"
+                                    value={quickTxForm.name}
+                                    onChange={e => setQuickTxForm(f => ({ ...f, name: e.target.value }))}
+                                    onKeyDown={e => e.key === 'Enter' && saveQuickTx()}
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-4" />
+                                <button onClick={saveQuickTx} disabled={!quickTxForm.amount}
+                                    className="w-full py-4 rounded-2xl font-black text-base transition-all disabled:opacity-40"
+                                    style={{ background: 'var(--accent)', color: '#fff' }}>
+                                    确认记账
+                                </button>
                             </div>
                         </div>
                     )}
