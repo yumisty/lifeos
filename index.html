@@ -1241,14 +1241,14 @@
                         <button onClick={() => setShowDetail(true)} className="text-[9px] font-black px-2 py-0.5 rounded-full" style={{ background: '#fce7f3', color: '#e11d48' }}>详情</button>
                     </div>
                     <p className="text-xl font-black mb-2 flex-shrink-0 leading-none" style={{ color: statusColor }}>{statusText}</p>
-                    <div className="flex items-end gap-1.5 flex-1 mb-2 overflow-hidden">
+                    <div className="flex items-end gap-1.5 flex-1 mb-2 overflow-x-auto">
                         {recent6.map((e, idx) => {
                             const sD = new Date(e.startDate+'T00:00:00');
                             const dur = Math.floor((new Date(e.endDate+'T00:00:00') - sD) / 86400000) + 1;
                             const barH = Math.max(Math.round(dur / maxDur * 28), 10);
                             const isLatest = idx === recent6.length - 1;
                             return (
-                                <div key={e.startDate} className="flex-1 flex flex-col items-center gap-0.5 min-w-0">
+                                <div key={e.startDate} className="flex-1 flex flex-col items-center gap-0.5 min-w-0" style={{ minWidth: '24px' }}>
                                     <div className="w-full rounded-sm flex items-center justify-center"
                                         style={{ height: `${barH}px`, background: isLatest && isInPeriod ? '#e11d48' : '#f9a8d4' }}>
                                         <span className="text-[7px] font-black text-white leading-none">{dur}d</span>
@@ -1312,31 +1312,30 @@
 
             return (
                 <div className="h-full flex flex-col p-3 rounded-os-xl" style={{ background: '#F1F5F9' }}>
-                    <div className="flex items-center justify-between mb-1.5 flex-shrink-0">
-                        <div className="flex items-center gap-1.5">
-                            <span style={{ fontSize: '13px' }}>🚬</span>
-                            <h3 className="font-black text-[9px] uppercase tracking-widest text-slate-500">爸爸的抽烟记录</h3>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            {editingGoal ? (
-                                <div className="flex items-center gap-1">
-                                    <input type="number" value={goalInput} onChange={e => setGoalInput(e.target.value)}
-                                        className="w-10 text-[11px] font-bold text-center bg-white rounded-lg px-1 py-0.5 border border-gray-200 outline-none" />
-                                    <button onClick={() => { saveGoal(parseInt(goalInput)||20); setEditingGoal(false); }}
-                                        className="text-[11px] font-black text-green-600">✓</button>
-                                </div>
-                            ) : (
-                                <button onClick={() => { setGoalInput(String(goal)); setEditingGoal(true); }}
-                                    className="text-[9px] font-black px-2 py-0.5 rounded-full bg-white text-slate-400 border border-slate-200">
-                                    目标{goal}根
-                                </button>
-                            )}
-                            {!editingGoal && (
-                                <button onClick={() => setShowDetail(true)}
-                                    className="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
-                                    详情
-                                </button>
-                            )}
+                    <div className="flex-shrink-0 mb-1.5">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-black text-[9px] uppercase tracking-widest text-slate-500">🚬 抽烟记录</h3>
+                            <div className="flex items-center gap-1">
+                                {editingGoal ? (
+                                    <div className="flex items-center gap-1">
+                                        <input type="number" value={goalInput} onChange={e => setGoalInput(e.target.value)}
+                                            className="w-10 text-[11px] font-bold text-center bg-white rounded-lg px-1 py-0.5 border border-gray-200 outline-none" />
+                                        <button onClick={() => { saveGoal(parseInt(goalInput)||20); setEditingGoal(false); }}
+                                            className="text-[11px] font-black text-green-600">✓</button>
+                                    </div>
+                                ) : (
+                                    <button onClick={() => { setGoalInput(String(goal)); setEditingGoal(true); }}
+                                        className="text-[9px] font-black px-2 py-0.5 rounded-full bg-white text-slate-400 border border-slate-200 whitespace-nowrap">
+                                        目标{goal}根
+                                    </button>
+                                )}
+                                {!editingGoal && (
+                                    <button onClick={() => setShowDetail(true)}
+                                        className="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
+                                        详情
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className="flex items-center justify-center gap-3 mb-2 flex-shrink-0">
@@ -1733,9 +1732,14 @@
             const [addForm, setAddForm] = useState({ amount: '', currency: 'JPY', category: '', name: '' });
             const [txKey, setTxKey] = useState(0); // triggers re-read of MOCK_TRANSACTIONS
 
-            const wCategories = getFinanceStorage().categories?.length > 0
-                ? getFinanceStorage().categories
-                : _DEFAULT_FINANCE_CATS.map(n => ({ name: n }));
+            const cats = (() => {
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    return d.categories?.length > 0
+                        ? d.categories.map(c => typeof c === 'string' ? c : c.name)
+                        : _DEFAULT_FINANCE_CATS;
+                } catch { return _DEFAULT_FINANCE_CATS; }
+            })();
             const exchRate = getFinanceStorage().exchangeRate || 0.048;
             const toJPYw = (amt, cur) => (cur === 'RMB' || cur === 'CNY') ? amt / exchRate : amt;
             const nowMonth = TODAY_STR.slice(0, 7);
@@ -1764,6 +1768,18 @@
                 MOCK_TRANSACTIONS.push(tx);
                 setAddForm({ amount: '', currency: 'JPY', category: '', name: '' });
                 setShowAdd(false);
+                setTxKey(k => k + 1);
+            };
+
+            const deleteTxW = (id) => {
+                const idx = MOCK_TRANSACTIONS.findIndex(t => t.id === id);
+                if (idx !== -1) MOCK_TRANSACTIONS.splice(idx, 1);
+                try {
+                    const s = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    s.transactions = (s.transactions || []).filter(t => t.id !== id);
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(s));
+                } catch {}
+                syncToCloud();
                 setTxKey(k => k + 1);
             };
 
@@ -1818,7 +1834,7 @@
                         {recentThree.length > 0 ? recentThree.map(t => {
                             const col = getCatColor(t.category);
                             return (
-                                <div key={t.id} className="flex items-center gap-2.5 rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.72)' }}>
+                                <div key={t.id} className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 group/wrow" style={{ background: 'rgba(255,255,255,0.72)' }}>
                                     <span className="text-[10px] font-black px-2 py-0.5 rounded-full flex-shrink-0 text-white" style={{ background: col }}>
                                         {t.category}
                                     </span>
@@ -1831,6 +1847,9 @@
                                     <span className="text-sm font-black flex-shrink-0" style={{ color: '#ea580c' }}>
                                         ¥{parseFloat(t.amount).toLocaleString()} {t.currency}
                                     </span>
+                                    <button onClick={() => { if (window.confirm('确定删除这条记录吗？')) deleteTxW(t.id); }}
+                                        className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] flex-shrink-0 opacity-40 hover:opacity-100 hover:bg-red-100 transition-all"
+                                        title="删除">🗑️</button>
                                 </div>
                             );
                         }) : (
@@ -1892,8 +1911,8 @@
                                     onChange={e => setAddForm(f => ({ ...f, category: e.target.value }))}
                                     className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-3">
                                     <option value="">选择分类…</option>
-                                    {wCategories.map(c => (
-                                        <option key={c.id || c.name} value={c.name}>{c.name}</option>
+                                    {cats.map(c => (
+                                        <option key={c} value={c}>{c}</option>
                                     ))}
                                 </select>
 
@@ -1928,7 +1947,52 @@
             const [selectedDay, setSelectedDay] = useState(() => TODAY_STR); // 日历选中日，默认今天
             const [displayCurrency, setDisplayCurrency] = useState('JPY'); // 列表货币切换
             const [detailCurrency, setDetailCurrency] = useState('JPY'); // 当日明细货币切换
-            const [searchTx, setSearchTx] = useState('');             // 记录搜索词
+            const [searchTx, setSearchTx] = useState('');
+            const [txKey, setTxKey] = useState(0);                    // 强制重渲
+            const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+            const [editingTx, setEditingTx] = useState(null);         // null | tx object
+            const [editForm, setEditForm] = useState({});
+
+            // 分类列表（每次渲染读最新）
+            const finCats = (() => {
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    return d.categories?.length > 0 ? d.categories.map(c => typeof c === 'string' ? c : c.name) : _DEFAULT_FINANCE_CATS;
+                } catch { return _DEFAULT_FINANCE_CATS; }
+            })();
+
+            const deleteTx = (id) => {
+                const idx = MOCK_TRANSACTIONS.findIndex(t => t.id === id);
+                if (idx !== -1) MOCK_TRANSACTIONS.splice(idx, 1);
+                try {
+                    const s = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    s.transactions = (s.transactions || []).filter(t => t.id !== id);
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(s));
+                } catch {}
+                syncToCloud();
+                setDeleteConfirmId(null);
+                setTxKey(k => k + 1);
+            };
+
+            const openEditTx = (t) => {
+                setEditingTx(t);
+                setEditForm({ amount: String(t.amount), currency: t.currency, category: t.category || '', name: t.name || '', date: t.date });
+            };
+
+            const saveTxEdit = () => {
+                if (!editingTx) return;
+                const updated = { ...editingTx, amount: parseFloat(editForm.amount) || 0, currency: editForm.currency, category: editForm.category, name: editForm.name.trim() || editForm.category || '记账', date: editForm.date };
+                const idx = MOCK_TRANSACTIONS.findIndex(t => t.id === editingTx.id);
+                if (idx !== -1) MOCK_TRANSACTIONS[idx] = updated;
+                try {
+                    const s = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    s.transactions = (s.transactions || []).map(t => t.id === editingTx.id ? updated : t);
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(s));
+                } catch {}
+                syncToCloud();
+                setEditingTx(null);
+                setTxKey(k => k + 1);
+            };
 
             // 从 localStorage 读取的可编辑状态
             const [fixedData, setFixedData] = useState(() => ({ ...(getFinanceStorage().fixedItemsByMonth || {}) }));
@@ -2368,14 +2432,24 @@
                                             const origLabel = isRMBCur
                                                 ? (t.currency === 'JPY' ? `原 ¥${origAmt.toLocaleString()} JPY` : null)
                                                 : (t.currency === 'RMB' ? `原 ¥${origAmt} RMB` : null);
-                                            return (
-                                                <div key={t.id} className="flex items-center gap-3 px-5 py-3">
+                                            return deleteConfirmId === t.id ? (
+                                                <div key={t.id} className="flex items-center gap-3 px-5 py-3 bg-red-50 animate-fade-in">
+                                                    <span className="text-sm font-bold text-red-600 flex-1">确定删除这条记录吗？</span>
+                                                    <button onClick={() => deleteTx(t.id)} className="text-xs font-black text-white bg-red-500 px-3 py-1.5 rounded-xl hover:bg-red-600 transition-colors">删除</button>
+                                                    <button onClick={() => setDeleteConfirmId(null)} className="text-xs font-black text-gray-500 bg-gray-100 px-3 py-1.5 rounded-xl hover:bg-gray-200 transition-colors">取消</button>
+                                                </div>
+                                            ) : (
+                                                <div key={t.id} className="flex items-center gap-3 px-5 py-3 group/row">
                                                     <span className="text-[10px] font-black px-2 py-0.5 rounded-full flex-shrink-0 text-white" style={{ background: col }}>{t.category}</span>
                                                     <span className="text-sm font-bold truncate flex-1 text-gray-700">{t.name}</span>
                                                     <span className="text-xs text-gray-400 flex-shrink-0">{t.date.slice(5)}</span>
                                                     <div className="flex flex-col items-end flex-shrink-0">
                                                         <span className="text-sm font-black" style={{ color: '#ea580c' }}>{displayAmt}</span>
                                                         {origLabel && <span className="text-[10px] text-gray-400">{origLabel}</span>}
+                                                    </div>
+                                                    <div className="flex gap-1 flex-shrink-0 opacity-100 md:opacity-0 md:group-hover/row:opacity-100 transition-opacity">
+                                                        <button onClick={() => openEditTx(t)} className="w-7 h-7 rounded-lg bg-gray-50 hover:bg-yellow-50 flex items-center justify-center text-sm transition-colors" title="编辑">✏️</button>
+                                                        <button onClick={() => setDeleteConfirmId(t.id)} className="w-7 h-7 rounded-lg bg-gray-50 hover:bg-red-50 flex items-center justify-center text-sm transition-colors" title="删除">🗑️</button>
                                                     </div>
                                                 </div>
                                             );
@@ -2607,6 +2681,54 @@
                     )}
 
                     <AIGeneratePanel isOpen={aiPanel.isOpen} title={aiPanel.title} type={aiPanel.type} data={aiPanel.data} onClose={() => setAIPanel(p => ({ ...p, isOpen: false }))} />
+
+                    {/* ── 编辑记录弹窗 ── */}
+                    {editingTx && (
+                        <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setEditingTx(null)}>
+                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-6" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-between mb-5">
+                                    <h2 className="font-black text-base text-gray-800">编辑记录</h2>
+                                    <button onClick={() => setEditingTx(null)} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
+                                </div>
+
+                                {/* 日期 */}
+                                <input type="date" value={editForm.date} onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-3" />
+
+                                {/* 金额 + 货币 */}
+                                <div className="flex gap-2 mb-3">
+                                    <input type="number" inputMode="decimal" placeholder="金额" value={editForm.amount}
+                                        onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))}
+                                        className="bg-gray-50 rounded-2xl px-4 py-3 text-lg font-black outline-none border-2 border-transparent focus:border-yellow-400 transition-colors"
+                                        style={{ flex: '7' }} />
+                                    <select value={editForm.currency} onChange={e => setEditForm(f => ({ ...f, currency: e.target.value }))}
+                                        className="bg-gray-50 rounded-2xl px-3 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors text-center"
+                                        style={{ flex: '3', minWidth: '72px' }}>
+                                        <option>JPY</option><option>RMB</option>
+                                    </select>
+                                </div>
+
+                                {/* 分类 */}
+                                <select value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-3">
+                                    <option value="">选择分类…</option>
+                                    {finCats.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+
+                                {/* 备注 */}
+                                <input type="text" placeholder="备注（可选）" value={editForm.name}
+                                    onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                                    onKeyDown={e => e.key === 'Enter' && saveTxEdit()}
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-4" />
+
+                                <button onClick={saveTxEdit} disabled={!editForm.amount}
+                                    className="w-full py-4 rounded-2xl font-black text-base transition-all disabled:opacity-40"
+                                    style={{ background: 'var(--accent)', color: '#fff' }}>
+                                    保存修改
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
@@ -2650,97 +2772,160 @@
 
         // 双栏备忘录式日历
         const CalendarView = ({ events, todos, activeFilter, onOpenReport }) => {
+            const [calTab, setCalTab] = useState('month');
             const [currentDate, setCurrentDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
             const [selectedDate, setSelectedDate] = useState(TODAY_STR);
-            
+
             const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
             const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-
-            // 过滤数据
             const filteredEvents = activeFilter === 'all' ? events : events.filter(e => e.catId === activeFilter);
-            
             const selectedEvents = filteredEvents.filter(e => e.date === selectedDate);
             const selectedTodos = todos.filter(t => t.date === selectedDate);
 
-            return (
-                <div className="flex flex-col md:flex-row gap-6 h-full pb-20 md:pb-0 animate-fade-in">
-                    {/* 左侧：大型日历网格 */}
-                    <div className="flex-1 bg-white p-6 rounded-[2rem] shadow-sm">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-black">{currentDate.getFullYear()}年 {currentDate.getMonth()+1}月</h2>
-                            <div className="flex gap-2">
-                                <button onClick={()=>setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()-1, 1))} className="w-10 h-10 rounded-full bg-gray-50 font-bold hover:bg-gray-200">←</button>
-                                <button onClick={()=>setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1))} className="w-10 h-10 rounded-full bg-gray-50 font-bold hover:bg-gray-200">→</button>
-                            </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-7 gap-y-4 gap-x-2 text-center">
-                            {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-xs font-bold text-gray-400 mb-2">{d}</div>)}
-                            {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
-                            
-                            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
-                                const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                                const dayEvents = filteredEvents.filter(e => e.date === dateStr);
-                                const isSelected = dateStr === selectedDate;
+            const calYear = currentDate.getFullYear();
+            const MONTH_LABELS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
-                                return (
-                                    <div key={d} onClick={() => setSelectedDate(dateStr)} className={`aspect-square flex flex-col items-center justify-start pt-2 rounded-2xl cursor-pointer transition-all ${isSelected ? 'bg-os-text text-white shadow-md' : 'hover:bg-gray-50 text-gray-600'}`}>
-                                        <span className="text-sm font-bold">{d}</span>
-                                        <div className="flex gap-0.5 mt-1 flex-wrap justify-center px-1">
-                                            {dayEvents.slice(0,4).map((e, idx) => {
-                                                const color = CATEGORIES.find(c=>c.id===e.catId)?.color || 'bg-gray-400';
-                                                return <span key={idx} className={`w-1.5 h-1.5 rounded-full ${color}`}></span>
-                                            })}
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
+            return (
+                <div className="flex flex-col gap-4 pb-32 md:pb-0 animate-fade-in">
+
+                    {/* Tab 切换 */}
+                    <div className="flex gap-2">
+                        {[['month','📅 月历'],['year','🗓 年历']].map(([t, label]) => (
+                            <button key={t} onClick={() => setCalTab(t)}
+                                className={`flex-1 md:flex-none px-5 py-2.5 rounded-2xl font-black text-sm transition-all ${calTab === t ? 'text-white shadow-sm' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+                                style={calTab === t ? { background: 'var(--theme-text, #475569)' } : {}}>
+                                {label}
+                            </button>
+                        ))}
                     </div>
 
-                    {/* 右侧：详情面板 (备忘录式) */}
-                    <div className="w-full md:w-80 flex flex-col gap-4">
-                        <button onClick={() => onOpenReport('month')} className="w-full bg-white/60 hover:bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between transition-colors group">
-                            <span className="font-bold text-sm text-os-text">生成 5月 洞察报告</span>
-                            <span className="text-xl group-hover:scale-125 transition-transform">✨</span>
-                        </button>
-
-                        <div className="bg-white p-6 rounded-[2rem] shadow-sm flex-1 overflow-y-auto">
-                            <h3 className="text-lg font-black mb-4 border-b border-gray-100 pb-2">{selectedDate} 记录</h3>
-                            
-                            {selectedEvents.length === 0 && selectedTodos.length === 0 ? (
-                                <div className="text-center text-gray-400 text-sm mt-10">这一天没有符合条件的记录哦。</div>
-                            ) : (
-                                <div className="space-y-4">
-                                    {/* Todos */}
-                                    {selectedTodos.map(t => (
-                                        <div key={`t-${t.id}`} className="flex items-start gap-3">
-                                            <div className={`mt-1 w-4 h-4 rounded border flex items-center justify-center text-[10px] ${t.done?'bg-green-400 border-green-400 text-white':'border-gray-300'}`}>✓</div>
-                                            <p className={`text-sm ${t.done?'line-through text-gray-400':'font-bold text-os-text'}`}>{t.title}</p>
-                                        </div>
-                                    ))}
-                                    {/* Events */}
-                                    {selectedEvents.map(e => {
-                                        const cat = CATEGORIES.find(c=>c.id===e.catId);
+                    {/* ── 月历 tab ── */}
+                    {calTab === 'month' && (
+                        <div className="flex flex-col md:flex-row gap-6">
+                            {/* 左侧：大型日历网格 */}
+                            <div className="flex-1 bg-white p-6 rounded-[2rem] shadow-sm">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-black">{currentDate.getFullYear()}年 {currentDate.getMonth()+1}月</h2>
+                                    <div className="flex gap-2">
+                                        <button onClick={()=>setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()-1, 1))} className="w-10 h-10 rounded-full bg-gray-50 font-bold hover:bg-gray-200">←</button>
+                                        <button onClick={()=>setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1))} className="w-10 h-10 rounded-full bg-gray-50 font-bold hover:bg-gray-200">→</button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-7 gap-y-4 gap-x-2 text-center">
+                                    {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-xs font-bold text-gray-400 mb-2">{d}</div>)}
+                                    {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
+                                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+                                        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                                        const dayEvents = filteredEvents.filter(e => e.date === dateStr);
+                                        const isSelected = dateStr === selectedDate;
                                         return (
-                                            <div key={`e-${e.id}`} className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className="text-lg">{cat?.icon}</span>
-                                                    <h4 className="font-bold text-sm text-os-text">{e.title}</h4>
+                                            <div key={d} onClick={() => setSelectedDate(dateStr)} className={`aspect-square flex flex-col items-center justify-start pt-2 rounded-2xl cursor-pointer transition-all ${isSelected ? 'bg-os-text text-white shadow-md' : 'hover:bg-gray-50 text-gray-600'}`}>
+                                                <span className="text-sm font-bold">{d}</span>
+                                                <div className="flex gap-0.5 mt-1 flex-wrap justify-center px-1">
+                                                    {dayEvents.slice(0,4).map((e, idx) => {
+                                                        const color = CATEGORIES.find(c=>c.id===e.catId)?.color || 'bg-gray-400';
+                                                        return <span key={idx} className={`w-1.5 h-1.5 rounded-full ${color}`}></span>
+                                                    })}
                                                 </div>
-                                                {e.rating > 0 && (
-                                                    <div className="flex gap-1 mb-2 text-yellow-400 text-xs">
-                                                        {Array.from({length:5}).map((_,i) => <span key={i} className={i<e.rating?'':'grayscale opacity-30'}>★</span>)}
-                                                    </div>
-                                                )}
-                                                {e.review && <p className="text-xs text-gray-600 leading-relaxed bg-white p-2 rounded-lg">{e.review}</p>}
                                             </div>
-                                        )
+                                        );
                                     })}
                                 </div>
-                            )}
+                            </div>
+                            {/* 右侧：详情面板 */}
+                            <div className="w-full md:w-80 flex flex-col gap-4">
+                                <button onClick={() => onOpenReport('month')} className="w-full bg-white/60 hover:bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between transition-colors group">
+                                    <span className="font-bold text-sm text-os-text">生成 {currentDate.getMonth()+1}月 洞察报告</span>
+                                    <span className="text-xl group-hover:scale-125 transition-transform">✨</span>
+                                </button>
+                                <div className="bg-white p-6 rounded-[2rem] shadow-sm flex-1 overflow-y-auto">
+                                    <h3 className="text-lg font-black mb-4 border-b border-gray-100 pb-2">{selectedDate} 记录</h3>
+                                    {selectedEvents.length === 0 && selectedTodos.length === 0 ? (
+                                        <div className="text-center text-gray-400 text-sm mt-10">这一天没有符合条件的记录哦。</div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {selectedTodos.map(t => (
+                                                <div key={`t-${t.id}`} className="flex items-start gap-3">
+                                                    <div className={`mt-1 w-4 h-4 rounded border flex items-center justify-center text-[10px] ${t.done?'bg-green-400 border-green-400 text-white':'border-gray-300'}`}>✓</div>
+                                                    <p className={`text-sm ${t.done?'line-through text-gray-400':'font-bold text-os-text'}`}>{t.title}</p>
+                                                </div>
+                                            ))}
+                                            {selectedEvents.map(e => {
+                                                const cat = CATEGORIES.find(c=>c.id===e.catId);
+                                                return (
+                                                    <div key={`e-${e.id}`} className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <span className="text-lg">{cat?.icon}</span>
+                                                            <h4 className="font-bold text-sm text-os-text">{e.title}</h4>
+                                                        </div>
+                                                        {e.rating > 0 && <div className="flex gap-1 mb-2 text-yellow-400 text-xs">{Array.from({length:5}).map((_,i)=><span key={i} className={i<e.rating?'':'grayscale opacity-30'}>★</span>)}</div>}
+                                                        {e.review && <p className="text-xs text-gray-600 leading-relaxed bg-white p-2 rounded-lg">{e.review}</p>}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    )}
+
+                    {/* ── 年历 tab ── */}
+                    {calTab === 'year' && (
+                        <div className="animate-fade-in">
+                            {/* 年份导航 */}
+                            <div className="flex items-center gap-3 mb-4">
+                                <button onClick={() => setCurrentDate(new Date(calYear - 1, currentDate.getMonth(), 1))} className="w-9 h-9 rounded-full bg-white shadow-sm font-bold text-gray-500 hover:bg-gray-50">←</button>
+                                <span className="font-black text-xl">{calYear} 年</span>
+                                <button onClick={() => setCurrentDate(new Date(calYear + 1, currentDate.getMonth(), 1))} className="w-9 h-9 rounded-full bg-white shadow-sm font-bold text-gray-500 hover:bg-gray-50">→</button>
+                            </div>
+
+                            {/* 12 个月小卡片：桌面 4 列，手机 2 列 */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                {MONTH_LABELS.map((mName, mi) => {
+                                    const m = mi + 1;
+                                    const ms = `${calYear}-${String(m).padStart(2,'0')}`;
+                                    const dInM = new Date(calYear, m, 0).getDate();
+                                    const fDay = new Date(calYear, mi, 1).getDay();
+                                    const eventDates = new Set(filteredEvents.filter(e => e.date.startsWith(ms)).map(e => e.date));
+                                    const isCurrentMonth = calYear === new Date().getFullYear() && m === new Date().getMonth() + 1;
+                                    return (
+                                        <div key={m}
+                                            onClick={() => { setCurrentDate(new Date(calYear, mi, 1)); setCalTab('month'); }}
+                                            className="bg-white rounded-2xl p-3 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
+                                            style={isCurrentMonth ? { outline: '2px solid #a78bfa', outlineOffset: '1px' } : {}}>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="font-black text-sm text-gray-700">{mName}</span>
+                                                {eventDates.size > 0 && (
+                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600">{eventDates.size}</span>
+                                                )}
+                                            </div>
+                                            {/* mini 7-col grid */}
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', rowGap: '2px' }}>
+                                                {Array.from({ length: fDay }).map((_, i) => <div key={`p-${i}`} style={{ height: '12px' }} />)}
+                                                {Array.from({ length: dInM }, (_, i) => i + 1).map(d => {
+                                                    const ds = `${ms}-${String(d).padStart(2,'0')}`;
+                                                    const hasEv = eventDates.has(ds);
+                                                    const isToday = ds === TODAY_STR;
+                                                    return (
+                                                        <div key={d} style={{ height: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            {isToday ? (
+                                                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#475569', display: 'block' }} />
+                                                            ) : hasEv ? (
+                                                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#a78bfa', display: 'block' }} />
+                                                            ) : (
+                                                                <span style={{ fontSize: '7px', color: '#d1d5db', fontWeight: 700, lineHeight: 1 }}>{d}</span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
@@ -3239,7 +3424,7 @@
                                 )}
                             </div>
                             
-                            <div className="flex gap-2 self-end md:self-auto items-center">
+                            <div className="flex gap-1.5 self-end md:self-auto items-center">
                                 {syncIndicator && (
                                     <span className="text-[11px] font-bold transition-all" style={{ color: syncIndicator.color }}>
                                         {syncIndicator.text}
@@ -3248,19 +3433,19 @@
                                 <button className="md:hidden w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-xl border border-gray-100">🔍</button>
                                 {currentView === 'home' && (<>
                                     <button onClick={openWeeklyAI}
-                                        className="px-4 h-10 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1.5">
+                                        className="px-3 py-1.5 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1.5 whitespace-nowrap">
                                         ✨ AI 周报
                                     </button>
                                     <button onClick={() => setShowWidgetLib(true)}
-                                        className="px-4 h-10 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1">
+                                        className="px-3 py-1.5 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1 whitespace-nowrap">
                                         + Widget
                                     </button>
-                                    <button onClick={() => setIsEditMode(!isEditMode)} className={`px-4 h-10 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 transition-colors ${isEditMode ? 'bg-os-text text-white' : 'bg-white hover:bg-gray-50'}`}>
+                                    <button onClick={() => setIsEditMode(!isEditMode)} className={`px-3 py-1.5 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 transition-colors whitespace-nowrap ${isEditMode ? 'bg-os-text text-white' : 'bg-white hover:bg-gray-50'}`}>
                                         {isEditMode ? 'Done' : 'Edit Layout'}
                                     </button>
                                     <div className="relative group">
                                         <button onClick={() => importFileRef.current?.click()}
-                                            className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors text-base">
+                                            className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors text-base">
                                             📂
                                         </button>
                                         <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold bg-gray-800 text-white px-2.5 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
@@ -3269,7 +3454,7 @@
                                     </div>
                                 </>)}
                                 {currentView === 'finance' && (
-                                    <button onClick={() => setCurrentView('home')} className="px-4 h-10 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1">
+                                    <button onClick={() => setCurrentView('home')} className="px-3 py-1.5 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1 whitespace-nowrap">
                                         ← Dashboard
                                     </button>
                                 )}
