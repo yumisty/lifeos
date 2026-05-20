@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>数据导入 · Visual Life OS</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -153,6 +154,24 @@
         .status-success .status-detail span { color: #15803d; }
         .status-error .status-detail span { color: #dc2626; }
 
+        .status-warning {
+            background: #fff7ed;
+            border: 1.5px solid #fdba74;
+            border-radius: 16px;
+            padding: 18px 20px;
+        }
+        .status-warning .status-title { color: #c2410c; }
+        .status-warning .status-detail span { color: #c2410c; }
+
+        .status-caution {
+            background: #fefce8;
+            border: 1.5px solid #fde047;
+            border-radius: 16px;
+            padding: 18px 20px;
+        }
+        .status-caution .status-title { color: #854d0e; }
+        .status-caution .status-detail span { color: #854d0e; }
+
         /* 返回按钮 */
         .btn-back {
             display: none;
@@ -234,6 +253,10 @@
 </div>
 
 <script>
+    const SUPABASE_URL = 'https://aiyflmkzzuiwmamvoils.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpeWZsbWt6enVpd21hbXZvaWxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMzQ0OTksImV4cCI6MjA5NDYxMDQ5OX0.1L59zixF4zg1yCahqo44h41kOiBfrWvtAGYvhGpRKAs';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
     const uploadZone = document.getElementById('uploadZone');
     const fileInput  = document.getElementById('fileInput');
     const filePreview = document.getElementById('filePreview');
@@ -317,14 +340,14 @@
         reader.readAsText(selectedFile, 'utf-8');
     });
 
-    function doImport(raw) {
-        const transactions     = raw.transactions     || [];
-        const categories       = raw.categories       || [];
+    async function doImport(raw) {
+        const transactions      = raw.transactions      || [];
+        const categories        = raw.categories        || [];
         const fixedItemsByMonth = raw.fixedItemsByMonth || {};
-        const wishlist         = raw.wishlist         || [];
-        const inventory        = raw.inventory        || [];
-        const exchangeRate     = raw.exchangeRate     || 0.05;
-        const monthlyRates     = raw.monthlyRates     || {};
+        const wishlist          = raw.wishlist          || [];
+        const inventory         = raw.inventory         || [];
+        const exchangeRate      = raw.exchangeRate      || 0.05;
+        const monthlyRates      = raw.monthlyRates      || {};
 
         let existing = {};
         try { existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
@@ -351,19 +374,68 @@
             return;
         }
 
-        importBtn.textContent = '✓ 已导入';
-        backBtn.classList.add('visible');
+        // 本地写入成功，开始云端同步
+        importBtn.textContent = '同步中…';
 
-        showStatus('success',
-            '✅ 导入完成！共导入 ' + transactions.length + ' 条记录',
-            [
-                '📊 交易记录：' + transactions.length + ' 条',
-                '🏷️ 分类：' + categories.length + ' 个',
-                '📅 固定收支月份：' + Object.keys(fixedItemsByMonth).length + ' 个',
-                '💝 心愿单：' + wishlist.length + ' 条',
-                '📦 库存：' + inventory.length + ' 条',
-            ]
-        );
+        const detailLines = [
+            '📊 交易记录：' + transactions.length + ' 条',
+            '🏷️ 分类：' + categories.length + ' 个',
+            '📅 固定收支月份：' + Object.keys(fixedItemsByMonth).length + ' 个',
+            '💝 心愿单：' + wishlist.length + ' 条',
+            '📦 库存：' + inventory.length + ' 条',
+        ];
+
+        try {
+            const { data: { user } } = await _supabase.auth.getUser();
+
+            if (!user) {
+                importBtn.textContent = '✓ 已导入';
+                backBtn.classList.add('visible');
+                showStatus('warning',
+                    '✅ 导入完成！但未检测到登录状态，请先在主页登录后再导入',
+                    detailLines
+                );
+                return;
+            }
+
+            const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            const { error } = await _supabase.from('lifeos_data').upsert({
+                id:                   user.id,
+                transactions:         local.transactions      || [],
+                categories:           local.categories        || [],
+                fixed_items_by_month: local.fixedItemsByMonth || {},
+                wishlist:             local.wishlist          || [],
+                todos:                local.allTodos          || {},
+                habits:               local.habits            || {},
+                period_log:           local.periodLog         || [],
+                exchange_rate:        local.exchangeRate      || 0.048,
+                monthly_rates:        local.monthlyRates      || {},
+                updated_at:           new Date().toISOString(),
+            });
+
+            if (error) {
+                importBtn.textContent = '✓ 已导入';
+                backBtn.classList.add('visible');
+                showStatus('caution',
+                    '✅ 本地导入成功，但云端同步失败，请手动同步',
+                    [...detailLines, '⚠️ 错误：' + error.message]
+                );
+            } else {
+                importBtn.textContent = '✓ 已导入并同步';
+                backBtn.classList.add('visible');
+                showStatus('success',
+                    '✅ 导入完成！共导入 ' + transactions.length + ' 条记录，已同步到云端',
+                    detailLines
+                );
+            }
+        } catch (err) {
+            importBtn.textContent = '✓ 已导入';
+            backBtn.classList.add('visible');
+            showStatus('caution',
+                '✅ 本地导入成功，但云端同步失败，请手动同步',
+                [...detailLines, '⚠️ 错误：' + err.message]
+            );
+        }
     }
 
     function showStatus(type, title, lines) {
