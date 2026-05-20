@@ -85,15 +85,8 @@
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpeWZsbWt6enVpd21hbXZvaWxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMzQ0OTksImV4cCI6MjA5NDYxMDQ5OX0.1L59zixF4zg1yCahqo44h41kOiBfrWvtAGYvhGpRKAs';
         const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        const getDeviceId = () => {
-            let id = localStorage.getItem('lifeos_device_id');
-            if (!id) {
-                id = 'user_' + Math.random().toString(36).slice(2, 10);
-                localStorage.setItem('lifeos_device_id', id);
-            }
-            return id;
-        };
-        let DEVICE_ID = getDeviceId();
+        // 当前登录用户 ID（登录后由 auth 设置）
+        let CURRENT_USER_ID = null;
 
         // 获取当前周的日期数组 (周日到周六)
         const getWeekDates = (date = new Date()) => {
@@ -2133,11 +2126,12 @@
 
         // ── 云同步函数 ──
         const syncFromCloud = async () => {
+            if (!CURRENT_USER_ID) return null;
             try {
                 const { data, error } = await _supabase
                     .from('lifeos_data')
                     .select('*')
-                    .eq('id', DEVICE_ID)
+                    .eq('id', CURRENT_USER_ID)
                     .single();
                 if (error || !data) return null;
                 const local = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
@@ -2165,12 +2159,13 @@
         };
 
         const syncToCloud = async () => {
+            if (!CURRENT_USER_ID) return false;
             try {
                 const local = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                 const { error } = await _supabase
                     .from('lifeos_data')
                     .upsert({
-                        id:                    DEVICE_ID,
+                        id:                    CURRENT_USER_ID,
                         transactions:          local.transactions        || [],
                         categories:            local.categories          || [],
                         fixed_items_by_month:  local.fixedItemsByMonth   || {},
@@ -2192,6 +2187,86 @@
                 console.log('sync to cloud failed:', e);
                 return false;
             }
+        };
+
+        const LoginForm = () => {
+            const [email, setEmail] = React.useState('');
+            const [password, setPassword] = React.useState('');
+            const [error, setError] = React.useState('');
+            const [loading, setLoading] = React.useState(''); // 'login' | 'register' | ''
+
+            const handleAuth = async (mode) => {
+                if (!email.trim() || !password.trim()) return;
+                setLoading(mode);
+                setError('');
+                try {
+                    let result;
+                    if (mode === 'login') {
+                        result = await _supabase.auth.signInWithPassword({ email: email.trim(), password });
+                    } else {
+                        result = await _supabase.auth.signUp({ email: email.trim(), password });
+                    }
+                    if (result.error) {
+                        setError(result.error.message);
+                    } else if (mode === 'register') {
+                        setError('注册成功！请查收验证邮件后登录。');
+                    }
+                } catch (e) {
+                    setError('网络错误，请重试');
+                }
+                setLoading('');
+            };
+
+            return (
+                <div className="fixed inset-0 flex items-center justify-center" style={{ background: 'var(--theme-bg)' }}>
+                    <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-8">
+                        <div className="text-center mb-8">
+                            <div className="text-5xl mb-3" style={{ color: '#E6B422' }}>✦</div>
+                            <h1 className="font-black text-2xl text-gray-800 tracking-tight">Visual Life OS</h1>
+                            <p className="text-sm text-gray-400 mt-1">你的生活管理中心</p>
+                        </div>
+
+                        <div className="space-y-3 mb-5">
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={e => setEmail(e.target.value)}
+                                placeholder="邮箱地址"
+                                className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-medium outline-none border-2 border-transparent focus:border-amber-300 transition-colors"
+                                onKeyDown={e => e.key === 'Enter' && handleAuth('login')}
+                            />
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                placeholder="密码（至少 6 位）"
+                                className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-medium outline-none border-2 border-transparent focus:border-amber-300 transition-colors"
+                                onKeyDown={e => e.key === 'Enter' && handleAuth('login')}
+                            />
+                        </div>
+
+                        {error && (
+                            <p className={`text-xs text-center mb-4 ${error.includes('成功') ? 'text-green-600' : 'text-red-500'}`}>{error}</p>
+                        )}
+
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => handleAuth('login')}
+                                disabled={!!loading || !email.trim() || !password.trim()}
+                                className="flex-1 py-3 rounded-2xl font-bold text-sm text-white transition-colors disabled:opacity-40"
+                                style={{ background: '#E6B422' }}>
+                                {loading === 'login' ? '登录中…' : '登录'}
+                            </button>
+                            <button
+                                onClick={() => handleAuth('register')}
+                                disabled={!!loading || !email.trim() || !password.trim()}
+                                className="flex-1 py-3 rounded-2xl font-bold text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-40">
+                                {loading === 'register' ? '注册中…' : '注册'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
         };
 
         const App = () => {
@@ -2217,10 +2292,10 @@
             const [showThemePicker, setShowThemePicker] = useState(false);
             const [showWidgetLib, setShowWidgetLib] = useState(false);
 
-            // 同步状态
+            // Auth + 同步状态
+            const [user, setUser] = useState(null);
+            const [authChecked, setAuthChecked] = useState(false);
             const [syncStatus, setSyncStatus] = useState('idle'); // idle | syncing | done | error
-            const [showSyncModal, setShowSyncModal] = useState(false);
-            const [deviceIdInput, setDeviceIdInput] = useState('');
 
             // 弹出层控制
             const [addingCategory, setAddingCategory] = useState(null);
@@ -2263,12 +2338,28 @@
                 } catch {}
             }, [widgets]);
 
-            // 启动时从云端拉取数据
+            // Auth 状态监听
             useEffect(() => {
+                _supabase.auth.getSession().then(({ data: { session } }) => {
+                    const u = session?.user ?? null;
+                    setUser(u);
+                    CURRENT_USER_ID = u?.id ?? null;
+                    setAuthChecked(true);
+                });
+                const { data: { subscription } } = _supabase.auth.onAuthStateChange((_event, session) => {
+                    const u = session?.user ?? null;
+                    setUser(u);
+                    CURRENT_USER_ID = u?.id ?? null;
+                });
+                return () => subscription.unsubscribe();
+            }, []);
+
+            // 登录后从云端拉取
+            useEffect(() => {
+                if (!user) return;
                 setSyncStatus('syncing');
                 syncFromCloud().then(data => {
                     if (data) {
-                        // 用云端数据刷新主题
                         if (data.theme) setThemeId(data.theme);
                         setSyncStatus('done');
                         setTimeout(() => setSyncStatus('idle'), 3000);
@@ -2276,7 +2367,7 @@
                         setSyncStatus('idle');
                     }
                 });
-            }, []);
+            }, [user]);
 
             // 同步状态指示器文本/样式
             const syncIndicator = syncStatus === 'syncing'
@@ -2287,25 +2378,6 @@
                 ? { text: '✗ 同步失败', color: '#ef4444' }
                 : null;
 
-            // 切换设备 ID
-            const applyDeviceId = async () => {
-                const newId = deviceIdInput.trim();
-                if (!newId) return;
-                localStorage.setItem('lifeos_device_id', newId);
-                DEVICE_ID = newId;
-                setDeviceIdInput('');
-                setShowSyncModal(false);
-                setSyncStatus('syncing');
-                const data = await syncFromCloud();
-                if (data) {
-                    if (data.theme) setThemeId(data.theme);
-                    setSyncStatus('done');
-                    setTimeout(() => setSyncStatus('idle'), 3000);
-                } else {
-                    setSyncStatus('error');
-                    setTimeout(() => setSyncStatus('idle'), 4000);
-                }
-            };
 
             // 拖拽逻辑
             const moveWidget = (fromIdx, toIdx) => {
@@ -2322,6 +2394,13 @@
                 newW[index].size = sizes[(sizes.indexOf(newW[index].size) + 1) % sizes.length];
                 setWidgets(newW);
             };
+
+            if (!authChecked) return (
+                <div className="fixed inset-0 flex items-center justify-center" style={{ background: 'var(--theme-bg)' }}>
+                    <div className="text-3xl animate-spin" style={{ color: 'var(--accent)' }}>⟳</div>
+                </div>
+            );
+            if (!user) return <LoginForm />;
 
             return (
                 <div className="flex h-screen font-sans" style={{ background: 'var(--theme-bg)', color: 'var(--theme-text)' }}>
@@ -2354,11 +2433,14 @@
                             🎨 主题
                         </button>
 
-                        {/* 多端同步按钮 */}
-                        <button onClick={() => setShowSyncModal(true)}
-                            className="w-full bg-white/60 py-3 rounded-2xl font-bold text-sm text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2">
-                            🔗 多端同步
-                        </button>
+                        {/* 用户信息 + 退出 */}
+                        <div className="mb-2 bg-white/60 rounded-2xl px-3 py-2 border border-white/80 shadow-sm">
+                            <p className="text-[10px] text-gray-400 truncate mb-1">{user?.email}</p>
+                            <button onClick={() => _supabase.auth.signOut()}
+                                className="w-full py-1.5 rounded-xl font-bold text-xs text-gray-500 hover:bg-white/90 transition-colors">
+                                退出登录
+                            </button>
+                        </div>
 
                         {/* 大屏居中悬浮添加按钮 */}
                         <button onClick={() => setShowAddCenter(true)} className="w-full bg-os-text text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-2">
@@ -2548,55 +2630,6 @@
                         </div>
                     )}
 
-                    {/* ── 多端同步弹窗 ── */}
-                    {showSyncModal && (
-                        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowSyncModal(false)}>
-                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 animate-slide-up" onClick={e => e.stopPropagation()}>
-                                <div className="flex items-center justify-between mb-5">
-                                    <h2 className="font-black text-base text-gray-800">🔗 多端同步</h2>
-                                    <button onClick={() => setShowSyncModal(false)} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
-                                </div>
-
-                                {/* 当前设备 ID */}
-                                <div className="mb-5">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">当前设备 ID</p>
-                                    <div className="flex items-center gap-2 bg-gray-50 rounded-2xl px-4 py-3 border border-gray-100">
-                                        <code className="flex-1 text-xs font-bold text-gray-700 break-all">{getDeviceId()}</code>
-                                        <button onClick={() => navigator.clipboard?.writeText(getDeviceId())}
-                                            className="text-[10px] font-black px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-500 hover:bg-gray-100 flex-shrink-0">复制</button>
-                                    </div>
-                                    <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">把此 ID 复制到另一台设备，两台设备即可共享数据。</p>
-                                </div>
-
-                                {/* 切换 ID */}
-                                <div className="mb-5">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">切换到其他设备的 ID</p>
-                                    <input
-                                        value={deviceIdInput}
-                                        onChange={e => setDeviceIdInput(e.target.value)}
-                                        placeholder="粘贴另一台设备的 ID…"
-                                        className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-medium outline-none border-2 border-transparent focus:border-gray-300 transition-colors"
-                                        onKeyDown={e => e.key === 'Enter' && applyDeviceId()}
-                                    />
-                                </div>
-
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => { setSyncStatus('syncing'); setShowSyncModal(false); syncToCloud().then(ok => { setSyncStatus(ok ? 'done' : 'error'); setTimeout(() => setSyncStatus('idle'), ok ? 3000 : 4000); }); }}
-                                        className="flex-1 py-3 rounded-2xl font-bold text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
-                                        立即上传
-                                    </button>
-                                    <button
-                                        onClick={applyDeviceId}
-                                        disabled={!deviceIdInput.trim()}
-                                        className="flex-1 py-3 rounded-2xl font-bold text-sm text-white transition-colors disabled:opacity-40"
-                                        style={{ background: '#475569' }}>
-                                        使用此 ID
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         };
