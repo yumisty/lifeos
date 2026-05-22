@@ -249,10 +249,35 @@
             return '#d1d5db';
         };
 
-        // ── 设置弹窗（API Key 管理）──
+        // ── 抽烟提醒调度（模块级，可递归调用）──
+        const scheduleSmokingReminder = () => {
+            const settings = (getFinanceStorage().notifySettings) || {};
+            if (!settings.smokingEnabled) return;
+            const [h, m] = (settings.smokingTime || '21:00').split(':').map(Number);
+            const now = new Date();
+            const next = new Date();
+            next.setHours(h, m, 0, 0);
+            if (next <= now) next.setDate(next.getDate() + 1);
+            const ms = next - now;
+            setTimeout(() => {
+                const log = (getFinanceStorage().smokingLog) || {};
+                const today = new Date().toISOString().split('T')[0];
+                if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && !log[today]) {
+                    new Notification('🚬 记录提醒', {
+                        body: '今天还没有记录爸爸的抽烟数量哦～',
+                        icon: '/icon-192.png'
+                    });
+                }
+                scheduleSmokingReminder();
+            }, ms);
+        };
+
+        // ── 设置弹窗（API Key 管理 + 通知设置）──
         const SettingsModal = ({ isOpen, onClose }) => {
             const [apiKey, setApiKey] = useState(() => localStorage.getItem('lifeos_gemini_key') || '');
             const [saveStatus, setSaveStatus] = useState(null); // null | 'ok' | 'fail'
+            const [notify, setNotify] = useState(() => getFinanceStorage().notifySettings || { smokingEnabled: false, smokingTime: '21:00' });
+            const [notifySaved, setNotifySaved] = useState(false);
 
             const saveKey = () => {
                 const trimmed = apiKey.trim();
@@ -262,15 +287,28 @@
                 setTimeout(() => setSaveStatus(null), 3000);
             };
 
+            const saveNotify = () => {
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    d.notifySettings = notify;
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                    scheduleSmokingReminder();
+                    setNotifySaved(true);
+                    setTimeout(() => setNotifySaved(false), 2000);
+                } catch {}
+            };
+
             if (!isOpen) return null;
             return (
                 <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={onClose}>
-                    <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 animate-slide-up" onClick={e => e.stopPropagation()}>
+                    <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 animate-slide-up overflow-y-auto hide-scrollbar" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-5">
                             <h2 className="font-black text-base text-gray-800">⚙️ 设置</h2>
                             <button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
                         </div>
-                        <div className="space-y-4">
+                        <div className="space-y-5">
+
+                            {/* Gemini API Key */}
                             <div>
                                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-2">Gemini API Key</label>
                                 <input
@@ -278,23 +316,50 @@
                                     value={apiKey}
                                     onChange={e => { setApiKey(e.target.value); setSaveStatus(null); }}
                                     placeholder="AIza..."
-                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-mono outline-none border border-gray-100 focus:border-gray-300 transition-colors"
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-mono outline-none border border-gray-100 focus:border-gray-300 transition-colors mb-2"
                                 />
-                                <p className="text-[10px] text-gray-400 mt-1.5">用于 AI 周报和年度总结功能，仅存储在本地</p>
+                                <p className="text-[10px] text-gray-400 mb-3">用于 AI 周报和年度总结功能，仅存储在本地</p>
+                                <div className="flex items-center gap-3">
+                                    <button onClick={saveKey}
+                                        className="flex-1 py-3 rounded-2xl font-bold text-sm text-white"
+                                        style={{ background: '#1e293b' }}>
+                                        保存
+                                    </button>
+                                    {saveStatus === 'ok' && <span className="text-sm font-bold text-green-600 animate-fade-in whitespace-nowrap">✅ 已保存</span>}
+                                    {saveStatus === 'fail' && <span className="text-sm font-bold text-red-500 animate-fade-in whitespace-nowrap">❌ 保存失败，请重试</span>}
+                                </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <button onClick={saveKey}
-                                    className="flex-1 py-3 rounded-2xl font-bold text-sm text-white transition-all"
-                                    style={{ background: '#1e293b' }}>
-                                    保存
+
+                            <div className="border-t border-gray-100" />
+
+                            {/* 通知设置 */}
+                            <div>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-3">🔔 通知设置</label>
+                                <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-bold text-gray-700">🚬 抽烟记录提醒</span>
+                                        <button
+                                            onClick={() => setNotify(n => ({ ...n, smokingEnabled: !n.smokingEnabled }))}
+                                            className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${notify.smokingEnabled ? 'bg-green-500' : 'bg-gray-300'}`}>
+                                            <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${notify.smokingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                        </button>
+                                    </div>
+                                    {notify.smokingEnabled && (
+                                        <div className="flex items-center justify-between animate-fade-in">
+                                            <span className="text-xs text-gray-500 font-medium">提醒时间</span>
+                                            <input type="time" value={notify.smokingTime || '21:00'}
+                                                onChange={e => setNotify(n => ({ ...n, smokingTime: e.target.value }))}
+                                                className="text-sm font-bold bg-white rounded-xl px-3 py-1.5 border border-gray-200 outline-none" />
+                                        </div>
+                                    )}
+                                </div>
+                                <button onClick={saveNotify}
+                                    className="w-full mt-3 py-2.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2"
+                                    style={{ background: notifySaved ? '#22c55e' : '#1e293b' }}>
+                                    {notifySaved ? '✅ 已保存' : '保存通知设置'}
                                 </button>
-                                {saveStatus === 'ok' && (
-                                    <span className="text-sm font-bold text-green-600 animate-fade-in whitespace-nowrap">✅ 已保存</span>
-                                )}
-                                {saveStatus === 'fail' && (
-                                    <span className="text-sm font-bold text-red-500 animate-fade-in whitespace-nowrap">❌ 保存失败，请重试</span>
-                                )}
                             </div>
+
                         </div>
                     </div>
                 </div>
@@ -492,22 +557,25 @@
         };
 
         // 分类筛选器条
-        const FilterBar = ({ activeFilter, setActiveFilter }) => (
-            <div className="flex gap-2 overflow-x-auto hide-scrollbar py-2">
-                <button 
-                    onClick={() => setActiveFilter('all')}
-                    className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${activeFilter === 'all' ? 'bg-os-text text-white shadow-md' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
-                >
-                    全部
-                </button>
-                {CATEGORIES.map(cat => (
-                    <button 
-                        key={cat.id} onClick={() => setActiveFilter(cat.id)}
-                        className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap flex items-center gap-1 ${activeFilter === cat.id ? `${cat.color} text-white shadow-md` : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+        const FilterBar = ({ activeFilter, setActiveFilter, right }) => (
+            <div className="flex items-center gap-2 py-2 min-w-0">
+                <div className="flex gap-2 overflow-x-auto hide-scrollbar flex-1 min-w-0">
+                    <button
+                        onClick={() => setActiveFilter('all')}
+                        className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${activeFilter === 'all' ? 'bg-os-text text-white shadow-md' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
                     >
-                        <span>{cat.icon}</span> {cat.label}
+                        全部
                     </button>
-                ))}
+                    {CATEGORIES.map(cat => (
+                        <button
+                            key={cat.id} onClick={() => setActiveFilter(cat.id)}
+                            className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap flex items-center gap-1 ${activeFilter === cat.id ? `${cat.color} text-white shadow-md` : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+                        >
+                            <span>{cat.icon}</span> {cat.label}
+                        </button>
+                    ))}
+                </div>
+                {right && <div className="flex items-center gap-2 flex-shrink-0">{right}</div>}
             </div>
         );
 
@@ -1755,10 +1823,11 @@
             const exchRate = getFinanceStorage().exchangeRate || 0.048;
             const toJPYw = (amt, cur) => (cur === 'RMB' || cur === 'CNY') ? amt / exchRate : amt;
             const nowMonth = TODAY_STR.slice(0, 7);
-            const monthTxW = MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(nowMonth));
+            const weekTxW = MOCK_TRANSACTIONS.filter(t => t.date && CURRENT_WEEK_DATES.includes(t.date));
             const todayTxW = MOCK_TRANSACTIONS.filter(t => t.date === TODAY_STR);
-            const wMonthTotal = Math.round(monthTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
+            const wWeekTotal = Math.round(weekTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
             const wTodayTotal = Math.round(todayTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
+            const monthTxW = MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(nowMonth));
             const recentThree = [...monthTxW].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3);
 
             const saveNewTx = () => {
@@ -1815,9 +1884,9 @@
                     <div className="flex items-start justify-between z-10">
                         <div className="flex gap-4">
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: 'var(--accent)' }}>{nowMonth.slice(5)}月支出</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: 'var(--accent)' }}>本周支出</p>
                                 <p className="text-2xl font-black leading-none" style={{ color: '#c2410c' }}>
-                                    ¥{wMonthTotal.toLocaleString()}
+                                    ¥{wWeekTotal.toLocaleString()}
                                 </p>
                             </div>
                             <div className="border-l pl-4" style={{ borderColor: 'var(--finance-border)' }}>
@@ -2785,14 +2854,17 @@
         };
 
         // 双栏备忘录式日历
-        const CalendarView = ({ events, todos, activeFilter, onOpenReport }) => {
+        const CalendarView = ({ events, todos, activeFilter, onOpenReport, calSearchOpen, calSearch, setCalSearch }) => {
             const [calTab, setCalTab] = useState('month');
             const [currentDate, setCurrentDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
             const [selectedDate, setSelectedDate] = useState(TODAY_STR);
 
             const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
             const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-            const filteredEvents = activeFilter === 'all' ? events : events.filter(e => e.catId === activeFilter);
+            const baseEvents = activeFilter === 'all' ? events : events.filter(e => e.catId === activeFilter);
+            const filteredEvents = calSearch?.trim()
+                ? baseEvents.filter(e => e.title?.toLowerCase().includes(calSearch.toLowerCase()))
+                : baseEvents;
             const selectedEvents = filteredEvents.filter(e => e.date === selectedDate);
             const selectedTodos = todos.filter(t => t.date === selectedDate);
 
@@ -2812,6 +2884,24 @@
                             </button>
                         ))}
                     </div>
+
+                    {/* 搜索框（移动端，由顶部🔍按钮控制） */}
+                    {calSearchOpen && (
+                        <div className="relative animate-fade-in md:hidden">
+                            <input
+                                autoFocus
+                                type="text"
+                                value={calSearch || ''}
+                                onChange={e => setCalSearch(e.target.value)}
+                                placeholder="搜索事件名称…"
+                                className="w-full bg-white rounded-2xl px-4 py-2.5 pr-9 text-sm font-medium outline-none border border-gray-100 shadow-sm"
+                            />
+                            {calSearch && (
+                                <button onClick={() => setCalSearch('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-black text-base leading-none">×</button>
+                            )}
+                        </div>
+                    )}
 
                     {/* ── 月历 tab ── */}
                     {calTab === 'month' && (
@@ -3197,6 +3287,8 @@
             const [showSettings, setShowSettings] = useState(false);
             const [showProfile, setShowProfile] = useState(false);
             const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+            const [calSearchOpen, setCalSearchOpen] = useState(false);
+            const [calSearch, setCalSearch] = useState('');
             const [toast, setToast] = useState(null);
             const importFileRef = useRef(null);
 
@@ -3262,6 +3354,14 @@
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
                 } catch {}
             }, [widgets]);
+
+            // 通知权限 + 提醒调度
+            useEffect(() => {
+                if (typeof Notification !== 'undefined') {
+                    Notification.requestPermission();
+                }
+                scheduleSmokingReminder();
+            }, []);
 
             // Auth 状态监听
             useEffect(() => {
@@ -3471,17 +3571,34 @@
                                     <h1 className="text-3xl font-black capitalize tracking-tight">{currentView}.</h1>
                                 </div>
                                 {(currentView === 'calendar' || currentView === 'year' || currentView === 'vault') && (
-                                    <FilterBar activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
+                                    <FilterBar
+                                        activeFilter={activeFilter}
+                                        setActiveFilter={setActiveFilter}
+                                        right={currentView === 'calendar' ? (
+                                            <div className="md:hidden flex items-center gap-1.5">
+                                                {syncIndicator && (
+                                                    <span className="text-[10px] font-bold whitespace-nowrap" style={{ color: syncIndicator.color }}>{syncIndicator.text}</span>
+                                                )}
+                                                <button
+                                                    onClick={() => { setCalSearchOpen(o => !o); if (calSearchOpen) setCalSearch(''); }}
+                                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm border transition-colors ${calSearchOpen ? 'bg-os-text text-white border-os-text' : 'bg-white border-gray-200'}`}>
+                                                    {calSearchOpen ? '×' : '🔍'}
+                                                </button>
+                                            </div>
+                                        ) : null}
+                                    />
                                 )}
                             </div>
                             
                             <div className="flex gap-1.5 self-end md:self-auto items-center">
                                 {syncIndicator && (
-                                    <span className="text-[11px] font-bold transition-all" style={{ color: syncIndicator.color }}>
+                                    <span className={`text-[11px] font-bold transition-all ${currentView === 'calendar' ? 'hidden md:inline' : ''}`} style={{ color: syncIndicator.color }}>
                                         {syncIndicator.text}
                                     </span>
                                 )}
-                                <button className="md:hidden w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-xl border border-gray-100">🔍</button>
+                                {currentView !== 'calendar' && (
+                                    <button className="md:hidden w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-xl border border-gray-100">🔍</button>
+                                )}
                                 {currentView === 'home' && (<>
                                     <button onClick={openWeeklyAI}
                                         className="px-3 py-1.5 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1.5 whitespace-nowrap">
@@ -3538,7 +3655,7 @@
                             )}
                             
                             {currentView === 'finance' && <FinanceView />}
-                            {currentView === 'calendar' && <CalendarView events={events} todos={todos} activeFilter={activeFilter} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026年 5月'})} />}
+                            {currentView === 'calendar' && <CalendarView events={events} todos={todos} activeFilter={activeFilter} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026年 5月'})} calSearchOpen={calSearchOpen} calSearch={calSearch} setCalSearch={setCalSearch} />}
                             {currentView === 'year' && <YearlyView events={events} activeFilter={activeFilter} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026 年度'})} />}
                             {currentView === 'vault' && (
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-24">
@@ -3600,9 +3717,9 @@
                         </button>
                     </nav>
 
-                    {/* 手机端：关闭快速菜单的透明遮罩 */}
+                    {/* 手机端：关闭快速菜单的透明遮罩（z-[48] < nav z-50，不会遮挡菜单按钮） */}
                     {showQuickMenu && (
-                        <div className="fixed inset-0 z-[55] md:hidden" onClick={() => setShowQuickMenu(false)} />
+                        <div className="fixed inset-0 z-[48] md:hidden" onClick={() => setShowQuickMenu(false)} />
                     )}
 
                     {/* 中央悬浮添加控制台 (Center Add Modal) */}
