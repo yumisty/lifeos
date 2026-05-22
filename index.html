@@ -162,7 +162,7 @@
                     nowPlaying:        data.now_playing         || local.nowPlaying   || {},
                     exchangeRate:      data.exchange_rate       || local.exchangeRate || 0.048,
                     monthlyRates:      mergeObj(data.monthly_rates,         local.monthlyRates),
-                    theme:             data.theme               || local.theme        || 'cream',
+                    theme:             local.theme              || data.theme         || 'cream',
                     smokingLog:        mergeObj(data.smoking_log,           local.smokingLog),
                     smokingGoal:       data.smoking_goal        || local.smokingGoal  || 20,
                 };
@@ -904,164 +904,122 @@
 
 
         const PeriodDetailModal = ({ isOpen, onClose, log, saveLog }) => {
-            const [selectedDate, setSelectedDate] = useState(TODAY_STR);
-
-            const periodDays = useMemo(() => {
-                const days = new Set();
-                log.forEach(entry => {
-                    const cur = new Date(entry.startDate + 'T00:00:00');
-                    const end = new Date(entry.endDate + 'T00:00:00');
-                    while (cur <= end) {
-                        days.add(cur.toISOString().split('T')[0]);
-                        cur.setDate(cur.getDate() + 1);
-                    }
-                });
-                return days;
-            }, [log]);
+            const [startDate, setStartDate] = useState(TODAY_STR);
+            const [endDate, setEndDate] = useState(TODAY_STR);
 
             if (!isOpen) return null;
 
+            const sorted = [...log].sort((a, b) => b.startDate.localeCompare(a.startDate));
             const year = new Date().getFullYear();
-            const sorted = [...log].sort((a, b) => a.startDate.localeCompare(b.startDate));
 
             const handleStart = () => {
-                if (log.some(e => selectedDate >= e.startDate && selectedDate <= e.endDate)) return;
-                saveLog([...log, { startDate: selectedDate, endDate: selectedDate }]);
+                const newEntry = { startDate, endDate: null };
+                saveLog([...log, newEntry]);
             };
-
             const handleEnd = () => {
-                if (!sorted.length) return;
-                const last = sorted[sorted.length - 1];
-                if (selectedDate >= last.startDate) {
-                    saveLog(log.map(e => e.startDate === last.startDate ? { ...e, endDate: selectedDate } : e));
-                }
+                // find last entry with null endDate or set endDate on latest
+                const latest = [...log].sort((a, b) => b.startDate.localeCompare(a.startDate))[0];
+                if (!latest) return;
+                saveLog(log.map(e => e.startDate === latest.startDate ? { ...e, endDate } : e));
+            };
+            const deleteEntry = (startD) => {
+                saveLog(log.filter(e => e.startDate !== startD));
             };
 
-            const toggleDay = (dateStr) => {
-                if (periodDays.has(dateStr)) {
-                    const match = log.find(e => dateStr >= e.startDate && dateStr <= e.endDate);
-                    if (!match) return;
-                    let next;
-                    if (match.startDate === dateStr && match.endDate === dateStr) {
-                        next = log.filter(e => e.startDate !== match.startDate);
-                    } else if (match.startDate === dateStr) {
-                        const d = new Date(dateStr + 'T00:00:00'); d.setDate(d.getDate() + 1);
-                        next = log.map(e => e.startDate === match.startDate ? { ...e, startDate: d.toISOString().split('T')[0] } : e);
-                    } else if (match.endDate === dateStr) {
-                        const d = new Date(dateStr + 'T00:00:00'); d.setDate(d.getDate() - 1);
-                        next = log.map(e => e.startDate === match.startDate ? { ...e, endDate: d.toISOString().split('T')[0] } : e);
-                    } else {
-                        const p = new Date(dateStr + 'T00:00:00'); p.setDate(p.getDate() - 1);
-                        const n = new Date(dateStr + 'T00:00:00'); n.setDate(n.getDate() + 1);
-                        next = [
-                            ...log.filter(e => e.startDate !== match.startDate),
-                            { startDate: match.startDate, endDate: p.toISOString().split('T')[0] },
-                            { startDate: n.toISOString().split('T')[0], endDate: match.endDate },
-                        ];
-                    }
-                    saveLog(next);
-                } else {
-                    saveLog([...log, { startDate: dateStr, endDate: dateStr }]);
-                }
-            };
-
-            const thisYearPeriods = sorted.filter(e => e.startDate.startsWith(`${year}`));
+            const durOf = (e) => e.endDate
+                ? Math.floor((new Date(e.endDate + 'T00:00:00') - new Date(e.startDate + 'T00:00:00')) / 86400000) + 1
+                : null;
+            const allSorted = [...log].sort((a, b) => a.startDate.localeCompare(b.startDate));
             let avgCycle = null, avgDuration = null;
-            if (sorted.length >= 2) {
+            if (allSorted.length >= 2) {
                 const ivs = [];
-                for (let i = 1; i < sorted.length; i++) {
-                    ivs.push(Math.floor((new Date(sorted[i].startDate + 'T00:00:00') - new Date(sorted[i-1].startDate + 'T00:00:00')) / 86400000));
-                }
+                for (let i = 1; i < allSorted.length; i++)
+                    ivs.push(Math.floor((new Date(allSorted[i].startDate + 'T00:00:00') - new Date(allSorted[i-1].startDate + 'T00:00:00')) / 86400000));
                 avgCycle = Math.round(ivs.reduce((s,v) => s+v, 0) / ivs.length);
             }
-            if (sorted.length > 0) {
-                const durs = sorted.map(e => Math.floor((new Date(e.endDate+'T00:00:00') - new Date(e.startDate+'T00:00:00')) / 86400000) + 1);
+            const completedEntries = allSorted.filter(e => e.endDate);
+            if (completedEntries.length > 0) {
+                const durs = completedEntries.map(e => durOf(e));
                 avgDuration = Math.round(durs.reduce((s,v) => s+v, 0) / durs.length);
             }
-            const lastStart = sorted[sorted.length - 1]?.startDate;
+            const thisYearCount = log.filter(e => e.startDate.startsWith(`${year}`)).length;
 
             return (
                 <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={onClose}>
-                    <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl animate-slide-up flex flex-col" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
-                        <div className="px-6 pt-5 pb-4 border-b border-gray-50 flex items-center justify-between flex-shrink-0">
-                            <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest mb-0.5" style={{ color: '#f472b6' }}>🌸 经期记录</p>
-                                <h2 className="font-black text-base text-gray-800">详细数据</h2>
-                            </div>
+                    <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl animate-slide-up flex flex-col max-h-[88vh]" onClick={e => e.stopPropagation()}>
+                        <div className="px-5 pt-5 pb-4 border-b border-gray-50 flex items-center justify-between flex-shrink-0">
+                            <h2 className="font-black text-base" style={{ color: '#9d174d' }}>🌸 经期详情</h2>
                             <button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
                         </div>
 
                         <div className="flex-1 overflow-y-auto hide-scrollbar">
                             {/* 补录入口 */}
-                            <div className="px-6 py-4 border-b border-gray-50">
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">补录经期</h3>
-                                <div className="flex gap-2 items-center">
-                                    <input type="date" value={selectedDate} max={TODAY_STR}
-                                        onChange={e => setSelectedDate(e.target.value)}
-                                        className="flex-1 text-sm font-bold rounded-xl px-3 py-2 border outline-none"
-                                        style={{ background: '#fdf2f8', borderColor: '#f0d8ea' }} />
-                                    <button onClick={handleStart}
-                                        className="px-4 py-2 rounded-xl text-sm font-black text-white flex-shrink-0"
-                                        style={{ background: '#f472b6' }}>开始</button>
-                                    <button onClick={handleEnd}
-                                        className="px-4 py-2 rounded-xl text-sm font-black flex-shrink-0"
-                                        style={{ background: '#fce7f3', color: '#e11d48' }}>结束</button>
+                            <div className="px-5 py-4 border-b border-gray-50">
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">补录 / 修改</h3>
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex gap-2 items-center">
+                                        <input type="date" value={startDate} max={TODAY_STR}
+                                            onChange={e => setStartDate(e.target.value)}
+                                            className="flex-1 text-sm font-bold rounded-xl px-3 py-2 border outline-none"
+                                            style={{ background: '#fdf2f8', borderColor: '#f0d8ea', color: '#9d174d' }} />
+                                        <button onClick={handleStart}
+                                            className="px-4 py-2 rounded-xl text-sm font-black text-white flex-shrink-0"
+                                            style={{ background: '#f472b6' }}>🔴 记录开始</button>
+                                    </div>
+                                    <div className="flex gap-2 items-center">
+                                        <input type="date" value={endDate} max={TODAY_STR}
+                                            onChange={e => setEndDate(e.target.value)}
+                                            className="flex-1 text-sm font-bold rounded-xl px-3 py-2 border outline-none"
+                                            style={{ background: '#fdf2f8', borderColor: '#f0d8ea', color: '#9d174d' }} />
+                                        <button onClick={handleEnd}
+                                            className="px-4 py-2 rounded-xl text-sm font-black flex-shrink-0"
+                                            style={{ background: '#fce7f3', color: '#e11d48' }}>⬜ 记录结束</button>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* 年度日历 */}
-                            <div className="px-6 py-4 border-b border-gray-50">
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{year} 年日历 · 点击标记/取消</h3>
-                                <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
-                                    {Array.from({length: 12}, (_, mIdx) => {
-                                        const daysInMon = new Date(year, mIdx + 1, 0).getDate();
-                                        const firstDay = new Date(year, mIdx, 1).getDay();
-                                        return (
-                                            <div key={mIdx} className="flex-shrink-0" style={{ width: '126px' }}>
-                                                <p className="text-[10px] font-black mb-1.5" style={{ color: '#f472b6' }}>{mIdx + 1}月</p>
-                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1.5px' }}>
-                                                    {['日','一','二','三','四','五','六'].map(d => (
-                                                        <div key={d} style={{ fontSize: '6px', fontWeight: 700, color: '#d1d5db', textAlign: 'center', height: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{d}</div>
-                                                    ))}
-                                                    {Array.from({length: firstDay}).map((_, i) => <div key={`e-${i}`} style={{ height: '15px' }} />)}
-                                                    {Array.from({length: daysInMon}, (_, i) => {
-                                                        const d = i + 1;
-                                                        const ds = `${year}-${String(mIdx+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                                                        const isPeriod = periodDays.has(ds);
-                                                        const isToday = ds === TODAY_STR;
-                                                        return (
-                                                            <div key={d} onClick={() => toggleDay(ds)}
-                                                                style={{
-                                                                    height: '15px', fontSize: '7px', fontWeight: 700,
-                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                    borderRadius: '2px', cursor: 'pointer',
-                                                                    background: isPeriod ? '#f9a8d4' : isToday ? '#475569' : 'transparent',
-                                                                    color: isPeriod ? '#be185d' : isToday ? '#fff' : '#9ca3af',
-                                                                }}>
-                                                                {d}
-                                                            </div>
-                                                        );
-                                                    })}
+                            {/* 历史记录列表 */}
+                            <div className="px-5 py-4 border-b border-gray-50">
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">历史记录</h3>
+                                {sorted.length === 0 ? (
+                                    <p className="text-sm text-gray-400 text-center py-4">暂无记录</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {sorted.map((e, i) => {
+                                            const dur = durOf(e);
+                                            return (
+                                                <div key={e.startDate} className="flex items-center justify-between rounded-xl px-3 py-2.5"
+                                                    style={{ background: i === 0 ? '#fdf2f8' : '#f9fafb' }}>
+                                                    <div>
+                                                        <span className="text-sm font-black" style={{ color: i === 0 ? '#e11d48' : '#374151' }}>
+                                                            {e.startDate.slice(5).replace('-','/')}
+                                                            {e.endDate && e.endDate !== e.startDate ? ` → ${e.endDate.slice(5).replace('-','/')}` : ''}
+                                                        </span>
+                                                        <span className="text-[11px] font-bold ml-2" style={{ color: '#f472b6' }}>
+                                                            {dur ? `${dur}天` : e.endDate ? '1天' : '进行中…'}
+                                                        </span>
+                                                    </div>
+                                                    <button onClick={() => deleteEntry(e.startDate)}
+                                                        className="w-6 h-6 rounded-full bg-gray-100 hover:bg-red-50 flex items-center justify-center text-[10px] text-gray-400 hover:text-red-400 transition-colors">×</button>
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
 
-                            {/* 统计数据 */}
-                            <div className="px-6 py-4">
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">统计数据</h3>
-                                <div className="grid grid-cols-2 gap-3">
+                            {/* 底部统计 */}
+                            <div className="px-5 py-4">
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">统计</h3>
+                                <div className="grid grid-cols-3 gap-2">
                                     {[
-                                        { label: '平均周期天数', value: avgCycle != null ? `${avgCycle} 天` : '—' },
-                                        { label: '平均持续天数', value: avgDuration != null ? `${avgDuration} 天` : '—' },
-                                        { label: '今年记录次数', value: `${thisYearPeriods.length} 次` },
-                                        { label: '最近开始日期', value: lastStart ? lastStart.slice(5).replace('-', '/') : '—' },
-                                    ].map(stat => (
-                                        <div key={stat.label} className="rounded-xl p-3" style={{ background: '#fdf2f8' }}>
-                                            <p className="text-[9px] font-black uppercase tracking-wide mb-1" style={{ color: '#f472b6' }}>{stat.label}</p>
-                                            <p className="text-xl font-black leading-none" style={{ color: '#e11d48' }}>{stat.value}</p>
+                                        { label: '平均周期', value: avgCycle != null ? `${avgCycle}天` : '—' },
+                                        { label: '平均经期', value: avgDuration != null ? `${avgDuration}天` : '—' },
+                                        { label: `${year}年次数`, value: `${thisYearCount}次` },
+                                    ].map(s => (
+                                        <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: '#fdf2f8' }}>
+                                            <p className="text-[9px] font-black tracking-wide mb-1" style={{ color: '#f472b6' }}>{s.label}</p>
+                                            <p className="text-lg font-black leading-none" style={{ color: '#e11d48' }}>{s.value}</p>
                                         </div>
                                     ))}
                                 </div>
@@ -1240,24 +1198,16 @@
         };
 
         const PeriodWidget = () => {
-            const normalize = (entries) => entries.map(e => {
-                if (e.endDate) return e;
-                const s = new Date(e.startDate + 'T00:00:00');
-                const en = new Date(s);
-                en.setDate(en.getDate() + (e.duration || 5) - 1);
-                return { startDate: e.startDate, endDate: en.toISOString().split('T')[0] };
-            });
+            const todayStr = new Date().toISOString().split('T')[0];
+            const today = new Date(todayStr + 'T00:00:00');
 
             const [log, setLog] = useState(() => {
-                try {
-                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    return normalize(d.periodLog || []);
-                } catch { return []; }
+                try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}').periodLog || []; }
+                catch { return []; }
             });
+            const [startDate, setStartDate] = useState(todayStr);
+            const [endDate, setEndDate] = useState(todayStr);
             const [showDetail, setShowDetail] = useState(false);
-
-            const today = new Date(); today.setHours(0,0,0,0);
-            const todayStr = today.toISOString().split('T')[0];
 
             const saveLog = (next) => {
                 setLog(next);
@@ -1269,102 +1219,115 @@
                 syncToCloud();
             };
 
-            const sorted = [...log].sort((a, b) => a.startDate.localeCompare(b.startDate));
-            const last = sorted[sorted.length - 1];
+            // sorted newest-first for display, oldest-first for cycle calc
+            const byNewest = [...log].sort((a, b) => b.startDate.localeCompare(a.startDate));
+            const byOldest = [...log].sort((a, b) => a.startDate.localeCompare(b.startDate));
+            const latest = byNewest[0] || null;
 
-            let statusText = '暂无记录';
+            // status
+            let statusText = '暂无记录，点击开始记录';
             let statusColor = '#94a3b8';
+            let predictText = null;
             let isInPeriod = false;
 
-            if (last) {
-                const startD = new Date(last.startDate + 'T00:00:00'); startD.setHours(0,0,0,0);
-                const endD   = new Date(last.endDate   + 'T00:00:00'); endD.setHours(0,0,0,0);
-
-                if (today >= startD && today <= endD) {
-                    statusText = `第 ${Math.floor((today - startD) / 86400000) + 1} 天`;
+            if (latest) {
+                const startD = new Date(latest.startDate + 'T00:00:00');
+                const endD = latest.endDate ? new Date(latest.endDate + 'T00:00:00') : null;
+                if (!endD || today <= endD) {
+                    // in period (endDate null or today ≤ endDate)
+                    const dayNum = Math.floor((today - startD) / 86400000) + 1;
+                    statusText = `第 ${dayNum} 天`;
                     statusColor = '#e11d48';
                     isInPeriod = true;
                 } else {
-                    let avgCycle = 28;
-                    if (sorted.length >= 2) {
-                        const ivs = [];
-                        for (let i = sorted.length - 1; i > Math.max(0, sorted.length - 4); i--) {
-                            ivs.push(Math.floor((new Date(sorted[i].startDate + 'T00:00:00') - new Date(sorted[i-1].startDate + 'T00:00:00')) / 86400000));
-                        }
-                        if (ivs.length) avgCycle = Math.round(ivs.reduce((s,v)=>s+v,0) / ivs.length);
-                    }
-                    const daysSinceStart = Math.floor((today - startD) / 86400000);
-                    const daysToNext = avgCycle - daysSinceStart;
                     const daysSinceEnd = Math.floor((today - endD) / 86400000);
-                    if (daysToNext > 0 && daysToNext <= 7) {
-                        statusText = `预计还有 ${daysToNext} 天`;
-                        statusColor = '#ec4899';
-                    } else {
-                        statusText = `距上次 ${daysSinceEnd} 天`;
-                        statusColor = '#94a3b8';
+                    statusText = `距上次 ${daysSinceEnd} 天`;
+                    statusColor = '#94a3b8';
+                    // predict next based on avg cycle of last 3
+                    if (byOldest.length >= 2) {
+                        const ivs = [];
+                        for (let i = Math.max(1, byOldest.length - 3); i < byOldest.length; i++)
+                            ivs.push(Math.floor((new Date(byOldest[i].startDate + 'T00:00:00') - new Date(byOldest[i-1].startDate + 'T00:00:00')) / 86400000));
+                        const avgCycle = Math.round(ivs.reduce((s,v) => s+v, 0) / ivs.length);
+                        const daysSinceStart = Math.floor((today - startD) / 86400000);
+                        const daysToNext = avgCycle - daysSinceStart;
+                        if (daysToNext > 0) predictText = `预计下次 ${daysToNext} 天后`;
+                        else if (daysToNext <= 0) predictText = `预计已到来`;
                     }
                 }
             }
 
-            const [recordDate, setRecordDate] = useState(todayStr);
-
-            const handleStart = () => {
-                if (log.some(e => recordDate >= e.startDate && recordDate <= e.endDate)) return;
-                saveLog([...log, { startDate: recordDate, endDate: recordDate }]);
+            const handleWidgetStart = () => {
+                saveLog([...log, { startDate, endDate: null }]);
             };
-            const handleEnd = () => {
-                if (!last) return;
-                if (recordDate >= last.startDate) {
-                    saveLog(log.map(e => e.startDate === last.startDate ? { ...e, endDate: recordDate } : e));
-                }
+            const handleWidgetEnd = () => {
+                if (!latest) return;
+                saveLog(log.map(e => e.startDate === latest.startDate ? { ...e, endDate } : e));
             };
 
-            const recent6 = sorted.slice(-6);
-            const maxDur = Math.max(...recent6.map(e => {
-                return Math.floor((new Date(e.endDate+'T00:00:00') - new Date(e.startDate+'T00:00:00')) / 86400000) + 1;
-            }), 1);
+            // recent 6 (newest first → display oldest→newest)
+            const recent6 = byNewest.slice(0, 6).reverse();
 
             return (
-                <div className="h-full flex flex-col p-4 rounded-os-xl" style={{ background: '#FDF2F8', border: '1.5px solid #f0d8ea' }}>
+                <div className="h-full flex flex-col p-3 rounded-os-xl" style={{ background: '#FDF2F8', border: '1.5px solid #f0d8ea' }}>
+                    {/* header */}
                     <div className="flex items-center justify-between mb-2 flex-shrink-0">
-                        <div className="flex items-center gap-1.5">
-                            <span style={{ fontSize: '13px' }}>🌸</span>
-                            <h3 className="font-black text-[10px] uppercase tracking-widest" style={{ color: '#9d174d' }}>经期记录</h3>
-                        </div>
+                        <h3 className="font-black text-[10px] uppercase tracking-widest" style={{ color: '#9d174d' }}>🌸 经期记录</h3>
                         <button onClick={() => setShowDetail(true)} className="text-[9px] font-black px-2 py-0.5 rounded-full" style={{ background: '#fce7f3', color: '#e11d48' }}>详情</button>
                     </div>
-                    <p className="text-xl font-black mb-2 flex-shrink-0 leading-none" style={{ color: statusColor }}>{statusText}</p>
-                    <div className="flex items-end gap-1.5 flex-1 mb-2 overflow-x-auto">
-                        {recent6.map((e, idx) => {
-                            const sD = new Date(e.startDate+'T00:00:00');
-                            const dur = Math.floor((new Date(e.endDate+'T00:00:00') - sD) / 86400000) + 1;
-                            const barH = Math.max(Math.round(dur / maxDur * 28), 10);
+
+                    {/* status */}
+                    <div className="mb-2 flex-shrink-0">
+                        <p className="text-xl font-black leading-none" style={{ color: statusColor }}>{statusText}</p>
+                        {predictText && <p className="text-[10px] font-bold mt-0.5" style={{ color: '#ec4899' }}>{predictText}</p>}
+                    </div>
+
+                    {/* recent records */}
+                    <div className="flex gap-1.5 flex-1 mb-2 overflow-x-auto items-end">
+                        {recent6.length === 0 ? (
+                            <p className="text-[10px] text-gray-300 font-bold self-center">暂无记录</p>
+                        ) : recent6.map((e, idx) => {
+                            const sD = new Date(e.startDate + 'T00:00:00');
+                            const dur = e.endDate
+                                ? Math.floor((new Date(e.endDate + 'T00:00:00') - sD) / 86400000) + 1
+                                : Math.floor((today - sD) / 86400000) + 1;
+                            const maxDur = Math.max(...recent6.map(r => r.endDate ? Math.floor((new Date(r.endDate+'T00:00:00') - new Date(r.startDate+'T00:00:00')) / 86400000) + 1 : 1), 1);
+                            const barH = Math.max(Math.round(dur / maxDur * 32), 8);
                             const isLatest = idx === recent6.length - 1;
                             return (
-                                <div key={e.startDate} className="flex-1 flex flex-col items-center gap-0.5 min-w-0" style={{ minWidth: '24px' }}>
-                                    <div className="w-full rounded-sm flex items-center justify-center"
-                                        style={{ height: `${barH}px`, background: isLatest && isInPeriod ? '#e11d48' : '#f9a8d4' }}>
-                                        <span className="text-[7px] font-black text-white leading-none">{dur}d</span>
-                                    </div>
-                                    <span className="text-[8px] font-bold leading-none" style={{ color: '#f472b6' }}>{sD.getMonth()+1}/{sD.getDate()}</span>
+                                <div key={e.startDate} className="flex-1 flex flex-col items-center gap-0.5 min-w-0" style={{ minWidth: '28px' }}>
+                                    <div className="w-full rounded-sm" style={{ height: `${barH}px`, background: isLatest && isInPeriod ? '#e11d48' : '#f9a8d4' }} />
+                                    <span className="text-[8px] font-bold text-center leading-tight" style={{ color: '#f472b6' }}>
+                                        {sD.getMonth()+1}/{sD.getDate()}
+                                    </span>
+                                    <span className="text-[7px] font-bold text-center" style={{ color: '#fbb6ce' }}>{dur}天</span>
                                 </div>
                             );
                         })}
                     </div>
+
+                    {/* action buttons with date pickers */}
                     <div className="flex flex-col gap-1.5 flex-shrink-0">
-                        <input type="date" value={recordDate} max={todayStr}
-                            onChange={e => setRecordDate(e.target.value)}
-                            className="w-full text-[10px] font-bold text-center bg-white rounded-lg px-2 py-1 border border-pink-200 outline-none"
-                            style={{ color: '#9d174d' }} />
-                        <div className="flex gap-2">
-                            <button onClick={handleStart}
-                                className="flex-1 py-1.5 rounded-xl text-[11px] font-black text-white transition-opacity"
-                                style={{ background: '#f472b6' }}>开始记录</button>
-                            <button onClick={handleEnd} disabled={!last}
-                                className="flex-1 py-1.5 rounded-xl text-[11px] font-black transition-opacity disabled:opacity-30"
-                                style={{ background: last ? '#fce7f3' : '#f3f4f6', color: last ? '#e11d48' : '#9ca3af' }}>结束记录</button>
+                        <div className="flex gap-1.5 items-center">
+                            <input type="date" value={startDate} max={todayStr}
+                                onChange={e => setStartDate(e.target.value)}
+                                className="flex-1 text-[10px] font-bold text-center bg-white rounded-lg px-1 py-1 border border-pink-200 outline-none min-w-0"
+                                style={{ color: '#9d174d' }} />
+                            <button onClick={handleWidgetStart}
+                                className="px-2.5 py-1.5 rounded-xl text-[11px] font-black text-white flex-shrink-0 transition-opacity"
+                                style={{ background: '#f472b6' }}>🔴 开始</button>
+                        </div>
+                        <div className="flex gap-1.5 items-center">
+                            <input type="date" value={endDate} max={todayStr}
+                                onChange={e => setEndDate(e.target.value)}
+                                className="flex-1 text-[10px] font-bold text-center bg-white rounded-lg px-1 py-1 border border-pink-200 outline-none min-w-0"
+                                style={{ color: '#9d174d' }} />
+                            <button onClick={handleWidgetEnd} disabled={!latest}
+                                className="px-2.5 py-1.5 rounded-xl text-[11px] font-black flex-shrink-0 transition-opacity disabled:opacity-30"
+                                style={{ background: '#fce7f3', color: '#e11d48' }}>⬜ 结束</button>
                         </div>
                     </div>
+
                     {showDetail && <PeriodDetailModal isOpen={showDetail} onClose={() => setShowDetail(false)} log={log} saveLog={saveLog} />}
                 </div>
             );
@@ -3656,7 +3619,6 @@
                 setSyncStatus('syncing');
                 syncFromCloud().then(data => {
                     if (data) {
-                        if (data.theme) setThemeId(data.theme);
                         setSyncStatus('done');
                         setTimeout(() => setSyncStatus('idle'), 3000);
                     } else {
