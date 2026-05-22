@@ -221,6 +221,7 @@
             { id: 'photo', size: 'large' },      // 2x2
             { id: 'health', size: 'medium' },    // 2x1
             { id: 'deadline', size: 'medium' },  // 2x1
+            { id: 'meals', size: 'large' },      // 2x2
             { id: 'period', size: '2x1' },       // 2x1
             { id: 'smoking', size: '2x1' },      // 2x1
             { id: 'finance', size: 'large' },    // 2x2
@@ -433,11 +434,11 @@
                 try {
                     let promptText;
                     if (type === 'weekly') {
-                        const { weekEvents, weekTx, completedTodos, totalTodos, weekHabits } = data || {};
-                        promptText = `你是我的生活助手，请根据以下本周数据生成一份温暖有趣的中文周报（300字以内）：\n本周事件：${JSON.stringify(weekEvents || [])}\n本周消费：${JSON.stringify(weekTx || [])}\nTodo完成：${completedTodos || 0}/${totalTodos || 0}\n习惯打卡：${JSON.stringify(weekHabits || {})}\n请包含：本周亮点、消费小结、下周建议，语气轻松可爱`;
+                        const { weekTx, weekTotal, completedTodos, totalTodos, weekHabits } = data || {};
+                        promptText = `你是我的生活助手，请根据以下本周数据生成一份温暖有趣的中文周报（300字以内）：\n本周消费共${weekTotal || 0}日元，明细：${JSON.stringify(weekTx || [])}\nTodo完成：${completedTodos || 0}/${totalTodos || 0}\n习惯打卡：${JSON.stringify(weekHabits || {})}\n请包含：本周消费亮点、花了最多钱在哪里、下周建议，语气轻松可爱像朋友一样`;
                     } else {
-                        const { year, yearTotal, monthlyData, catData } = data || {};
-                        promptText = `你是我的财务助手，请根据${year}年消费数据生成年度总结（500字以内）：\n全年支出：${yearTotal}JPY\n月度数据：${JSON.stringify(monthlyData || [])}\n分类占比：${JSON.stringify(catData || [])}\n请包含：年度消费特点、最大开销分析、节省建议，语气温暖鼓励`;
+                        const { year, yearTotal, monthlyData, topCats } = data || {};
+                        promptText = `你是我的财务助手，请根据${year}年消费数据生成年度总结（500字以内）：\n全年共消费${Math.round(yearTotal || 0)}日元\n月度数据：${JSON.stringify(monthlyData || [])}\n主要分类：${JSON.stringify(topCats || [])}\n请包含：年度消费特点、花钱最多的地方、理财建议，语气温暖鼓励`;
                     }
                     const response = await fetch(
                         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
@@ -462,9 +463,10 @@
                 const report = { type, period: data?.period || title, content: result, createdAt: new Date().toISOString() };
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    const all = [report, ...(d.aiReports || [])];
+                    const all = [report, ...(d.aiReports || [])].slice(0, 20);
                     d.aiReports = all;
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                    syncToCloud();
                     setHistory(all.filter(r => r.type === type));
                     setResult(null);
                 } catch {}
@@ -885,8 +887,15 @@
             const hh = String(now.getHours()).padStart(2, '0');
             const mm = String(now.getMinutes()).padStart(2, '0');
             const dateStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${weekDays[now.getDay()]}`;
+            const hour = now.getHours();
+            const greeting = hour >= 5 && hour < 11 ? '早上好 🌸'
+                : hour >= 11 && hour < 14 ? '午安 ☀️'
+                : hour >= 14 && hour < 18 ? '下午好 🍵'
+                : hour >= 18 && hour < 22 ? '晚上好 🌙'
+                : '夜深了 ⭐';
             return (
                 <div className="h-full flex flex-col items-center justify-center rounded-os-xl" style={{ background: '#475569' }}>
+                    <span className="text-[11px] font-bold mb-1" style={{ color: '#cbd5e1' }}>{greeting}</span>
                     <span className="font-black text-white leading-none tracking-tight" style={{ fontSize: 'clamp(2rem, 5vw, 2.5rem)' }}>{hh}:{mm}</span>
                     <span className="text-[10px] font-medium mt-2 text-center px-2" style={{ color: '#94a3b8' }}>{dateStr}</span>
                 </div>
@@ -1351,6 +1360,113 @@
             );
         };
 
+        // ── 饮食规划 Widget ──
+        const MealsWidget = () => {
+            const getISOWeekKey = (date) => {
+                const d = new Date(date);
+                d.setHours(0, 0, 0, 0);
+                d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+                const week1 = new Date(d.getFullYear(), 0, 4);
+                const weekNum = 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+                return `${d.getFullYear()}-w${weekNum}`;
+            };
+            const weekKey = getISOWeekKey(new Date());
+
+            const getMonday = () => {
+                const d = new Date();
+                const day = d.getDay();
+                d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+                d.setHours(0, 0, 0, 0);
+                return d;
+            };
+            const monday = getMonday();
+            const weekDays = Array.from({ length: 7 }, (_, i) => {
+                const d = new Date(monday);
+                d.setDate(monday.getDate() + i);
+                return { date: d.toISOString().split('T')[0], label: ['一','二','三','四','五','六','日'][i] };
+            });
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            const [meals, setMeals] = useState(() => {
+                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); return d.allMeals?.[weekKey] || {}; }
+                catch { return {}; }
+            });
+            const [editing, setEditing] = useState(null); // { date, slot }
+            const [draft, setDraft] = useState('');
+
+            const saveMeals = (next) => {
+                setMeals(next);
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    if (!d.allMeals) d.allMeals = {};
+                    d.allMeals[weekKey] = next;
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                } catch {}
+                syncToCloud();
+            };
+
+            const startEdit = (date, slot) => {
+                setEditing({ date, slot });
+                setDraft(meals[date]?.[slot] || '');
+            };
+
+            const commitEdit = () => {
+                if (!editing) return;
+                const { date, slot } = editing;
+                const dayData = { ...(meals[date] || {}) };
+                if (draft.trim()) dayData[slot] = draft.trim();
+                else delete dayData[slot];
+                saveMeals({ ...meals, [date]: dayData });
+                setEditing(null);
+            };
+
+            const SLOTS = [{ key: 'b', label: '早' }, { key: 'l', label: '午' }, { key: 'd', label: '晚' }];
+            const SLOT_COLORS = { b: '#fef9c3', l: '#dcfce7', d: '#ede9fe' };
+            const SLOT_TEXT = { b: '#a16207', l: '#166534', d: '#6d28d9' };
+
+            return (
+                <div className="h-full flex flex-col p-3 rounded-os-xl" style={{ background: '#F0FDF4' }}>
+                    <h3 className="text-[9px] font-black uppercase tracking-widest mb-2 flex-shrink-0" style={{ color: '#16a34a' }}>🥗 本周饮食</h3>
+                    <div className="grid flex-1 gap-0.5" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: 'auto repeat(3, 1fr)' }}>
+                        {weekDays.map(({ date, label }) => (
+                            <div key={date} className="flex items-center justify-center">
+                                <span className="text-[9px] font-black rounded-full w-5 h-5 flex items-center justify-center"
+                                    style={{ background: date === todayStr ? '#16a34a' : 'transparent', color: date === todayStr ? '#fff' : '#6b7280' }}>
+                                    {label}
+                                </span>
+                            </div>
+                        ))}
+                        {SLOTS.map(({ key: slot, label: slotLabel }) =>
+                            weekDays.map(({ date }) => {
+                                const val = meals[date]?.[slot] || '';
+                                const isEditing = editing?.date === date && editing?.slot === slot;
+                                const isToday = date === todayStr;
+                                return (
+                                    <div key={`${date}-${slot}`}
+                                        className="rounded-md flex items-center justify-center cursor-pointer overflow-hidden"
+                                        style={{ background: isToday ? SLOT_COLORS[slot] : '#f0fdf4', border: `1px solid ${isToday ? '#86efac' : '#d1fae5'}` }}
+                                        onClick={() => !isEditing && startEdit(date, slot)}>
+                                        {isEditing ? (
+                                            <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
+                                                onBlur={commitEdit}
+                                                onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditing(null); }}
+                                                className="w-full h-full text-[8px] font-bold text-center outline-none px-0.5"
+                                                style={{ background: 'transparent', color: SLOT_TEXT[slot] }} />
+                                        ) : val ? (
+                                            <span className="text-[8px] font-bold leading-tight text-center px-0.5 line-clamp-2"
+                                                style={{ color: isToday ? SLOT_TEXT[slot] : '#6b7280' }}>{val}</span>
+                                        ) : (
+                                            <span className="text-[8px] font-bold opacity-30" style={{ color: '#16a34a' }}>{slotLabel}</span>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
         const SmokingWidget = () => {
             const todayStr = new Date().toISOString().split('T')[0];
 
@@ -1376,6 +1492,8 @@
             };
 
             const todayCount = log[todayStr] || 0;
+            const yesterdayStr = (() => { const d = new Date(); d.setDate(d.getDate()-1); return d.toISOString().split('T')[0]; })();
+            const yesterdayCount = log[yesterdayStr] ?? null;
             const change = (delta) => saveLog({ ...log, [todayStr]: Math.max(0, todayCount + delta) });
 
             const last7 = Array.from({ length: 7 }, (_, i) => {
@@ -1422,6 +1540,11 @@
                         <button onClick={() => change(-1)} className="w-7 h-7 rounded-full bg-white shadow-sm font-black text-slate-500 flex items-center justify-center text-base hover:bg-gray-100 transition-colors">−</button>
                         <div className="text-center">
                             <span className="font-black leading-none" style={{ fontSize: '36px', color: todayCount > goal ? '#ef4444' : '#334155' }}>{todayCount}</span>
+                            {yesterdayCount !== null && todayCount !== yesterdayCount && (
+                                <p className="text-[9px] font-black" style={{ color: todayCount < yesterdayCount ? '#16a34a' : '#ef4444' }}>
+                                    {todayCount < yesterdayCount ? `↓${yesterdayCount - todayCount}根` : `↑${todayCount - yesterdayCount}根`}
+                                </p>
+                            )}
                             <p className="text-[9px] text-slate-400 font-bold">今日</p>
                         </div>
                         <button onClick={() => change(1)} className="w-7 h-7 rounded-full bg-white shadow-sm font-black text-slate-500 flex items-center justify-center text-base hover:bg-gray-100 transition-colors">+</button>
@@ -1517,18 +1640,31 @@
         const DEFAULT_HABITS = ['喝水💧', '运动🏃', '早睡🌙', '维生素💊'];
         const HabitsWidget = () => {
             const todayStr = new Date().toISOString().split('T')[0];
-            const [checked, setChecked] = useState(() => {
-                try {
-                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    return d.habits?.[todayStr] || [];
-                } catch { return []; }
+            const [habitsData, setHabitsData] = useState(() => {
+                try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}').habits || {}; }
+                catch { return {}; }
             });
+            const checked = habitsData[todayStr] || [];
+
+            const getStreak = (habit) => {
+                let streak = 0;
+                const d = new Date();
+                while (true) {
+                    const key = d.toISOString().split('T')[0];
+                    if (key === todayStr && !checked.includes(habit)) { d.setDate(d.getDate() - 1); continue; }
+                    if (!(habitsData[key] || []).includes(habit)) break;
+                    streak++;
+                    d.setDate(d.getDate() - 1);
+                }
+                return streak;
+            };
+
             const saveChecked = (next) => {
-                setChecked(next);
+                const nextData = { ...habitsData, [todayStr]: next };
+                setHabitsData(nextData);
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    if (!d.habits) d.habits = {};
-                    d.habits[todayStr] = next;
+                    d.habits = nextData;
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
                 } catch {}
                 syncToCloud();
@@ -1548,6 +1684,7 @@
                     <div className="grid grid-cols-2 gap-2 flex-1 content-center">
                         {DEFAULT_HABITS.map(habit => {
                             const done = checked.includes(habit);
+                            const streak = getStreak(habit);
                             return (
                                 <button key={habit} onClick={() => toggle(habit)}
                                     className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all"
@@ -1560,7 +1697,10 @@
                                         style={{ background: done ? '#22c55e' : 'transparent', borderColor: done ? '#22c55e' : '#cbd5e1', color: '#fff' }}>
                                         {done ? '✓' : ''}
                                     </span>
-                                    {habit}
+                                    <span className="flex-1 text-left leading-tight">{habit}</span>
+                                    {streak > 0 && (
+                                        <span className="text-[8px] font-black leading-none" style={{ color: '#f97316' }}>🔥{streak}</span>
+                                    )}
                                 </button>
                             );
                         })}
@@ -1811,6 +1951,7 @@
             const [showAdd, setShowAdd] = useState(false);
             const [addForm, setAddForm] = useState({ amount: '', currency: 'JPY', category: '', name: '', date: TODAY_STR });
             const [txKey, setTxKey] = useState(0); // triggers re-read of MOCK_TRANSACTIONS
+            const [weekCur, setWeekCur] = useState('JPY');
 
             const cats = (() => {
                 try {
@@ -1897,9 +2038,18 @@
                     <div className="flex items-start justify-between z-10">
                         <div className="flex gap-4">
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: 'var(--accent)' }}>本周支出</p>
+                                <div className="flex items-center gap-1.5 mb-1">
+                                    <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--accent)' }}>本周支出</p>
+                                    <button onClick={() => setWeekCur(c => c === 'JPY' ? 'RMB' : 'JPY')}
+                                        className="text-[8px] font-black px-1.5 py-0.5 rounded-full border transition-colors"
+                                        style={{ color: 'var(--accent)', borderColor: 'var(--accent)', background: 'transparent', lineHeight: 1.2 }}>
+                                        {weekCur} ⇄
+                                    </button>
+                                </div>
                                 <p className="text-2xl font-black leading-none" style={{ color: '#c2410c' }}>
-                                    ¥{wWeekTotal.toLocaleString()}
+                                    {weekCur === 'JPY'
+                                        ? `¥${wWeekTotal.toLocaleString()}`
+                                        : `¥${Math.round(wWeekTotal * exchRate).toLocaleString()} RMB`}
                                 </p>
                             </div>
                             <div className="border-l pl-4" style={{ borderColor: 'var(--finance-border)' }}>
@@ -2575,8 +2725,8 @@
                                         </button>
                                         <button onClick={() => {
                                             const monthlyData = yearRows.map(m => ({ month: m.month, total: m.total, txTotal: m.txTotal, fixedTotal: m.fixedTotal }));
-                                            const catData = top5.map(c => ({ name: c.name, total: c.total, pct: yearTotal > 0 ? (c.total / yearTotal * 100).toFixed(1) : '0' }));
-                                            setAIPanel({ isOpen: true, title: `AI 年度总结 · ${displayYear}`, type: 'annual', data: { year: displayYear, yearTotal, monthlyData, catData, period: `${displayYear}年度总结` } });
+                                            const topCats = top5.map(c => ({ name: c.name, total: c.total, pct: yearTotal > 0 ? (c.total / yearTotal * 100).toFixed(1) + '%' : '0%' }));
+                                            setAIPanel({ isOpen: true, title: `AI 年度总结 · ${displayYear}`, type: 'annual', data: { year: displayYear, yearTotal, monthlyData, topCats, period: `${displayYear}年度总结` } });
                                         }}
                                             className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1">
                                             ✨ AI 年度总结
@@ -3167,6 +3317,7 @@
             { id: 'health',    label: '体感监测', icon: '🩰', defaultSize: 'medium' },
             { id: 'deadline',  label: 'DDL提醒',  icon: '⏰', defaultSize: 'medium' },
             { id: 'finance',   label: 'Finance',  icon: '💰', defaultSize: 'large' },
+            { id: 'meals',     label: '饮食规划', icon: '🥗', defaultSize: 'large' },
             { id: 'period',    label: '月经记录', icon: '🌸', defaultSize: '2x1' },
             { id: 'smoking',   label: '抽烟记录', icon: '🚬', defaultSize: '2x1' },
         ];
@@ -3486,26 +3637,34 @@
             // 收集本周数据并打开 AI 周报面板
             const openWeeklyAI = () => {
                 const stored = (() => { try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); } catch { return {}; } })();
-                const weekDates = CURRENT_WEEK_DATES;
-                const weekEvents = events.filter(e => weekDates.includes(e.date))
-                    .map(({ title, catId, date }) => ({ title, catId, date }));
-                const weekTx = MOCK_TRANSACTIONS.filter(t => weekDates.includes(t.date))
-                    .map(({ name, amount, currency, category, date }) => ({ name, amount, currency, category, date }));
+                const exchRate = stored.exchangeRate || 0.048;
+                // Mon–Sun week range
+                const now = new Date();
+                const day = now.getDay();
+                const diffToMonday = day === 0 ? -6 : 1 - day;
+                const monday = new Date(now);
+                monday.setDate(now.getDate() + diffToMonday);
+                monday.setHours(0, 0, 0, 0);
+                const sunday = new Date(monday);
+                sunday.setDate(monday.getDate() + 6);
+                sunday.setHours(23, 59, 59, 999);
+                const allTx = stored.transactions || [];
+                const weekTx = allTx.filter(t => { const d = new Date(t.date); return d >= monday && d <= sunday; });
+                const weekTotal = weekTx.reduce((s, t) => s + (t.currency === 'JPY' ? parseFloat(t.amount) || 0 : (parseFloat(t.amount) || 0) / exchRate), 0);
                 const weekKey = getWeek(new Date(TODAY_STR));
                 const weekTodos = stored.allTodos?.[weekKey] || [];
                 const completedTodos = weekTodos.filter(t => t.done).length;
                 const totalTodos = weekTodos.length;
                 const habitsData = stored.habits || {};
                 const weekHabits = {};
-                weekDates.forEach(d => { if (habitsData[d]?.length) weekHabits[d] = habitsData[d]; });
-                const now = new Date();
+                CURRENT_WEEK_DATES.forEach(d => { if (habitsData[d]?.length) weekHabits[d] = habitsData[d]; });
                 const weekNum = Math.ceil(now.getDate() / 7);
                 const period = `${now.getFullYear()}年${now.getMonth() + 1}月第${weekNum}周`;
                 setAIPanel({
                     isOpen: true,
                     title: `AI 周报 · ${period}`,
                     type: 'weekly',
-                    data: { weekEvents, weekTx, completedTodos, totalTodos, weekHabits, period }
+                    data: { weekTx: weekTx.map(t => ({ 名称: t.name, 金额: t.amount, 货币: t.currency, 分类: t.category })), weekTotal: Math.round(weekTotal), completedTodos, totalTodos, weekHabits, period }
                 });
             };
 
@@ -3659,6 +3818,7 @@
                                             {widget.id === 'shopping' && <ShoppingWidget />}
                                             {widget.id === 'health' && <HealthWidget />}
                                             {widget.id === 'deadline' && <DeadlineWidget />}
+                                            {widget.id === 'meals' && <MealsWidget />}
                                             {widget.id === 'period' && <PeriodWidget />}
                                             {widget.id === 'smoking' && <SmokingWidget />}
                                             {widget.id === 'finance' && <FinanceWidget onOpen={() => setCurrentView('finance')} />}
