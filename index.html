@@ -434,8 +434,8 @@
                 try {
                     let promptText;
                     if (type === 'weekly') {
-                        const { weekTx, weekTotal, completedTodos, totalTodos, weekHabits } = data || {};
-                        promptText = `你是我的生活助手，请根据以下本周数据生成一份温暖有趣的中文周报（300字以内）：\n本周消费共${weekTotal || 0}日元，明细：${JSON.stringify(weekTx || [])}\nTodo完成：${completedTodos || 0}/${totalTodos || 0}\n习惯打卡：${JSON.stringify(weekHabits || {})}\n请包含：本周消费亮点、花了最多钱在哪里、下周建议，语气轻松可爱像朋友一样`;
+                        const { weekTxSummary, weekTotal, weekSmokingTotal, weekSmokingAvg, periodStatus, weekMealsSummary, habitsSummary, completedTodos, totalTodos } = data || {};
+                        promptText = `你是我的贴心生活助手，请根据以下本周数据生成温暖有趣的中文周报（400字以内）：\n\n本周消费：共${weekTotal || 0}日元，明细：${JSON.stringify(weekTxSummary || [])}\n爸爸抽烟情况：本周共${weekSmokingTotal || 0}根，日均${weekSmokingAvg || 0}根\n我的经期状态：${periodStatus || '无记录'}\n本周饮食：${JSON.stringify(weekMealsSummary || [])}\n习惯完成情况：${habitsSummary || '无记录'}\nTodo完成：${completedTodos || 0}/${totalTodos || 0}\n\n请包含：\n1. 本周生活亮点\n2. 消费小结（花最多的地方）\n3. 爸爸健康提醒（抽烟情况）\n4. 下周生活建议\n语气像闺蜜一样温暖可爱，可以加 emoji`;
                     } else {
                         const { year, yearTotal, monthlyData, topCats } = data || {};
                         promptText = `你是我的财务助手，请根据${year}年消费数据生成年度总结（500字以内）：\n全年共消费${Math.round(yearTotal || 0)}日元\n月度数据：${JSON.stringify(monthlyData || [])}\n主要分类：${JSON.stringify(topCats || [])}\n请包含：年度消费特点、花钱最多的地方、理财建议，语气温暖鼓励`;
@@ -1306,13 +1306,17 @@
                 }
             }
 
+            const [recordDate, setRecordDate] = useState(todayStr);
+
             const handleStart = () => {
-                if (isInPeriod || log.some(e => e.startDate === todayStr)) return;
-                saveLog([...log, { startDate: todayStr, endDate: todayStr }]);
+                if (log.some(e => recordDate >= e.startDate && recordDate <= e.endDate)) return;
+                saveLog([...log, { startDate: recordDate, endDate: recordDate }]);
             };
             const handleEnd = () => {
-                if (!isInPeriod || !last) return;
-                saveLog(log.map(e => e.startDate === last.startDate ? { ...e, endDate: todayStr } : e));
+                if (!last) return;
+                if (recordDate >= last.startDate) {
+                    saveLog(log.map(e => e.startDate === last.startDate ? { ...e, endDate: recordDate } : e));
+                }
             };
 
             const recent6 = sorted.slice(-6);
@@ -1347,13 +1351,19 @@
                             );
                         })}
                     </div>
-                    <div className="flex gap-2 flex-shrink-0">
-                        <button onClick={handleStart} disabled={isInPeriod}
-                            className="flex-1 py-1.5 rounded-xl text-[11px] font-black text-white transition-opacity disabled:opacity-30"
-                            style={{ background: '#f472b6' }}>开始记录</button>
-                        <button onClick={handleEnd} disabled={!isInPeriod}
-                            className="flex-1 py-1.5 rounded-xl text-[11px] font-black transition-opacity disabled:opacity-30"
-                            style={{ background: isInPeriod ? '#fce7f3' : '#f3f4f6', color: isInPeriod ? '#e11d48' : '#9ca3af' }}>结束记录</button>
+                    <div className="flex flex-col gap-1.5 flex-shrink-0">
+                        <input type="date" value={recordDate} max={todayStr}
+                            onChange={e => setRecordDate(e.target.value)}
+                            className="w-full text-[10px] font-bold text-center bg-white rounded-lg px-2 py-1 border border-pink-200 outline-none"
+                            style={{ color: '#9d174d' }} />
+                        <div className="flex gap-2">
+                            <button onClick={handleStart}
+                                className="flex-1 py-1.5 rounded-xl text-[11px] font-black text-white transition-opacity"
+                                style={{ background: '#f472b6' }}>开始记录</button>
+                            <button onClick={handleEnd} disabled={!last}
+                                className="flex-1 py-1.5 rounded-xl text-[11px] font-black transition-opacity disabled:opacity-30"
+                                style={{ background: last ? '#fce7f3' : '#f3f4f6', color: last ? '#e11d48' : '#9ca3af' }}>结束记录</button>
+                        </div>
                     </div>
                     {showDetail && <PeriodDetailModal isOpen={showDetail} onClose={() => setShowDetail(false)} log={log} saveLog={saveLog} />}
                 </div>
@@ -1427,11 +1437,11 @@
             return (
                 <div className="h-full flex flex-col p-3 rounded-os-xl" style={{ background: '#F0FDF4' }}>
                     <h3 className="text-[9px] font-black uppercase tracking-widest mb-2 flex-shrink-0" style={{ color: '#16a34a' }}>🥗 本周饮食</h3>
-                    <div className="grid flex-1 gap-0.5" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: 'auto repeat(3, 1fr)' }}>
+                    <div className="grid flex-1 gap-1" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: 'auto repeat(3, 1fr)' }}>
                         {weekDays.map(({ date, label }) => (
-                            <div key={date} className="flex items-center justify-center">
-                                <span className="text-[9px] font-black rounded-full w-5 h-5 flex items-center justify-center"
-                                    style={{ background: date === todayStr ? '#16a34a' : 'transparent', color: date === todayStr ? '#fff' : '#6b7280' }}>
+                            <div key={date} className="flex items-center justify-center py-0.5">
+                                <span className="text-[11px] font-black rounded-full w-6 h-6 flex items-center justify-center"
+                                    style={{ background: date === todayStr ? '#16a34a' : 'transparent', color: date === todayStr ? '#fff' : '#6b7280', boxShadow: date === todayStr ? '0 0 0 2px #bbf7d0' : 'none' }}>
                                     {label}
                                 </span>
                             </div>
@@ -1443,20 +1453,20 @@
                                 const isToday = date === todayStr;
                                 return (
                                     <div key={`${date}-${slot}`}
-                                        className="rounded-md flex items-center justify-center cursor-pointer overflow-hidden"
-                                        style={{ background: isToday ? SLOT_COLORS[slot] : '#f0fdf4', border: `1px solid ${isToday ? '#86efac' : '#d1fae5'}` }}
+                                        className="rounded-lg flex items-center justify-center cursor-pointer overflow-hidden min-h-[32px]"
+                                        style={{ background: isToday ? SLOT_COLORS[slot] : '#f0fdf4', border: `1.5px solid ${isToday ? '#4ade80' : '#d1fae5'}` }}
                                         onClick={() => !isEditing && startEdit(date, slot)}>
                                         {isEditing ? (
                                             <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
                                                 onBlur={commitEdit}
                                                 onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditing(null); }}
-                                                className="w-full h-full text-[8px] font-bold text-center outline-none px-0.5"
+                                                className="w-full h-full text-[11px] font-bold text-center outline-none px-0.5"
                                                 style={{ background: 'transparent', color: SLOT_TEXT[slot] }} />
                                         ) : val ? (
-                                            <span className="text-[8px] font-bold leading-tight text-center px-0.5 line-clamp-2"
-                                                style={{ color: isToday ? SLOT_TEXT[slot] : '#6b7280' }}>{val}</span>
+                                            <span className="text-[11px] font-bold leading-tight text-center px-0.5 line-clamp-2"
+                                                style={{ color: isToday ? SLOT_TEXT[slot] : '#4b7c50' }}>{val}</span>
                                         ) : (
-                                            <span className="text-[8px] font-bold opacity-30" style={{ color: '#16a34a' }}>{slotLabel}</span>
+                                            <span className="text-[11px] font-bold opacity-25" style={{ color: '#16a34a' }}>{slotLabel}</span>
                                         )}
                                     </div>
                                 );
@@ -1886,61 +1896,150 @@
             const todayStr = new Date().toISOString().split('T')[0];
             const fileRef = React.useRef(null);
 
-            const [photo, setPhoto] = useState(() => {
-                try {
-                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    return d.dailyPhotos?.[todayStr] || null;
-                } catch { return null; }
+            const getPhotos = () => {
+                try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}').dailyPhotos || {}; }
+                catch { return {}; }
+            };
+
+            const [photoUrl, setPhotoUrl] = useState(() => getPhotos()[todayStr] || null);
+            const [uploading, setUploading] = useState(false);
+            const [uploadErr, setUploadErr] = useState(null);
+            const [showHistory, setShowHistory] = useState(false);
+            const [photos, setPhotos] = useState(getPhotos);
+
+            const displayDate = todayStr.slice(5).replace('-', '/');
+
+            const compressImage = (file) => new Promise(resolve => {
+                const canvas = document.createElement('canvas');
+                const img = new Image();
+                img.onload = () => {
+                    const maxW = 1080;
+                    const scale = Math.min(1, maxW / img.width);
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob(resolve, 'image/jpeg', 0.7);
+                };
+                img.src = URL.createObjectURL(file);
             });
 
-            const savePhoto = (base64) => {
-                setPhoto(base64);
+            const saveUrlLocally = (dateStr, url) => {
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     if (!d.dailyPhotos) d.dailyPhotos = {};
-                    d.dailyPhotos[todayStr] = base64;
-                    // 清理7天前的照片
-                    const cutoff = new Date();
-                    cutoff.setDate(cutoff.getDate() - 7);
-                    Object.keys(d.dailyPhotos).forEach(k => {
-                        if (new Date(k + 'T00:00:00') < cutoff) delete d.dailyPhotos[k];
-                    });
+                    d.dailyPhotos[dateStr] = url;
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                    setPhotos({ ...d.dailyPhotos });
                 } catch {}
             };
 
-            const handleFile = (e) => {
+            const handleFile = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => savePhoto(ev.target.result);
-                reader.readAsDataURL(file);
+                e.target.value = '';
+                setUploading(true);
+                setUploadErr(null);
+                try {
+                    const blob = await compressImage(file);
+
+                    if (CURRENT_USER_ID) {
+                        // Supabase Storage upload
+                        const path = `${CURRENT_USER_ID}/${todayStr}.jpg`;
+                        const { error: upErr } = await _supabase.storage
+                            .from('lifeos-photos')
+                            .upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+                        if (upErr) throw upErr;
+                        const { data: signData, error: signErr } = await _supabase.storage
+                            .from('lifeos-photos')
+                            .createSignedUrl(path, 60 * 60 * 24 * 7);
+                        if (signErr) throw signErr;
+                        saveUrlLocally(todayStr, signData.signedUrl);
+                        setPhotoUrl(signData.signedUrl);
+                    } else {
+                        // fallback: base64 in localStorage
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                            saveUrlLocally(todayStr, ev.target.result);
+                            setPhotoUrl(ev.target.result);
+                        };
+                        reader.readAsDataURL(blob);
+                    }
+                } catch (err) {
+                    setUploadErr(err.message || '上传失败');
+                } finally {
+                    setUploading(false);
+                }
             };
 
-            const [mdy] = todayStr.split('-');
-            const displayDate = todayStr.slice(5).replace('-', '/');
+            // History modal: last 30 days grid
+            const last30 = Array.from({ length: 30 }, (_, i) => {
+                const d = new Date(); d.setDate(d.getDate() - (29 - i));
+                return d.toISOString().split('T')[0];
+            });
 
             return (
-                <div className="h-full rounded-os-xl overflow-hidden relative" style={{ background: '#e5e7eb' }}>
+                <div className="h-full rounded-os-xl overflow-hidden relative" style={{ background: '#1e293b' }}>
                     <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
 
-                    {photo ? (<>
-                        {/* 照片填满 */}
-                        <img src={photo} alt="今日照片" className="w-full h-full object-cover" />
-                        {/* 暗角 */}
-                        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 50%)' }} />
-                        {/* 左下日期 */}
-                        <span className="absolute bottom-3 left-4 text-white text-xs font-black drop-shadow-md">{displayDate}</span>
-                        {/* 右下更换按钮 */}
-                        <button onClick={() => fileRef.current?.click()}
-                            className="absolute bottom-2.5 right-3 w-8 h-8 rounded-full flex items-center justify-center font-black text-base shadow-lg transition-opacity hover:opacity-80"
-                            style={{ background: 'rgba(255,255,255,0.25)', color: '#fff', backdropFilter: 'blur(4px)' }}>+</button>
+                    {photoUrl ? (<>
+                        <img src={photoUrl} alt="今日照片" className="w-full h-full object-cover"
+                            onError={() => { setPhotoUrl(null); }} />
+                        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 55%)' }} />
+                        <span className="absolute bottom-10 left-4 text-white text-xs font-black drop-shadow-md">{displayDate}</span>
+                        <button onClick={() => setShowHistory(true)}
+                            className="absolute bottom-2.5 left-4 text-[10px] font-bold text-white/70 hover:text-white transition-colors">查看更多 ›</button>
+                        <button onClick={() => fileRef.current?.click()} disabled={uploading}
+                            className="absolute bottom-2.5 right-3 w-8 h-8 rounded-full flex items-center justify-center font-black text-base shadow-lg transition-opacity hover:opacity-80 disabled:opacity-50"
+                            style={{ background: 'rgba(255,255,255,0.25)', color: '#fff', backdropFilter: 'blur(4px)' }}>
+                            {uploading ? <span className="animate-spin text-sm">⟳</span> : '+'}
+                        </button>
                     </>) : (
-                        /* 空状态 */
-                        <div className="w-full h-full flex flex-col items-center justify-center gap-2 cursor-pointer group" onClick={() => fileRef.current?.click()}>
-                            <span className="text-4xl opacity-30 group-hover:opacity-50 transition-opacity">📷</span>
-                            <span className="text-xs font-bold text-gray-400 group-hover:text-gray-500 transition-colors">记录今天</span>
-                            <span className="text-[10px] text-gray-300">{displayDate}</span>
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-2 cursor-pointer group relative" onClick={() => !uploading && fileRef.current?.click()}>
+                            {uploading ? (
+                                <>
+                                    <span className="text-3xl animate-spin text-white/50">⟳</span>
+                                    <span className="text-xs font-bold text-white/50">上传中…</span>
+                                </>
+                            ) : (<>
+                                <span className="text-4xl opacity-30 group-hover:opacity-50 transition-opacity">📷</span>
+                                <span className="text-xs font-bold text-gray-400 group-hover:text-gray-300 transition-colors">记录今天</span>
+                                <span className="text-[10px] text-gray-500">{displayDate}</span>
+                            </>)}
+                            {uploadErr && (
+                                <span className="absolute bottom-3 left-0 right-0 text-center text-[9px] font-bold text-red-400 px-2">{uploadErr}</span>
+                            )}
+                            <button onClick={e => { e.stopPropagation(); setShowHistory(true); }}
+                                className="absolute bottom-2.5 right-3 text-[10px] font-bold text-gray-500 hover:text-gray-300 transition-colors">历史 ›</button>
+                        </div>
+                    )}
+
+                    {showHistory && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowHistory(false)}>
+                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up overflow-hidden" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                                    <h2 className="font-black text-base text-gray-800">📷 近30天</h2>
+                                    <button onClick={() => setShowHistory(false)} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
+                                </div>
+                                <div className="grid grid-cols-5 gap-1 px-4 pb-5">
+                                    {last30.map(dateStr => {
+                                        const url = photos[dateStr];
+                                        const label = dateStr.slice(5).replace('-', '/');
+                                        const isToday = dateStr === todayStr;
+                                        return (
+                                            <div key={dateStr} className="flex flex-col gap-0.5">
+                                                <div className="aspect-square rounded-lg overflow-hidden relative"
+                                                    style={{ background: url ? 'transparent' : '#f1f5f9', border: isToday ? '2px solid #f59e0b' : 'none' }}>
+                                                    {url
+                                                        ? <img src={url} alt={label} className="w-full h-full object-cover" onError={ev => { ev.target.style.display='none'; }} />
+                                                        : <div className="w-full h-full flex items-center justify-center text-gray-300 text-base">+</div>
+                                                    }
+                                                </div>
+                                                <span className="text-[8px] font-bold text-center text-gray-400">{label}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -2034,41 +2133,41 @@
                     {/* 背景水印 */}
                     <div className="absolute -right-4 -bottom-6 text-[7rem] font-black select-none pointer-events-none" style={{ color: 'var(--accent)', opacity: 0.07 }}>¥</div>
 
-                    {/* ① 顶部：左侧统计 + 右侧按钮 */}
-                    <div className="flex items-start justify-between z-10">
-                        <div className="flex gap-4">
-                            <div>
-                                <div className="flex items-center gap-1.5 mb-1">
-                                    <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--accent)' }}>本周支出</p>
+                    {/* ① 顶部：一行搞定，nowrap */}
+                    <div className="flex items-center justify-between gap-2 z-10 flex-nowrap">
+                        <div className="flex items-center gap-2 flex-nowrap min-w-0">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-1 mb-0.5">
+                                    <p className="text-[9px] font-black uppercase tracking-widest whitespace-nowrap" style={{ color: 'var(--accent)' }}>本周</p>
                                     <button onClick={() => setWeekCur(c => c === 'JPY' ? 'RMB' : 'JPY')}
-                                        className="text-[8px] font-black px-1.5 py-0.5 rounded-full border transition-colors"
+                                        className="text-[7px] font-black px-1 py-0.5 rounded-full border transition-colors whitespace-nowrap flex-shrink-0"
                                         style={{ color: 'var(--accent)', borderColor: 'var(--accent)', background: 'transparent', lineHeight: 1.2 }}>
                                         {weekCur} ⇄
                                     </button>
                                 </div>
-                                <p className="text-2xl font-black leading-none" style={{ color: '#c2410c' }}>
+                                <p className="text-lg font-black leading-none whitespace-nowrap" style={{ color: '#c2410c' }}>
                                     {weekCur === 'JPY'
                                         ? `¥${wWeekTotal.toLocaleString()}`
-                                        : `¥${Math.round(wWeekTotal * exchRate).toLocaleString()} RMB`}
+                                        : `¥${Math.round(wWeekTotal * exchRate).toLocaleString()} ¥`}
                                 </p>
                             </div>
-                            <div className="border-l pl-4" style={{ borderColor: 'var(--finance-border)' }}>
-                                <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: 'var(--accent)' }}>今日</p>
-                                <p className="text-2xl font-black leading-none" style={{ color: '#c2410c' }}>
+                            <div className="border-l pl-2 flex-shrink-0" style={{ borderColor: 'var(--finance-border)' }}>
+                                <p className="text-[9px] font-black uppercase tracking-widest mb-0.5 whitespace-nowrap" style={{ color: 'var(--accent)' }}>今日</p>
+                                <p className="text-lg font-black leading-none whitespace-nowrap" style={{ color: '#c2410c' }}>
                                     ¥{wTodayTotal.toLocaleString()}
                                 </p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-1.5 flex-shrink-0 flex-nowrap">
                             <button onClick={() => setShowAdd(true)}
-                                className="text-[11px] font-bold rounded-full px-3 py-1.5 transition-colors hover:opacity-80"
+                                className="text-[10px] font-bold rounded-full px-2.5 py-1.5 transition-colors hover:opacity-80 whitespace-nowrap"
                                 style={{ color: '#fff', background: 'var(--accent)' }}>
-                                + 记一笔
+                                +记一笔
                             </button>
                             <button onClick={onOpen}
-                                className="text-[11px] font-bold rounded-full px-3 py-1.5 transition-colors hover:opacity-80"
+                                className="text-[10px] font-bold rounded-full px-2.5 py-1.5 transition-colors hover:opacity-80 whitespace-nowrap"
                                 style={{ color: 'var(--accent)', background: 'transparent', border: '1.5px solid var(--accent)' }}>
-                                详情 →
+                                详情→
                             </button>
                         </div>
                     </div>
@@ -2194,6 +2293,7 @@
             const [displayCurrency, setDisplayCurrency] = useState('JPY'); // 列表货币切换
             const [detailCurrency, setDetailCurrency] = useState('JPY'); // 当日明细货币切换
             const [searchTx, setSearchTx] = useState('');
+            const [searchOpen, setSearchOpen] = useState(false);
             const [txKey, setTxKey] = useState(0);                    // 强制重渲
             const [deleteConfirmId, setDeleteConfirmId] = useState(null);
             const [editingTx, setEditingTx] = useState(null);         // null | tx object
@@ -2429,25 +2529,42 @@
                             <div className="flex flex-col gap-4 animate-fade-in pb-32 md:pb-8">
 
                                 <div className="flex flex-col gap-2">
-                                    {/* 第一行：← 年月 → 两端对齐 ¥JPY⇄ 汇率 */}
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <button onClick={goPrevMonth} className="w-8 h-8 rounded-full bg-white shadow-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors">←</button>
-                                            <span className="font-black text-lg min-w-[90px] text-center">{displayYear}年{displayMonth}月</span>
-                                            <button onClick={goNextMonth} className="w-8 h-8 rounded-full bg-white shadow-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors">→</button>
-                                        </div>
-                                        <div className="flex items-center gap-2">
+                                    {/* 第一行：← 年月 → 两端对齐 ¥JPY⇄ 汇率 🔍 */}
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={goPrevMonth} className="w-8 h-8 rounded-full bg-white shadow-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0">←</button>
+                                        <span className="font-black text-lg min-w-[90px] text-center flex-shrink-0">{displayYear}年{displayMonth}月</span>
+                                        <button onClick={goNextMonth} className="w-8 h-8 rounded-full bg-white shadow-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0">→</button>
+                                        <div className="flex items-center gap-2 flex-1 justify-end">
                                             <button onClick={() => setDisplayCurrency(isRMBCur ? 'JPY' : 'RMB')}
-                                                className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors"
+                                                className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors whitespace-nowrap"
                                                 style={{ color: isRMBCur ? '#c2410c' : '#1e293b' }}>
                                                 ¥{isRMBCur ? 'RMB' : 'JPY'} ⇄
                                             </button>
                                             <button onClick={openRateModal}
-                                                className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-500 hover:bg-gray-50 transition-colors">
+                                                className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-500 hover:bg-gray-50 transition-colors whitespace-nowrap">
                                                 汇率 {currentRate}
+                                            </button>
+                                            <button onClick={() => { setSearchOpen(o => !o); if (searchOpen) setSearchTx(''); }}
+                                                className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0">
+                                                {searchOpen ? '×' : '🔍'}
                                             </button>
                                         </div>
                                     </div>
+                                    {searchOpen && (
+                                        <div className="relative animate-fade-in">
+                                            <input autoFocus
+                                                value={searchTx}
+                                                onChange={e => setSearchTx(e.target.value)}
+                                                placeholder="搜索名称或分类…"
+                                                className="w-full bg-white rounded-2xl px-4 py-2.5 pr-10 text-sm outline-none border border-gray-100 shadow-sm"
+                                                style={{ fontWeight: 600, color: '#1e293b' }}
+                                            />
+                                            {searchTx && (
+                                                <button onClick={() => setSearchTx('')}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-black text-base leading-none">×</button>
+                                            )}
+                                        </div>
+                                    )}
                                     {/* 第二行：手机两行 / 桌面横排 */}
                                     <div className="flex flex-col md:flex-row md:items-end gap-2 md:gap-4">
                                         {/* 第一行：本月支出（大字） */}
@@ -2627,20 +2744,6 @@
                                     </div>
                                 </div>
 
-                                {/* 搜索框 */}
-                                <div className="relative mb-2">
-                                    <input
-                                        value={searchTx}
-                                        onChange={e => setSearchTx(e.target.value)}
-                                        placeholder="搜索名称或分类…"
-                                        className="w-full bg-white rounded-2xl px-4 py-2.5 pr-10 text-sm outline-none border border-gray-100 shadow-sm"
-                                        style={{ fontWeight: 600, color: '#1e293b' }}
-                                    />
-                                    {searchTx && (
-                                        <button onClick={() => setSearchTx('')}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-black text-base leading-none">×</button>
-                                    )}
-                                </div>
 
                                 {/* 当月记录列表 */}
                                 <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
@@ -3200,40 +3303,44 @@
         // 真实 3x4 年历视图
         const YearlyView = ({ events, activeFilter, onOpenReport }) => {
             const [year, setYear] = useState(new Date().getFullYear());
-            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-            
+            const months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
+            const todayStr = new Date().toISOString().split('T')[0];
+
             const filteredEvents = activeFilter === 'all' ? events : events.filter(e => e.catId === activeFilter);
 
             return (
                 <div className="animate-fade-in pb-24 md:pb-6 w-full max-w-5xl mx-auto h-full flex flex-col">
-                    <div className="flex justify-between items-center mb-6 bg-white p-4 rounded-2xl shadow-sm">
-                        <button onClick={() => onOpenReport('year')} className="font-bold text-sm bg-os-purple text-purple-900 px-4 py-2 rounded-xl flex items-center gap-2 hover:opacity-80 transition-opacity">
-                            <span>✨</span> 生成 {year} 年度总结
-                        </button>
-                        <div className="flex gap-4 items-center">
-                            <button onClick={()=>setYear(y=>y-1)} className="font-bold text-gray-400 hover:text-os-text">←</button>
+                    <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-2xl shadow-sm gap-3">
+                        <div className="flex gap-3 items-center">
+                            <button onClick={()=>setYear(y=>y-1)} className="w-8 h-8 rounded-full bg-gray-100 font-bold text-gray-500 hover:bg-gray-200 transition-colors">←</button>
                             <h2 className="text-2xl font-black">{year} Map.</h2>
-                            <button onClick={()=>setYear(y=>y+1)} className="font-bold text-gray-400 hover:text-os-text">→</button>
+                            <button onClick={()=>setYear(y=>y+1)} className="w-8 h-8 rounded-full bg-gray-100 font-bold text-gray-500 hover:bg-gray-200 transition-colors">→</button>
                         </div>
+                        <button onClick={() => onOpenReport('year')} className="text-[11px] font-bold bg-os-purple text-purple-900 px-3 py-1.5 rounded-xl flex items-center gap-1.5 hover:opacity-80 transition-opacity flex-shrink-0">
+                            <span>✨</span> AI 年度总结
+                        </button>
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 flex-1">
                         {months.map((month, mIdx) => {
                             const daysInMonth = new Date(year, mIdx + 1, 0).getDate();
                             return (
-                                <div key={month} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50 flex flex-col">
-                                    <h4 className="text-xs font-black text-gray-400 mb-3 uppercase tracking-widest">{month}</h4>
-                                    <div className="grid grid-cols-7 gap-1 mt-auto">
+                                <div key={month} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50 flex flex-col gap-2">
+                                    <h4 className="text-base font-black text-gray-700 leading-snug">{month}</h4>
+                                    <div className="grid grid-cols-7 gap-1.5">
                                         {Array.from({ length: daysInMonth }).map((_, dIdx) => {
                                             const dateStr = `${year}-${String(mIdx + 1).padStart(2, '0')}-${String(dIdx + 1).padStart(2, '0')}`;
                                             const dayEvents = filteredEvents.filter(e => e.date === dateStr);
-                                            
-                                            // 真实颜色渲染
-                                            const bgColor = dayEvents.length > 0 
-                                                ? CATEGORIES.find(c => c.id === dayEvents[0].catId)?.color.replace('-400', '-500') || 'bg-gray-800'
-                                                : 'bg-gray-50';
+                                            const isToday = dateStr === todayStr;
 
-                                            return <div key={dIdx} className={`w-full aspect-square rounded-[3px] ${bgColor} transition-colors`} title={`${dateStr}: ${dayEvents.length} records`}></div>
+                                            const bgColor = dayEvents.length > 0
+                                                ? CATEGORIES.find(c => c.id === dayEvents[0].catId)?.color.replace('-400', '-500') || 'bg-gray-800'
+                                                : isToday ? 'bg-yellow-300' : 'bg-gray-100';
+
+                                            return <div key={dIdx}
+                                                className={`w-full rounded-[3px] transition-colors ${bgColor} ${dayEvents.length > 0 ? 'shadow-sm' : ''}`}
+                                                style={{ aspectRatio: '1', minHeight: '10px' }}
+                                                title={`${dateStr}${dayEvents.length > 0 ? ': ' + dayEvents.map(e=>e.title).join(', ') : ''}`} />
                                         })}
                                     </div>
                                 </div>
@@ -3648,23 +3755,69 @@
                 const sunday = new Date(monday);
                 sunday.setDate(monday.getDate() + 6);
                 sunday.setHours(23, 59, 59, 999);
+                // week date strings Mon-Sun
+                const weekDateStrs = Array.from({ length: 7 }, (_, i) => {
+                    const d = new Date(monday); d.setDate(monday.getDate() + i);
+                    return d.toISOString().split('T')[0];
+                });
+                // 消费
                 const allTx = stored.transactions || [];
                 const weekTx = allTx.filter(t => { const d = new Date(t.date); return d >= monday && d <= sunday; });
-                const weekTotal = weekTx.reduce((s, t) => s + (t.currency === 'JPY' ? parseFloat(t.amount) || 0 : (parseFloat(t.amount) || 0) / exchRate), 0);
+                const weekTotal = Math.round(weekTx.reduce((s, t) => s + (t.currency === 'JPY' ? parseFloat(t.amount) || 0 : (parseFloat(t.amount) || 0) / exchRate), 0));
+                const weekTxSummary = weekTx.map(t => ({ 名称: t.name, 金额: t.amount, 货币: t.currency, 分类: t.category }));
+                // 抽烟
+                const smokingLog = stored.smokingLog || {};
+                const weekSmoking = weekDateStrs.reduce((obj, d) => { if (smokingLog[d] != null) obj[d] = smokingLog[d]; return obj; }, {});
+                const weekSmokingTotal = Object.values(weekSmoking).reduce((s, v) => s + v, 0);
+                const smokingDays = Object.keys(weekSmoking).length;
+                const weekSmokingAvg = smokingDays > 0 ? (weekSmokingTotal / smokingDays).toFixed(1) : 0;
+                // 经期
+                const periodLog = stored.periodLog || [];
+                const sorted = [...periodLog].sort((a, b) => a.startDate.localeCompare(b.startDate));
+                const lastPeriod = sorted[sorted.length - 1];
+                let periodStatus = '无经期记录';
+                if (lastPeriod) {
+                    const todayD = new Date(TODAY_STR + 'T00:00:00');
+                    const startD = new Date(lastPeriod.startDate + 'T00:00:00');
+                    const endD = new Date(lastPeriod.endDate + 'T00:00:00');
+                    if (todayD >= startD && todayD <= endD) {
+                        periodStatus = `经期中，第${Math.floor((todayD - startD) / 86400000) + 1}天`;
+                    } else {
+                        const daysSince = Math.floor((todayD - endD) / 86400000);
+                        periodStatus = `距上次结束${daysSince}天`;
+                    }
+                }
+                // 饮食
+                const _getISOWeekKey = (date) => {
+                    const d = new Date(date); d.setHours(0,0,0,0);
+                    d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+                    const w1 = new Date(d.getFullYear(), 0, 4);
+                    return `${d.getFullYear()}-w${1 + Math.round(((d - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7)}`;
+                };
+                const mealsKey = _getISOWeekKey(now);
+                const allMeals = stored.allMeals || {};
+                const weekMealsRaw = allMeals[mealsKey] || {};
+                const weekMealsSummary = weekDateStrs.filter(d => weekMealsRaw[d]).map(d => ({ 日期: d, 早: weekMealsRaw[d].b, 午: weekMealsRaw[d].l, 晚: weekMealsRaw[d].d }));
+                // 习惯
+                const habitsData = stored.habits || {};
+                const weekHabits = {};
+                weekDateStrs.forEach(d => { if (habitsData[d]?.length) weekHabits[d] = habitsData[d]; });
+                const habitsSummary = DEFAULT_HABITS.map(h => {
+                    const doneDays = weekDateStrs.filter(d => (habitsData[d] || []).includes(h)).length;
+                    return `${h}：${doneDays}/7天`;
+                }).join('、');
+                // todos
                 const weekKey = getWeek(new Date(TODAY_STR));
                 const weekTodos = stored.allTodos?.[weekKey] || [];
                 const completedTodos = weekTodos.filter(t => t.done).length;
                 const totalTodos = weekTodos.length;
-                const habitsData = stored.habits || {};
-                const weekHabits = {};
-                CURRENT_WEEK_DATES.forEach(d => { if (habitsData[d]?.length) weekHabits[d] = habitsData[d]; });
                 const weekNum = Math.ceil(now.getDate() / 7);
                 const period = `${now.getFullYear()}年${now.getMonth() + 1}月第${weekNum}周`;
                 setAIPanel({
                     isOpen: true,
                     title: `AI 周报 · ${period}`,
                     type: 'weekly',
-                    data: { weekTx: weekTx.map(t => ({ 名称: t.name, 金额: t.amount, 货币: t.currency, 分类: t.category })), weekTotal: Math.round(weekTotal), completedTodos, totalTodos, weekHabits, period }
+                    data: { weekTxSummary, weekTotal, weekSmokingTotal, weekSmokingAvg, periodStatus, weekMealsSummary, habitsSummary, completedTodos, totalTodos, period }
                 });
             };
 
@@ -3793,11 +3946,6 @@
                                         </span>
                                     </div>
                                 </>)}
-                                {currentView === 'finance' && (
-                                    <button onClick={() => setCurrentView('home')} className="px-3 py-1.5 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1 whitespace-nowrap">
-                                        ← Dashboard
-                                    </button>
-                                )}
                             </div>
                         </header>
 
@@ -3897,9 +4045,8 @@
 
                     {/* 中央悬浮添加控制台 (Center Add Modal) */}
                     {showAddCenter && (
-                        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center glass-overlay animate-fade-in" onClick={() => setShowAddCenter(false)}>
-                            <div className="bg-white/90 backdrop-blur-2xl w-full max-w-lg rounded-t-[2rem] md:rounded-[2rem] p-6 shadow-2xl border border-white animate-slide-up" onClick={e => e.stopPropagation()}>
-                                <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6 md:hidden"></div>
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowAddCenter(false)}>
+                            <div className="bg-white/90 backdrop-blur-2xl w-full max-w-lg rounded-[2rem] p-6 shadow-2xl border border-white animate-slide-up max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                                 <h3 className="text-center font-black text-sm text-gray-400 tracking-widest uppercase mb-6">What's on your mind?</h3>
                                 
                                 <div className="grid grid-cols-3 gap-3">
@@ -4051,8 +4198,8 @@
 
                     {/* 快速记一笔弹窗 */}
                     {showQuickTx && (
-                        <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowQuickTx(false)}>
-                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-6" onClick={e => e.stopPropagation()}>
+                        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowQuickTx(false)}>
+                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-6 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-between mb-5">
                                     <h2 className="font-black text-base text-gray-800">✏️ 记一笔</h2>
                                     <input type="date" value={quickTxForm.date} max={TODAY_STR}
