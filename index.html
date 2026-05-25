@@ -63,17 +63,58 @@
         .music-bar { display:inline-block; width:3px; border-radius:2px; background:#a78bfa; transform-origin:bottom; animation:musicBar 0.7s ease-in-out infinite; }
         .music-bar:nth-child(2){ animation-delay:0.2s; }
         .music-bar:nth-child(3){ animation-delay:0.4s; }
+        @keyframes viewIn { 0%{opacity:0;transform:translateY(8px)} 100%{opacity:1;transform:translateY(0)} }
+        .animate-view-in { animation: viewIn 0.2s ease-out; }
+        @keyframes voiceWave { 0%,100%{transform:scaleY(0.3)} 50%{transform:scaleY(1)} }
+        .voice-bar { display:inline-block; width:3px; border-radius:2px; background:#ef4444; transform-origin:center; animation:voiceWave 0.6s ease-in-out infinite; }
+        .voice-bar:nth-child(2){animation-delay:0.1s;height:16px;} .voice-bar:nth-child(3){animation-delay:0.2s;height:20px;} .voice-bar:nth-child(4){animation-delay:0.1s;height:16px;} .voice-bar:nth-child(5){animation-delay:0s;height:12px;}
+        @keyframes widgetDragging { 0%,100%{transform:scale(1.05) rotate(-0.5deg)} 50%{transform:scale(1.05) rotate(0.5deg)} }
+        .widget-dragging { animation: widgetDragging 0.4s ease-in-out infinite; box-shadow: 0 20px 40px rgba(0,0,0,0.25); z-index:50; }
+        /* 深夜主题 CSS 变量 */
+        :root {
+            --card-bg: #ffffff; --card-border: #f1f5f9;
+            --text-primary: inherit; --text-secondary: #64748b;
+            --input-bg: #f8fafc; --modal-bg: #ffffff;
+        }
+        [data-theme="dark"] {
+            --card-bg: #1e3a5f; --card-border: #2d5a8e;
+            --text-primary: #f1f5f9; --text-secondary: #94a3b8;
+            --input-bg: #0f2744; --modal-bg: #0f172a;
+        }
         /* 深夜主题覆盖 */
-        [data-theme="dark"] .bg-white { background-color: #334155 !important; }
-        [data-theme="dark"] .bg-gray-50 { background-color: #1e293b !important; }
-        [data-theme="dark"] .bg-gray-100 { background-color: #334155 !important; }
-        [data-theme="dark"] .glass-panel { background: rgba(15,23,42,0.85) !important; border-color: rgba(255,255,255,0.1) !important; }
-        [data-theme="dark"] .text-gray-700, [data-theme="dark"] .text-gray-800 { color: #e2e8f0 !important; }
+        [data-theme="dark"] .bg-white { background-color: #1e3a5f !important; }
+        [data-theme="dark"] .bg-gray-50 { background-color: #0f2744 !important; }
+        [data-theme="dark"] .bg-gray-100 { background-color: #1e3a5f !important; }
+        [data-theme="dark"] .bg-gray-200 { background-color: #2d5a8e !important; }
+        [data-theme="dark"] .glass-panel { background: rgba(15,23,42,0.9) !important; border-color: rgba(45,90,142,0.6) !important; }
+        [data-theme="dark"] .glass-overlay { background: rgba(0,0,0,0.6) !important; }
+        [data-theme="dark"] .text-gray-700, [data-theme="dark"] .text-gray-800, [data-theme="dark"] .text-gray-900 { color: #e2e8f0 !important; }
         [data-theme="dark"] .text-gray-400, [data-theme="dark"] .text-gray-500, [data-theme="dark"] .text-gray-600 { color: #94a3b8 !important; }
-        [data-theme="dark"] .border-gray-50, [data-theme="dark"] .border-gray-100, [data-theme="dark"] .border-gray-200 { border-color: #475569 !important; }
-        [data-theme="dark"] .divide-gray-50 > * + * { border-color: #475569 !important; }
-        [data-theme="dark"] .shadow-sm, [data-theme="dark"] .shadow-md { box-shadow: 0 1px 4px rgba(0,0,0,0.5) !important; }
-        [data-theme="dark"] .bg-os-bg { background-color: #1e293b !important; }
+        [data-theme="dark"] .text-gray-300 { color: #64748b !important; }
+        [data-theme="dark"] .border-gray-50, [data-theme="dark"] .border-gray-100, [data-theme="dark"] .border-gray-200 { border-color: #2d5a8e !important; }
+        [data-theme="dark"] .divide-gray-50 > * + *, [data-theme="dark"] .divide-gray-100 > * + * { border-color: #2d5a8e !important; }
+        [data-theme="dark"] .shadow-sm, [data-theme="dark"] .shadow-md, [data-theme="dark"] .shadow-lg { box-shadow: 0 1px 6px rgba(0,0,0,0.5) !important; }
+        [data-theme="dark"] .bg-os-bg { background-color: #0f172a !important; }
+        /* 输入框深色适配 */
+        [data-theme="dark"] input:not([type=range]):not([type=checkbox]):not([type=radio]),
+        [data-theme="dark"] select,
+        [data-theme="dark"] textarea {
+            background-color: #0f2744 !important;
+            color: #f1f5f9 !important;
+            border-color: #2d5a8e !important;
+        }
+        [data-theme="dark"] input::placeholder, [data-theme="dark"] textarea::placeholder { color: #475569 !important; }
+        /* 弹窗适配 */
+        [data-theme="dark"] .rounded-3xl.bg-white, [data-theme="dark"] .rounded-\[2rem\].bg-white,
+        [data-theme="dark"] .rounded-3xl.shadow-2xl, [data-theme="dark"] .rounded-\[2rem\].shadow-2xl {
+            background-color: #0f172a !important;
+            border: 1px solid #2d5a8e;
+        }
+        /* Finance Widget 深色金边加亮 */
+        [data-theme="dark"] .border-\[var\(--finance-border\)\] { border-color: #60a5fa !important; }
+        /* 白色文字在深色按钮不要覆盖 */
+        [data-theme="dark"] .text-white { color: #ffffff !important; }
+        [data-theme="dark"] .text-os-text { color: #f1f5f9 !important; }
     </style>
 </head>
 <body>
@@ -126,6 +167,8 @@
                     theme:                local.theme               || 'cream',
                     smoking_log:          local.smokingLog          || {},
                     smoking_goal:         local.smokingGoal         || 20,
+                    all_meals:            local.allMeals            || {},
+                    vault:                local.vault               || {},
                     updated_at:           new Date().toISOString(),
                 });
                 return !error;
@@ -165,6 +208,8 @@
                     theme:             local.theme              || data.theme         || 'cream',
                     smokingLog:        mergeObj(data.smoking_log,           local.smokingLog),
                     smokingGoal:       data.smoking_goal        || local.smokingGoal  || 20,
+                    allMeals:          mergeObj(data.all_meals,             local.allMeals),
+                    vault:             mergeObj(data.vault,                 local.vault),
                 };
                 localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
                 await syncToCloud();
@@ -436,6 +481,9 @@
                     if (type === 'weekly') {
                         const { weekTxSummary, weekTotal, weekSmokingTotal, weekSmokingAvg, periodStatus, weekMealsSummary, habitsSummary, completedTodos, totalTodos } = data || {};
                         promptText = `你是我的贴心生活助手，请根据以下本周数据生成温暖有趣的中文周报（400字以内）：\n\n本周消费：共${weekTotal || 0}日元，明细：${JSON.stringify(weekTxSummary || [])}\n爸爸抽烟情况：本周共${weekSmokingTotal || 0}根，日均${weekSmokingAvg || 0}根\n我的经期状态：${periodStatus || '无记录'}\n本周饮食：${JSON.stringify(weekMealsSummary || [])}\n习惯完成情况：${habitsSummary || '无记录'}\nTodo完成：${completedTodos || 0}/${totalTodos || 0}\n\n请包含：\n1. 本周生活亮点\n2. 消费小结（花最多的地方）\n3. 爸爸健康提醒（抽烟情况）\n4. 下周生活建议\n语气像闺蜜一样温暖可爱，可以加 emoji`;
+                    } else if (type === 'monthly') {
+                        const { year, month, monthTotal, catSummary, maxTx, busiestDay, compareText } = data || {};
+                        promptText = `请分析以下${year}年${month}月消费数据，给出温暖实用的建议（300字以内）：\n本月支出：${Math.round(monthTotal || 0)}JPY\n分类占比：${JSON.stringify(catSummary || [])}\n最大单笔：${maxTx?.name || '无'} ${maxTx?.amount || 0}${maxTx?.currency || 'JPY'}\n消费最多日期：${busiestDay || '无'}\n和上月对比：${compareText || '暂无上月数据'}\n\n请包含：消费特点、哪里花多了、下月节省建议，语气像理财闺蜜`;
                     } else {
                         const { year, yearTotal, monthlyData, topCats } = data || {};
                         promptText = `你是我的财务助手，请根据${year}年消费数据生成年度总结（500字以内）：\n全年共消费${Math.round(yearTotal || 0)}日元\n月度数据：${JSON.stringify(monthlyData || [])}\n主要分类：${JSON.stringify(topCats || [])}\n请包含：年度消费特点、花钱最多的地方、理财建议，语气温暖鼓励`;
@@ -727,7 +775,11 @@
             const toggleItem = (id) => saveItems(items.map(i => i.id === id ? { ...i, done: !i.done, purchased: !i.done } : i));
             const deleteItem = (id) => saveItems(items.filter(i => i.id !== id));
 
-            const tabItems = items.filter(i => i.tab === activeTab);
+            const [newPrice, setNewPrice] = useState('');
+
+            const rawTabItems = items.filter(i => i.tab === activeTab);
+            // done items go to bottom
+            const tabItems = [...rawTabItems.filter(i => !i.done), ...rawTabItems.filter(i => i.done)];
             const needCount = items.filter(i => i.tab === 'need' && !i.done).length;
             const wantCount = items.filter(i => i.tab === 'want' && !i.done).length;
 
@@ -737,13 +789,21 @@
             };
             const cfg = tabCfg[activeTab];
 
+            const addItemWithPrice = () => {
+                if (!newText.trim()) return;
+                saveItems([...items, { id: Date.now(), name: newText.trim(), price: newPrice.trim(), currency: 'JPY', category: '', purchased: false, done: false, tab: activeTab }]);
+                setNewText(''); setNewPrice('');
+            };
+
+            const totalPrice = rawTabItems.filter(i => !i.done && parseFloat(i.price) > 0).reduce((s, i) => s + parseFloat(i.price), 0);
+
             return (
                 <div className="bg-white rounded-os-xl shadow-sm h-full flex flex-col overflow-hidden">
                     {/* 头部 */}
                     <div className="px-4 pt-4 pb-3 border-b border-gray-50 flex items-center justify-between flex-shrink-0">
                         <div className="flex gap-1">
                             {Object.entries(tabCfg).map(([key, c]) => (
-                                <button key={key} onClick={() => { setActiveTab(key); setNewText(''); }}
+                                <button key={key} onClick={() => { setActiveTab(key); setNewText(''); setNewPrice(''); }}
                                     className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5
                                         ${activeTab === key ? c.activeBg + ' text-white shadow-sm' : 'text-gray-400 hover:bg-gray-50'}`}>
                                     {c.label}
@@ -775,7 +835,7 @@
                                         {item.name}
                                     </span>
                                     {item.price && (
-                                        <span className="text-[10px] text-gray-400 font-medium">{item.price} {item.currency}</span>
+                                        <span className={`text-[10px] font-medium ${item.done ? 'text-gray-300 line-through' : 'text-gray-400'}`}>¥{item.price}</span>
                                     )}
                                 </div>
                                 <button onClick={() => deleteItem(item.id)}
@@ -784,19 +844,36 @@
                         ))}
                     </div>
 
+                    {/* 预计总价 */}
+                    {totalPrice > 0 && (
+                        <div className="px-4 py-1.5 border-t border-gray-50 flex-shrink-0 flex items-center justify-between">
+                            <span className="text-[10px] text-gray-400 font-bold">预计总价</span>
+                            <span className="text-xs font-black text-gray-600">¥{Math.round(totalPrice).toLocaleString()}</span>
+                        </div>
+                    )}
+
                     {/* 添加输入框 */}
-                    <div className="flex gap-2 px-4 pb-4 pt-2 border-t border-gray-50 flex-shrink-0">
-                        <input
-                            value={newText}
-                            onChange={e => setNewText(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && addItem()}
-                            placeholder={activeTab === 'need' ? '添加需要买的…' : '添加心愿…'}
-                            className="flex-1 text-xs bg-gray-50 rounded-xl px-3 py-2 outline-none border border-transparent focus:border-gray-200 transition-colors placeholder-gray-300 font-medium"
-                        />
-                        <button onClick={addItem}
-                            className={`w-8 h-8 rounded-xl text-white text-lg font-black flex items-center justify-center hover:opacity-80 transition-opacity flex-shrink-0 ${cfg.activeBg}`}>
-                            +
-                        </button>
+                    <div className="flex flex-col gap-1.5 px-4 pb-4 pt-2 border-t border-gray-50 flex-shrink-0">
+                        <div className="flex gap-2">
+                            <input
+                                value={newText}
+                                onChange={e => setNewText(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && addItemWithPrice()}
+                                placeholder={activeTab === 'need' ? '添加需要买的…' : '添加心愿…'}
+                                className="flex-1 text-xs bg-gray-50 rounded-xl px-3 py-2 outline-none border border-transparent focus:border-gray-200 transition-colors placeholder-gray-300 font-medium"
+                            />
+                            <input
+                                value={newPrice}
+                                onChange={e => setNewPrice(e.target.value)}
+                                placeholder="价格"
+                                type="number"
+                                className="w-16 text-xs bg-gray-50 rounded-xl px-2 py-2 outline-none border border-transparent focus:border-gray-200 transition-colors placeholder-gray-300 font-medium text-center"
+                            />
+                            <button onClick={addItemWithPrice}
+                                className={`w-8 h-8 rounded-xl text-white text-lg font-black flex items-center justify-center hover:opacity-80 transition-opacity flex-shrink-0 ${cfg.activeBg}`}>
+                                +
+                            </button>
+                        </div>
                     </div>
                 </div>
             );
@@ -1335,60 +1412,58 @@
 
         // ── 饮食规划 Widget ──
         const MealsWidget = () => {
-            const getISOWeekKey = (date) => {
-                const d = new Date(date);
+            const getISOWeekKey = (mondayDate) => {
+                const d = new Date(mondayDate);
                 d.setHours(0, 0, 0, 0);
                 d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
                 const week1 = new Date(d.getFullYear(), 0, 4);
                 const weekNum = 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
                 return `${d.getFullYear()}-w${weekNum}`;
             };
-            const weekKey = getISOWeekKey(new Date());
-
-            const getMonday = () => {
+            const getMondayOfWeek = (offsetWeeks = 0) => {
                 const d = new Date();
                 const day = d.getDay();
-                d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+                d.setDate(d.getDate() - (day === 0 ? 6 : day - 1) + offsetWeeks * 7);
                 d.setHours(0, 0, 0, 0);
                 return d;
             };
-            const monday = getMonday();
-            const weekDays = Array.from({ length: 7 }, (_, i) => {
-                const d = new Date(monday);
-                d.setDate(monday.getDate() + i);
-                return { date: d.toISOString().split('T')[0], label: ['一','二','三','四','五','六','日'][i] };
-            });
-            const todayStr = new Date().toISOString().split('T')[0];
 
-            const [meals, setMeals] = useState(() => {
-                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); return d.allMeals?.[weekKey] || {}; }
+            const [weekOffset, setWeekOffset] = useState(0);
+            const [allMeals, setAllMeals] = useState(() => {
+                try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}').allMeals || {}; }
                 catch { return {}; }
             });
-            const [editing, setEditing] = useState(null); // { date, slot }
+            const [editing, setEditing] = useState(null);
             const [draft, setDraft] = useState('');
 
+            const monday = getMondayOfWeek(weekOffset);
+            const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+            const weekKey = getISOWeekKey(monday);
+            const meals = allMeals[weekKey] || {};
+            const todayStr = new Date().toISOString().split('T')[0];
+            const weekDays = Array.from({ length: 7 }, (_, i) => {
+                const d = new Date(monday); d.setDate(monday.getDate() + i);
+                return { date: d.toISOString().split('T')[0], label: ['一','二','三','四','五','六','日'][i] };
+            });
+            const weekLabel = weekOffset === 0 ? '本周'
+                : `${monday.getMonth()+1}月${monday.getDate()}日-${sunday.getMonth()+1}月${sunday.getDate()}日`;
+
             const saveMeals = (next) => {
-                setMeals(next);
+                const nextAll = { ...allMeals, [weekKey]: next };
+                setAllMeals(nextAll);
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    if (!d.allMeals) d.allMeals = {};
-                    d.allMeals[weekKey] = next;
+                    d.allMeals = nextAll;
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
                 } catch {}
                 syncToCloud();
             };
-
-            const startEdit = (date, slot) => {
-                setEditing({ date, slot });
-                setDraft(meals[date]?.[slot] || '');
-            };
-
+            const startEdit = (date, slot) => { setEditing({ date, slot }); setDraft(meals[date]?.[slot] || ''); };
             const commitEdit = () => {
                 if (!editing) return;
                 const { date, slot } = editing;
                 const dayData = { ...(meals[date] || {}) };
-                if (draft.trim()) dayData[slot] = draft.trim();
-                else delete dayData[slot];
+                if (draft.trim()) dayData[slot] = draft.trim(); else delete dayData[slot];
                 saveMeals({ ...meals, [date]: dayData });
                 setEditing(null);
             };
@@ -1399,7 +1474,19 @@
 
             return (
                 <div className="h-full flex flex-col p-3 rounded-os-xl" style={{ background: '#F0FDF4' }}>
-                    <h3 className="text-[9px] font-black uppercase tracking-widest mb-2 flex-shrink-0" style={{ color: '#16a34a' }}>🥗 本周饮食</h3>
+                    {/* Header + 周切换 */}
+                    <div className="flex items-center justify-between mb-2 flex-shrink-0">
+                        <button onClick={() => { setWeekOffset(o => o - 1); setEditing(null); }}
+                            className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black hover:bg-green-100 transition-colors flex-shrink-0"
+                            style={{ color: '#16a34a' }}>←</button>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-center"
+                            style={{ color: weekOffset === 0 ? '#16a34a' : '#6b7280' }}>
+                            🥗 {weekLabel}
+                        </span>
+                        <button onClick={() => { setWeekOffset(o => o + 1); setEditing(null); }}
+                            className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black hover:bg-green-100 transition-colors flex-shrink-0"
+                            style={{ color: '#16a34a' }}>→</button>
+                    </div>
                     <div className="grid flex-1 gap-1" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: 'auto repeat(3, 1fr)' }}>
                         {weekDays.map(({ date, label }) => (
                             <div key={date} className="flex items-center justify-center py-0.5">
@@ -1617,6 +1704,16 @@
                 try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}').habits || {}; }
                 catch { return {}; }
             });
+            const [habitsList, setHabitsList] = useState(() => {
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    return d.habitsList || DEFAULT_HABITS;
+                } catch { return DEFAULT_HABITS; }
+            });
+            const [editMode, setEditMode] = useState(false);
+            const [newHabit, setNewHabit] = useState('');
+            const [editingHabit, setEditingHabit] = useState(null); // { index, value }
+
             const checked = habitsData[todayStr] || [];
 
             const getStreak = (habit) => {
@@ -1635,49 +1732,86 @@
             const saveChecked = (next) => {
                 const nextData = { ...habitsData, [todayStr]: next };
                 setHabitsData(nextData);
-                try {
-                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    d.habits = nextData;
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
-                } catch {}
+                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); d.habits = nextData; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                syncToCloud();
+            };
+            const saveHabitsList = (next) => {
+                setHabitsList(next);
+                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); d.habitsList = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
                 syncToCloud();
             };
             const toggle = (habit) => {
+                if (editMode) return;
                 const next = checked.includes(habit) ? checked.filter(h => h !== habit) : [...checked, habit];
                 saveChecked(next);
             };
+            const addHabit = () => {
+                if (!newHabit.trim()) return;
+                saveHabitsList([...habitsList, newHabit.trim()]);
+                setNewHabit('');
+            };
+            const deleteHabit = (idx) => saveHabitsList(habitsList.filter((_, i) => i !== idx));
+            const renameHabit = (idx, val) => {
+                const next = habitsList.map((h, i) => i === idx ? val : h);
+                saveHabitsList(next);
+                setEditingHabit(null);
+            };
+
             return (
                 <div className="h-full flex flex-col p-4 rounded-os-xl bg-white shadow-sm">
                     <div className="flex items-center justify-between mb-3 flex-shrink-0">
                         <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">今日习惯</h3>
-                        <span className="text-xs font-black" style={{ color: checked.length === DEFAULT_HABITS.length ? '#22c55e' : '#94a3b8' }}>
-                            {checked.length}/{DEFAULT_HABITS.length}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            {!editMode && <span className="text-xs font-black" style={{ color: checked.length === habitsList.length ? '#22c55e' : '#94a3b8' }}>{checked.length}/{habitsList.length}</span>}
+                            <button onClick={() => setEditMode(m => !m)} className="text-[10px] font-black px-2 py-0.5 rounded-lg" style={{ background: editMode ? '#dcfce7' : '#f1f5f9', color: editMode ? '#15803d' : '#94a3b8' }}>
+                                {editMode ? '完成' : '✏️'}
+                            </button>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 flex-1 content-center">
-                        {DEFAULT_HABITS.map(habit => {
+                    <div className={`flex-1 overflow-y-auto ${editMode ? 'space-y-2' : 'grid grid-cols-2 gap-2 content-center'}`}>
+                        {habitsList.map((habit, idx) => {
                             const done = checked.includes(habit);
                             const streak = getStreak(habit);
+                            if (editMode) {
+                                return (
+                                    <div key={idx} className="flex items-center gap-2">
+                                        {editingHabit?.index === idx ? (
+                                            <input autoFocus value={editingHabit.value}
+                                                onChange={e => setEditingHabit(h => ({ ...h, value: e.target.value }))}
+                                                onBlur={() => renameHabit(idx, editingHabit.value.trim() || habit)}
+                                                onKeyDown={e => e.key === 'Enter' && renameHabit(idx, editingHabit.value.trim() || habit)}
+                                                className="flex-1 text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 outline-none" />
+                                        ) : (
+                                            <button onClick={() => setEditingHabit({ index: idx, value: habit })}
+                                                className="flex-1 text-xs font-bold text-left px-2 py-1.5 rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors">{habit}</button>
+                                        )}
+                                        <button onClick={() => deleteHabit(idx)} className="w-6 h-6 rounded-lg bg-red-50 text-red-400 flex items-center justify-center text-xs font-black hover:bg-red-100 flex-shrink-0">×</button>
+                                    </div>
+                                );
+                            }
                             return (
                                 <button key={habit} onClick={() => toggle(habit)}
                                     className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all"
-                                    style={{
-                                        background: done ? '#dcfce7' : '#f8fafc',
-                                        color: done ? '#15803d' : '#64748b',
-                                        border: `1.5px solid ${done ? '#86efac' : '#e2e8f0'}`,
-                                    }}>
+                                    style={{ background: done ? '#dcfce7' : '#f8fafc', color: done ? '#15803d' : '#64748b', border: `1.5px solid ${done ? '#86efac' : '#e2e8f0'}` }}>
                                     <span className="w-4 h-4 rounded-full border flex items-center justify-center text-[9px] flex-shrink-0"
                                         style={{ background: done ? '#22c55e' : 'transparent', borderColor: done ? '#22c55e' : '#cbd5e1', color: '#fff' }}>
                                         {done ? '✓' : ''}
                                     </span>
                                     <span className="flex-1 text-left leading-tight">{habit}</span>
-                                    {streak > 0 && (
-                                        <span className="text-[8px] font-black leading-none" style={{ color: '#f97316' }}>🔥{streak}</span>
-                                    )}
+                                    {streak > 0 && <span className="text-[8px] font-black leading-none" style={{ color: '#f97316' }}>🔥{streak}</span>}
                                 </button>
                             );
                         })}
                     </div>
+                    {editMode && (
+                        <div className="flex gap-2 mt-2 flex-shrink-0">
+                            <input value={newHabit} onChange={e => setNewHabit(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && addHabit()}
+                                placeholder="新增习惯…"
+                                className="flex-1 text-xs bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 outline-none placeholder-gray-300 font-medium" />
+                            <button onClick={addHabit} className="w-8 h-8 rounded-xl bg-green-500 text-white text-lg font-black flex items-center justify-center hover:bg-green-600 flex-shrink-0">+</button>
+                        </div>
+                    )}
                 </div>
             );
         };
@@ -1761,7 +1895,7 @@
                     <p className="text-sm font-bold leading-relaxed text-gray-700 z-10 flex-1 flex items-center">{QUOTES[idx]}</p>
                     <div className="flex items-center justify-between z-10 flex-shrink-0">
                         <span className="text-[9px] text-gray-300 font-medium">{idx + 1} / {QUOTES.length}</span>
-                        <button onClick={nextQuote} className="text-[10px] font-black text-gray-400 hover:text-gray-600 transition-colors px-2 py-1 rounded-lg hover:bg-gray-50">换一句 →</button>
+                        <button onClick={nextQuote} className="text-[10px] font-black text-gray-400 hover:text-gray-600 transition-colors px-2 py-1 rounded-lg hover:bg-gray-50">下一句 →</button>
                     </div>
                 </div>
             );
@@ -2009,6 +2143,66 @@
             );
         };
 
+        const parseVoiceInput = (text) => {
+            const jpyMatch = text.match(/(\d+\.?\d*)\s*(日元|円|JPY|日币)/);
+            const rmbMatch = text.match(/(\d+\.?\d*)\s*(块|元|RMB|人民币|rmb)/i);
+            const amount = jpyMatch ? jpyMatch[1] : rmbMatch?.[1] || '';
+            const currency = jpyMatch ? 'JPY' : 'RMB';
+            const name = text.replace(/\d+\.?\d*\s*(日元|円|JPY|日币|块|元|RMB|人民币)/i, '').trim() || text;
+            return { name, amount, currency };
+        };
+
+        const VoiceButton = ({ onResult }) => {
+            const [listening, setListening] = React.useState(false);
+            const [error, setError] = React.useState('');
+            const recRef = React.useRef(null);
+
+            const start = () => {
+                const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRec) { setError('浏览器不支持语音'); return; }
+                setError('');
+                const rec = new SpeechRec();
+                recRef.current = rec;
+                rec.lang = 'zh-CN';
+                rec.continuous = false;
+                rec.interimResults = false;
+                rec.onresult = (e) => {
+                    const text = e.results[0][0].transcript;
+                    const parsed = parseVoiceInput(text);
+                    onResult(parsed);
+                    setListening(false);
+                };
+                rec.onerror = () => { setListening(false); setError('识别失败，请重试'); };
+                rec.onend = () => setListening(false);
+                rec.start();
+                setListening(true);
+            };
+            const stop = () => { recRef.current?.stop(); setListening(false); };
+
+            return (
+                <div className="flex flex-col items-center">
+                    <button onClick={listening ? stop : start}
+                        className={`w-full py-2.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${listening ? 'bg-red-50 text-red-500 border-2 border-red-200' : 'bg-gray-50 text-gray-500 border-2 border-gray-100 hover:bg-gray-100'}`}>
+                        {listening ? (
+                            <>
+                                <div className="flex items-end gap-0.5 h-5">
+                                    <span className="voice-bar" style={{height:'10px'}}/>
+                                    <span className="voice-bar" style={{height:'16px'}}/>
+                                    <span className="voice-bar" style={{height:'20px'}}/>
+                                    <span className="voice-bar" style={{height:'16px'}}/>
+                                    <span className="voice-bar" style={{height:'10px'}}/>
+                                </div>
+                                <span>录音中，点击停止</span>
+                            </>
+                        ) : (
+                            <><span>🎤</span><span>语音记账</span></>
+                        )}
+                    </button>
+                    {error && <p className="text-[10px] text-red-400 mt-1">{error}</p>}
+                </div>
+            );
+        };
+
         const FinanceWidget = ({ onOpen }) => {
             const [showAdd, setShowAdd] = useState(false);
             const [addForm, setAddForm] = useState({ amount: '', currency: 'JPY', category: '', name: '', date: TODAY_STR });
@@ -2233,6 +2427,11 @@
                                     className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-4"
                                 />
 
+                                {/* 语音记账 */}
+                                <div className="mb-3">
+                                    <VoiceButton onResult={parsed => setAddForm(f => ({ ...f, amount: parsed.amount, currency: parsed.currency, name: parsed.name }))} />
+                                </div>
+
                                 {/* 确认按钮 */}
                                 <button onClick={saveNewTx}
                                     disabled={!addForm.amount}
@@ -2257,6 +2456,7 @@
             const [detailCurrency, setDetailCurrency] = useState('JPY'); // 当日明细货币切换
             const [searchTx, setSearchTx] = useState('');
             const [searchOpen, setSearchOpen] = useState(false);
+            const [catFilter, setCatFilter] = useState('');
             const [txKey, setTxKey] = useState(0);                    // 强制重渲
             const [deleteConfirmId, setDeleteConfirmId] = useState(null);
             const [editingTx, setEditingTx] = useState(null);         // null | tx object
@@ -2507,27 +2707,21 @@
                                                 className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-500 hover:bg-gray-50 transition-colors whitespace-nowrap">
                                                 汇率 {currentRate}
                                             </button>
-                                            <button onClick={() => { setSearchOpen(o => !o); if (searchOpen) setSearchTx(''); }}
-                                                className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0">
-                                                {searchOpen ? '×' : '🔍'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                    {searchOpen && (
-                                        <div className="relative animate-fade-in">
-                                            <input autoFocus
-                                                value={searchTx}
-                                                onChange={e => setSearchTx(e.target.value)}
-                                                placeholder="搜索名称或分类…"
-                                                className="w-full bg-white rounded-2xl px-4 py-2.5 pr-10 text-sm outline-none border border-gray-100 shadow-sm"
-                                                style={{ fontWeight: 600, color: '#1e293b' }}
-                                            />
-                                            {searchTx && (
-                                                <button onClick={() => setSearchTx('')}
-                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-black text-base leading-none">×</button>
+                                            {searchOpen ? (
+                                                <div className="flex items-center gap-1 flex-1 animate-fade-in">
+                                                    <input autoFocus value={searchTx} onChange={e=>setSearchTx(e.target.value)}
+                                                        placeholder="搜索…"
+                                                        className="flex-1 min-w-0 bg-white rounded-xl px-3 py-1.5 text-xs outline-none border border-gray-200 shadow-sm font-medium" />
+                                                    <button onClick={()=>{setSearchOpen(false);setSearchTx('');}} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-black text-sm flex-shrink-0">×</button>
+                                                </div>
+                                            ) : (
+                                                <button onClick={() => setSearchOpen(true)}
+                                                    className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0">
+                                                    🔍
+                                                </button>
                                             )}
                                         </div>
-                                    )}
+                                    </div>
                                     {/* 第二行：手机两行 / 桌面横排 */}
                                     <div className="flex flex-col md:flex-row md:items-end gap-2 md:gap-4">
                                         {/* 第一行：本月支出（大字） */}
@@ -2722,15 +2916,29 @@
                                                     </button>
                                                 ))}
                                             </div>
-                                            <span className="text-xs font-bold text-gray-400">
-                                                {searchTx.trim() ? (() => { const q = searchTx.toLowerCase(); return [...monthTx].filter(t => (t.name||'').toLowerCase().includes(q)||(t.category||'').toLowerCase().includes(q)).length; })() : monthTx.length} 笔
-                                            </span>
+                                            <span className="text-xs font-bold text-gray-400">{monthTx.length} 笔</span>
                                         </div>
                                     </div>
+                                    {/* 分类标签筛选 */}
+                                    {finCats.length > 0 && (
+                                        <div className="px-5 py-2 flex gap-1.5 overflow-x-auto border-b border-gray-50">
+                                            <button onClick={()=>setCatFilter('')}
+                                                className={`text-[10px] font-black px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 transition-colors ${!catFilter?'text-white':'bg-gray-100 text-gray-400'}`}
+                                                style={!catFilter?{background:'var(--theme-text)'}:{}}>全部</button>
+                                            {finCats.map(cat => (
+                                                <button key={cat} onClick={()=>setCatFilter(c=>c===cat?'':cat)}
+                                                    className={`text-[10px] font-black px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 transition-colors ${catFilter===cat?'text-white':'bg-gray-100 text-gray-400'}`}
+                                                    style={catFilter===cat?{background:getCatColor(cat)}:{}}>
+                                                    {cat}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                     <div className="divide-y divide-gray-50">
                                         {(() => {
                                             const filteredTx = (() => {
-                                                const reversed = [...monthTx].reverse();
+                                                let reversed = [...monthTx].reverse();
+                                                if (catFilter) reversed = reversed.filter(t => t.category === catFilter);
                                                 if (!searchTx.trim()) return reversed;
                                                 const q = searchTx.toLowerCase();
                                                 return reversed.filter(t => (t.name||'').toLowerCase().includes(q)||(t.category||'').toLowerCase().includes(q));
@@ -2771,6 +2979,25 @@
                                         })()}
                                     </div>
                                 </div>
+
+                                {/* AI 分析本月账单 */}
+                                <button onClick={() => {
+                                    const catSummary = allMonthCats.map(c => ({ 分类: c.name, 金额: Math.round(c.total) }));
+                                    const maxTx = [...monthTx].sort((a, b) => toJPY(parseFloat(b.amount)||0, b.currency) - toJPY(parseFloat(a.amount)||0, a.currency))[0];
+                                    const dayMap = {};
+                                    monthTx.forEach(t => { dayMap[t.date] = (dayMap[t.date] || 0) + toJPY(parseFloat(t.amount)||0, t.currency); });
+                                    const busiestDay = Object.entries(dayMap).sort((a,b)=>b[1]-a[1])[0]?.[0] || '无';
+                                    const prevMonthStr = displayMonth === 1 ? `${displayYear-1}-12` : `${displayYear}-${String(displayMonth-1).padStart(2,'0')}`;
+                                    const prevMonthTotal = Math.round(getFinanceStorage().transactions.filter(t=>t.date?.startsWith(prevMonthStr)).reduce((s,t)=>s+toJPY(parseFloat(t.amount)||0,t.currency),0));
+                                    const diff = Math.round(monthTotal) - prevMonthTotal;
+                                    const compareText = prevMonthTotal > 0 ? `上月${prevMonthTotal}JPY，本月${diff>=0?'多花':'少花'}了${Math.abs(diff)}JPY` : '暂无上月数据';
+                                    setAIPanel({ isOpen: true, title: `AI 月度分析 · ${displayYear}年${displayMonth}月`, type: 'monthly',
+                                        data: { year: displayYear, month: displayMonth, monthTotal: Math.round(monthTotal), catSummary, maxTx, busiestDay, compareText, period: `${displayYear}年${displayMonth}月分析` } });
+                                }}
+                                    className="w-full py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all hover:opacity-80"
+                                    style={{ background: '#1e293b', color: '#fff' }}>
+                                    🤖 AI 分析本月账单
+                                </button>
                             </div>
                         )}
 
@@ -3046,33 +3273,176 @@
         };
 
         // 可拖拽与缩放的包装器
-        const WidgetWrapper = ({ children, isEditMode, size, onCycleSize, onMove, index }) => {
-            // 将 size 映射到 Tailwind Grid 跨度
+        const GlobalSearchModal = ({ onClose, events, todos, vaultItems, onNavigate }) => {
+            const [query, setQuery] = React.useState('');
+            const inputRef = React.useRef(null);
+            React.useEffect(() => { inputRef.current?.focus(); }, []);
+
+            const q = query.trim().toLowerCase();
+            const results = q ? {
+                transactions: (() => {
+                    try {
+                        const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                        return (d.transactions || []).filter(t => (t.name||'').toLowerCase().includes(q) || (t.category||'').toLowerCase().includes(q)).slice(0, 5);
+                    } catch { return []; }
+                })(),
+                events: events.filter(e => e.title?.toLowerCase().includes(q) || e.review?.toLowerCase().includes(q)).slice(0, 5),
+                todos: (() => {
+                    try {
+                        const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                        return Object.values(d.allTodos || {}).flat().filter(t => t.title?.toLowerCase().includes(q)).slice(0, 5);
+                    } catch { return []; }
+                })(),
+                shopping: (() => {
+                    try {
+                        const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                        return (d.wishlist || []).filter(i => i.name?.toLowerCase().includes(q)).slice(0, 5);
+                    } catch { return []; }
+                })(),
+                vault: vaultItems.filter(v => v.title?.toLowerCase().includes(q) || v.content?.toLowerCase().includes(q)).slice(0, 5),
+            } : null;
+
+            const hasResults = results && Object.values(results).some(r => r.length > 0);
+
+            const Section = ({ icon, label, items, renderItem }) => items.length === 0 ? null : (
+                <div className="mb-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">{icon} {label}</p>
+                    <div className="space-y-1">
+                        {items.map((it, i) => (
+                            <div key={i} className="px-3 py-2.5 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => renderItem.onClick(it)}>
+                                {renderItem.content(it)}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="fixed inset-0 z-[120] flex flex-col items-center pt-16 px-4 pb-8 glass-overlay animate-fade-in" onClick={onClose}>
+                    <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+                        {/* 搜索框 */}
+                        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-50">
+                            <span className="text-xl">🔍</span>
+                            <input ref={inputRef} type="text" value={query} onChange={e => setQuery(e.target.value)}
+                                placeholder="搜索账单、事件、待办、购物…"
+                                className="flex-1 text-base font-medium outline-none text-gray-800 placeholder-gray-300" />
+                            {query && <button onClick={() => setQuery('')} className="text-gray-400 font-black text-lg">×</button>}
+                            <button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 font-black text-sm ml-1">✕</button>
+                        </div>
+
+                        {/* 结果 */}
+                        <div className="px-5 py-4 max-h-[60vh] overflow-y-auto">
+                            {!q && (
+                                <p className="text-center text-gray-300 text-sm py-8">输入关键词开始搜索</p>
+                            )}
+                            {q && !hasResults && (
+                                <p className="text-center text-gray-400 text-sm py-8">没有找到「{query}」的相关结果</p>
+                            )}
+                            {results && (
+                                <>
+                                    <Section icon="💰" label="记账记录" items={results.transactions} renderItem={{
+                                        onClick: () => { onNavigate('finance'); onClose(); },
+                                        content: (t) => (
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-black px-2 py-0.5 rounded-full text-white" style={{ background: '#f97316' }}>{t.category||'未分类'}</span>
+                                                <span className="text-sm font-bold text-gray-700 flex-1">{t.name}</span>
+                                                <span className="text-xs text-gray-400">{t.amount} {t.currency}</span>
+                                            </div>
+                                        )
+                                    }} />
+                                    <Section icon="📅" label="日历事件" items={results.events} renderItem={{
+                                        onClick: () => { onNavigate('calendar'); onClose(); },
+                                        content: (e) => (
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-base">{CATEGORIES.find(c=>c.id===e.catId)?.icon||'📌'}</span>
+                                                <span className="text-sm font-bold text-gray-700 flex-1">{e.title}</span>
+                                                <span className="text-xs text-gray-400">{e.date}</span>
+                                            </div>
+                                        )
+                                    }} />
+                                    <Section icon="✅" label="待办事项" items={results.todos} renderItem={{
+                                        onClick: () => { onNavigate('calendar'); onClose(); },
+                                        content: (t) => (
+                                            <div className="flex items-center gap-2">
+                                                <span className={`w-4 h-4 rounded border flex items-center justify-center text-[9px] ${t.done?'bg-green-400 border-green-400 text-white':'border-gray-300'}`}>✓</span>
+                                                <span className={`text-sm font-bold flex-1 ${t.done?'line-through text-gray-400':'text-gray-700'}`}>{t.title}</span>
+                                            </div>
+                                        )
+                                    }} />
+                                    <Section icon="🛍️" label="购物清单" items={results.shopping} renderItem={{
+                                        onClick: () => { onNavigate('home'); onClose(); },
+                                        content: (i) => (
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-sm font-bold flex-1 ${i.done?'line-through text-gray-400':'text-gray-700'}`}>{i.name}</span>
+                                                {i.price && <span className="text-xs text-gray-400">¥{i.price}</span>}
+                                            </div>
+                                        )
+                                    }} />
+                                    <Section icon="📂" label="Vault" items={results.vault} renderItem={{
+                                        onClick: () => { onNavigate('vault'); onClose(); },
+                                        content: (v) => (
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-base">{VAULT_TYPES.find(t=>t.id===v.type)?.icon||'📝'}</span>
+                                                <span className="text-sm font-bold text-gray-700 flex-1">{v.title}</span>
+                                                <span className="text-xs text-gray-400">{v.date}</span>
+                                            </div>
+                                        )
+                                    }} />
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const WidgetWrapper = ({ children, isEditMode, onEnterEdit, size, onCycleSize, onMove, index }) => {
             const spanClass = (size === 'large' || size === '2x2') ? 'col-span-2 row-span-2' : (size === 'medium' || size === '2x1') ? 'col-span-2 row-span-1' : 'col-span-1 row-span-1';
-            
+            const longPressRef = React.useRef(null);
+            const [isDragging, setIsDragging] = React.useState(false);
+            const [isDragOver, setIsDragOver] = React.useState(false);
+
+            const handlePointerDown = () => {
+                if (isEditMode) return;
+                longPressRef.current = setTimeout(() => { onEnterEdit && onEnterEdit(); }, 600);
+            };
+            const cancelLongPress = () => { clearTimeout(longPressRef.current); };
+
             const handleDragStart = (e) => {
                 if (!isEditMode) return e.preventDefault();
-                e.dataTransfer.setData('text/plain', index);
-                e.target.classList.add('opacity-50');
+                e.dataTransfer.setData('text/plain', String(index));
+                e.dataTransfer.effectAllowed = 'move';
+                setIsDragging(true);
             };
+            const handleDragEnd = () => { setIsDragging(false); cancelLongPress(); };
             const handleDrop = (e) => {
+                e.preventDefault();
+                setIsDragOver(false);
                 if (!isEditMode) return;
                 const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
-                if (fromIndex !== index) onMove(fromIndex, index);
-                e.target.classList.remove('opacity-50');
+                if (!isNaN(fromIndex) && fromIndex !== index) onMove(fromIndex, index);
             };
 
             return (
-                <div 
-                    draggable={isEditMode} 
-                    onDragStart={handleDragStart} 
-                    onDragOver={(e) => { if(isEditMode) e.preventDefault(); }} 
-                    onDragEnd={(e) => e.target.classList.remove('opacity-50')}
+                <div
+                    draggable={isEditMode}
+                    onPointerDown={handlePointerDown}
+                    onPointerUp={cancelLongPress}
+                    onPointerLeave={cancelLongPress}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => { if (isEditMode) { e.preventDefault(); setIsDragOver(true); } }}
+                    onDragLeave={() => setIsDragOver(false)}
                     onDrop={handleDrop}
-                    className={`${spanClass} relative transition-all duration-300 w-full h-full ${isEditMode ? 'cursor-grab active:cursor-grabbing animate-wiggle ring-2 ring-dashed ring-gray-300 rounded-os-xl' : ''}`}
+                    className={`${spanClass} relative w-full h-full ${isEditMode && !isDragging ? 'cursor-grab animate-wiggle' : ''} ${isDragging ? 'widget-dragging cursor-grabbing' : ''}`}
+                    style={{
+                        transition: 'transform 0.2s cubic-bezier(0.34,1.56,0.64,1), opacity 0.2s',
+                        opacity: isDragging ? 0.7 : 1,
+                        outline: isDragOver && !isDragging ? '2px dashed var(--theme-accent)' : 'none',
+                        borderRadius: '1rem',
+                    }}
                 >
                     <div className="w-full h-full pointer-events-auto">{children}</div>
-                    
                     {isEditMode && (
                         <div className="absolute bottom-2 right-2 glass-panel rounded-full shadow-lg flex items-center p-1 z-20">
                             <button onClick={(e) => { e.stopPropagation(); onCycleSize(); }} className="w-8 h-8 rounded-full bg-os-text text-white font-bold flex items-center justify-center hover:scale-110 transition-transform">⤡</button>
@@ -3083,10 +3453,271 @@
         };
 
         // 双栏备忘录式日历
-        const CalendarView = ({ events, todos, activeFilter, onOpenReport, calSearchOpen, calSearch, setCalSearch }) => {
+        const VAULT_TYPES = [
+            { id: 'note',  icon: '📝', label: '笔记' },
+            { id: 'link',  icon: '🔗', label: '链接' },
+            { id: 'image', icon: '🖼️', label: '图片' },
+            { id: 'file',  icon: '📁', label: '文件' },
+        ];
+
+        const VaultLibraryView = ({ items, onSave, onDelete }) => {
+            const [filter, setFilter] = useState('all');
+            const [showAdd, setShowAdd] = useState(false);
+            const [editItem, setEditItem] = useState(null);
+            const [search, setSearch] = useState('');
+
+            const filtered = items.filter(it => {
+                const matchType = filter === 'all' || it.type === filter;
+                const matchSearch = !search.trim() || it.title?.toLowerCase().includes(search.toLowerCase()) || it.content?.toLowerCase().includes(search.toLowerCase()) || it.url?.toLowerCase().includes(search.toLowerCase());
+                return matchType && matchSearch;
+            }).sort((a, b) => b.id - a.id);
+
+            return (
+                <div className="flex flex-col gap-4 pb-32 md:pb-0 animate-fade-in">
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex gap-2 overflow-x-auto flex-1 pr-2">
+                            {[['all','全部'],['note','📝 笔记'],['link','🔗 链接'],['image','🖼️ 图片'],['file','📁 文件']].map(([t,l]) => (
+                                <button key={t} onClick={()=>setFilter(t)}
+                                    className={`px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all flex-shrink-0 ${filter===t?'text-white shadow-sm':'bg-white text-gray-400 hover:bg-gray-50'}`}
+                                    style={filter===t?{background:'var(--theme-text)'}:{}}>
+                                    {l}
+                                </button>
+                            ))}
+                        </div>
+                        <button onClick={()=>{ setEditItem(null); setShowAdd(true); }}
+                            className="w-9 h-9 rounded-full text-white font-bold text-xl flex items-center justify-center flex-shrink-0 shadow-md hover:scale-105 transition-transform"
+                            style={{background:'var(--theme-text)'}}>+</button>
+                    </div>
+
+                    {/* 搜索 */}
+                    <div className="relative">
+                        <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="搜索 Vault..." className="w-full bg-white rounded-2xl px-4 py-2.5 pr-9 text-sm font-medium outline-none border border-gray-100 shadow-sm" />
+                        {search && <button onClick={()=>setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-black text-base">×</button>}
+                    </div>
+
+                    {/* 卡片网格 */}
+                    {filtered.length === 0 ? (
+                        <div className="bg-white rounded-[2rem] p-12 text-center shadow-sm">
+                            <p className="text-4xl mb-3">📂</p>
+                            <p className="font-bold text-gray-400 text-sm">Vault 是空的</p>
+                            <p className="text-xs text-gray-300 mt-1">点击 + 添加笔记、链接或文件</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {filtered.map(it => {
+                                const vt = VAULT_TYPES.find(v=>v.id===it.type) || VAULT_TYPES[0];
+                                return (
+                                    <div key={it.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 group hover:shadow-md transition-shadow">
+                                        <div className="flex items-start gap-3">
+                                            {it.type === 'image' && it.url ? (
+                                                <img src={it.url} className="w-14 h-14 object-cover rounded-xl flex-shrink-0 border border-gray-100" alt="" onError={el=>el.target.style.display='none'} />
+                                            ) : (
+                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 bg-gray-50">{vt.icon}</div>
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <h4 className="font-bold text-sm text-os-text leading-snug">{it.title}</h4>
+                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                                        <button onClick={()=>{ setEditItem(it); setShowAdd(true); }} className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center text-xs text-gray-500 hover:bg-gray-200">✏️</button>
+                                                        <button onClick={()=>onDelete(it.id)} className="w-6 h-6 rounded-lg bg-red-50 flex items-center justify-center text-xs text-red-400 hover:bg-red-100">×</button>
+                                                    </div>
+                                                </div>
+                                                {it.type === 'link' && it.url && (
+                                                    <a href={it.url} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline truncate block mt-0.5 max-w-[200px]">{it.url}</a>
+                                                )}
+                                                {it.content && <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-3">{it.content}</p>}
+                                                <p className="text-[10px] text-gray-300 font-bold mt-1.5">{vt.label} · {it.date}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* Add/Edit Modal */}
+                    {showAdd && (
+                        <VaultItemModal
+                            item={editItem}
+                            onClose={()=>{ setShowAdd(false); setEditItem(null); }}
+                            onSave={data=>{ onSave(data); setShowAdd(false); setEditItem(null); }}
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        const VaultItemModal = ({ item, onClose, onSave }) => {
+            const [type, setType] = useState(item?.type || 'note');
+            const [title, setTitle] = useState(item?.title || '');
+            const [content, setContent] = useState(item?.content || '');
+            const [url, setUrl] = useState(item?.url || '');
+            const [date, setDate] = useState(item?.date || TODAY_STR);
+
+            const handleSave = () => {
+                if (!title.trim()) return;
+                onSave({ id: item?.id || Date.now(), type, title: title.trim(), content, url, date });
+            };
+
+            return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={onClose}>
+                    <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-slide-up" onClick={e=>e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-5">
+                            <h2 className="font-black text-lg text-os-text">{item ? '编辑条目' : '添加到 Vault'}</h2>
+                            <button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
+                        </div>
+
+                        {/* 类型选择 */}
+                        <div className="flex gap-2 mb-4">
+                            {VAULT_TYPES.map(vt => (
+                                <button key={vt.id} onClick={()=>setType(vt.id)}
+                                    className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${type===vt.id?'text-white shadow-sm':'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                                    style={type===vt.id?{background:'var(--theme-text)'}:{}}>
+                                    {vt.icon}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="space-y-3 mb-5">
+                            <div>
+                                <p className="text-xs font-bold text-gray-400 mb-1">标题 *</p>
+                                <input type="text" value={title} onChange={e=>setTitle(e.target.value)} placeholder="输入标题..." autoFocus className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-os-purple/20" />
+                            </div>
+                            {(type === 'link' || type === 'image') && (
+                                <div>
+                                    <p className="text-xs font-bold text-gray-400 mb-1">{type==='image'?'图片 URL':'链接 URL'}</p>
+                                    <input type="url" value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://..." className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5 text-xs font-medium outline-none focus:ring-2 focus:ring-os-purple/20" />
+                                </div>
+                            )}
+                            {(type === 'note' || type === 'file') && (
+                                <div>
+                                    <p className="text-xs font-bold text-gray-400 mb-1">{type==='file'?'备注/路径':'内容'}</p>
+                                    <textarea value={content} onChange={e=>setContent(e.target.value)} placeholder={type==='note'?'写点什么...':'文件路径或描述...'} className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-3 text-sm outline-none resize-none h-24 focus:ring-2 focus:ring-os-purple/20" />
+                                </div>
+                            )}
+                            <div>
+                                <p className="text-xs font-bold text-gray-400 mb-1">日期</p>
+                                <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-os-purple/20" />
+                            </div>
+                        </div>
+
+                        <button onClick={handleSave} disabled={!title.trim()} className="w-full bg-os-text text-white py-3.5 rounded-2xl font-bold shadow-lg hover:scale-[1.02] transition-transform disabled:opacity-40">
+                            {item ? '保存修改' : '添加到 Vault'}
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const EventDetailModal = ({ event, onClose, onUpdate, onDelete }) => {
+            if (!event) return null;
+            const cat = CATEGORIES.find(c => c.id === event.catId);
+            const [isEditing, setIsEditing] = useState(false);
+            const [title, setTitle] = useState(event.title || '');
+            const [date, setDate] = useState(event.date || TODAY_STR);
+            const [rating, setRating] = useState(event.rating || 0);
+            const [review, setReview] = useState(event.review || '');
+            const [coverUrl, setCoverUrl] = useState(event.coverUrl || '');
+            const [coverError, setCoverError] = useState(false);
+
+            const handleSave = () => {
+                onUpdate({ ...event, title: title || event.title, date, rating, review, coverUrl });
+                setIsEditing(false);
+            };
+            const handleDelete = () => {
+                if (window.confirm(`确认删除「${event.title}」？`)) { onDelete(event.id); onClose(); }
+            };
+
+            return (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={onClose}>
+                    <div className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl animate-slide-up relative overflow-hidden" onClick={e => e.stopPropagation()}>
+                        {/* 封面区 */}
+                        {event.coverUrl && !coverError ? (
+                            <div className="w-full h-44 relative overflow-hidden">
+                                <img src={event.coverUrl} onError={()=>setCoverError(true)} className="w-full h-full object-cover" alt="" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                                <div className="absolute bottom-3 left-4 right-4">
+                                    <p className="text-white font-black text-lg leading-tight drop-shadow">{event.title}</p>
+                                    <p className="text-white/70 text-xs mt-0.5">{cat?.icon} {cat?.label} · {event.date}</p>
+                                </div>
+                                <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 bg-black/30 backdrop-blur-sm rounded-full flex items-center justify-center font-bold text-white text-sm">×</button>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-3 p-6 pb-0 pr-14">
+                                <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-3xl border border-gray-100 flex-shrink-0">{cat?.icon}</div>
+                                <div>
+                                    <h3 className="font-black text-lg text-os-text leading-tight">{event.title}</h3>
+                                    <p className="text-xs text-gray-400 font-bold mt-0.5">{cat?.label} · {event.date}</p>
+                                </div>
+                                <button onClick={onClose} className="absolute top-5 right-5 w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
+                            </div>
+                        )}
+
+                        <div className="p-6 pt-4 max-h-[60vh] overflow-y-auto">
+                            {!isEditing ? (
+                                <>
+                                    {event.rating > 0 && (
+                                        <div className="flex gap-1 mb-3">
+                                            {Array.from({length:5}).map((_,i) => <span key={i} className={`text-xl ${i < event.rating ? 'text-yellow-400' : 'text-gray-200'}`}>★</span>)}
+                                        </div>
+                                    )}
+                                    {event.review && <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-2xl mb-4">{event.review}</p>}
+                                    {!event.coverUrl && !event.rating && !event.review && (
+                                        <p className="text-sm text-gray-400 text-center py-3 mb-4">还没有添加详细内容</p>
+                                    )}
+                                    <div className="flex gap-2">
+                                        <button onClick={()=>setIsEditing(true)} className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-2xl font-bold text-sm hover:bg-gray-200 transition-colors">编辑</button>
+                                        <button onClick={handleDelete} className="flex-1 bg-red-50 text-red-500 py-3 rounded-2xl font-bold text-sm hover:bg-red-100 transition-colors">删除</button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="space-y-3 mb-4">
+                                        <div>
+                                            <p className="text-xs font-bold text-gray-400 mb-1">事件名称</p>
+                                            <input type="text" value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-os-purple/20" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-gray-400 mb-1">日期</p>
+                                            <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-os-purple/20" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-gray-400 mb-1">封面图 URL（选填）</p>
+                                            <input type="url" value={coverUrl} onChange={e=>{setCoverUrl(e.target.value);setCoverError(false);}} placeholder="粘贴图片链接..." className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-os-purple/20" />
+                                            <p className="text-[10px] text-gray-400 mt-1">可从豆瓣/IGDB/Google图片搜索，右键「复制图片地址」</p>
+                                            {coverUrl && !coverError && <img src={coverUrl} onError={()=>setCoverError(true)} className="mt-2 w-16 h-22 object-cover rounded-xl border border-gray-100" alt="" />}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-gray-400 mb-1.5">打分</p>
+                                            <div className="flex gap-1.5">
+                                                {[1,2,3,4,5].map(star => (
+                                                    <button key={star} onClick={()=>setRating(star)} className={`text-2xl transition-transform hover:scale-110 ${star<=rating?'text-yellow-400':'text-gray-200'}`}>★</button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-gray-400 mb-1">感受与复盘</p>
+                                            <textarea value={review} onChange={e=>setReview(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-3 text-sm outline-none resize-none h-20 focus:ring-2 focus:ring-os-purple/20" />
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={()=>setIsEditing(false)} className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-2xl font-bold text-sm hover:bg-gray-200 transition-colors">取消</button>
+                                        <button onClick={handleSave} className="flex-1 bg-os-text text-white py-3 rounded-2xl font-bold text-sm hover:scale-[1.02] transition-transform">保存</button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const CalendarView = ({ events, todos, activeFilter, onOpenReport, calSearchOpen, calSearch, setCalSearch, onUpdateEvent, onDeleteEvent }) => {
             const [calTab, setCalTab] = useState('month');
             const [currentDate, setCurrentDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
             const [selectedDate, setSelectedDate] = useState(TODAY_STR);
+            const [detailEvent, setDetailEvent] = useState(null);
 
             const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
             const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
@@ -3156,6 +3787,9 @@
                                                 <span className="text-sm font-bold">{d}</span>
                                                 <div className="flex gap-0.5 mt-1 flex-wrap justify-center px-1">
                                                     {dayEvents.slice(0,4).map((e, idx) => {
+                                                        if (e.coverUrl && (e.catId === 'movie' || e.catId === 'game')) {
+                                                            return <img key={idx} src={e.coverUrl} className="w-3 h-4 object-cover rounded-sm opacity-90" alt="" onError={el=>el.target.style.display='none'} />;
+                                                        }
                                                         const color = CATEGORIES.find(c=>c.id===e.catId)?.color || 'bg-gray-400';
                                                         return <span key={idx} className={`w-1.5 h-1.5 rounded-full ${color}`}></span>
                                                     })}
@@ -3185,14 +3819,22 @@
                                             ))}
                                             {selectedEvents.map(e => {
                                                 const cat = CATEGORIES.find(c=>c.id===e.catId);
+                                                const hasCover = e.coverUrl && (e.catId === 'movie' || e.catId === 'game');
                                                 return (
-                                                    <div key={`e-${e.id}`} className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <span className="text-lg">{cat?.icon}</span>
-                                                            <h4 className="font-bold text-sm text-os-text">{e.title}</h4>
+                                                    <div key={`e-${e.id}`} className="bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors overflow-hidden" onClick={()=>setDetailEvent(e)}>
+                                                        <div className="flex items-stretch gap-0">
+                                                            {hasCover && (
+                                                                <img src={e.coverUrl} className="w-12 h-full object-cover flex-shrink-0 rounded-l-xl" alt="" style={{minHeight:'64px',maxHeight:'96px'}} onError={el=>el.target.style.display='none'} />
+                                                            )}
+                                                            <div className="flex-1 p-3">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    {!hasCover && <span className="text-base">{cat?.icon}</span>}
+                                                                    <h4 className="font-bold text-sm text-os-text leading-tight">{e.title}</h4>
+                                                                </div>
+                                                                {e.rating > 0 && <div className="flex gap-0.5 mb-1 text-yellow-400 text-xs">{Array.from({length:5}).map((_,i)=><span key={i} className={i<e.rating?'':'grayscale opacity-30'}>★</span>)}</div>}
+                                                                {e.review && <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{e.review}</p>}
+                                                            </div>
                                                         </div>
-                                                        {e.rating > 0 && <div className="flex gap-1 mb-2 text-yellow-400 text-xs">{Array.from({length:5}).map((_,i)=><span key={i} className={i<e.rating?'':'grayscale opacity-30'}>★</span>)}</div>}
-                                                        {e.review && <p className="text-xs text-gray-600 leading-relaxed bg-white p-2 rounded-lg">{e.review}</p>}
                                                     </div>
                                                 );
                                             })}
@@ -3259,13 +3901,23 @@
                             </div>
                         </div>
                     )}
+
+                {detailEvent && (
+                    <EventDetailModal
+                        event={detailEvent}
+                        onClose={()=>setDetailEvent(null)}
+                        onUpdate={e=>{ onUpdateEvent && onUpdateEvent(e); setDetailEvent(null); }}
+                        onDelete={id=>{ onDeleteEvent && onDeleteEvent(id); setDetailEvent(null); }}
+                    />
+                )}
                 </div>
             );
         };
 
         // 真实 3x4 年历视图
-        const YearlyView = ({ events, activeFilter, onOpenReport }) => {
+        const YearlyView = ({ events, activeFilter, onOpenReport, user }) => {
             const [year, setYear] = useState(new Date().getFullYear());
+            const [showReview, setShowReview] = useState(false);
             const months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
             const todayStr = new Date().toISOString().split('T')[0];
 
@@ -3279,9 +3931,14 @@
                             <h2 className="text-2xl font-black">{year} Map.</h2>
                             <button onClick={()=>setYear(y=>y+1)} className="w-8 h-8 rounded-full bg-gray-100 font-bold text-gray-500 hover:bg-gray-200 transition-colors">→</button>
                         </div>
-                        <button onClick={() => onOpenReport('year')} className="text-[11px] font-bold bg-os-purple text-purple-900 px-3 py-1.5 rounded-xl flex items-center gap-1.5 hover:opacity-80 transition-opacity flex-shrink-0">
-                            <span>✨</span> AI 年度总结
-                        </button>
+                        <div className="flex gap-2 flex-shrink-0">
+                            <button onClick={() => onOpenReport('year')} className="text-[11px] font-bold bg-os-purple text-purple-900 px-3 py-1.5 rounded-xl flex items-center gap-1.5 hover:opacity-80 transition-opacity">
+                                <span>✨</span> AI 年度总结
+                            </button>
+                            <button onClick={() => setShowReview(true)} className="text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 hover:opacity-80 transition-opacity" style={{ background: 'linear-gradient(135deg,#6366f1,#a78bfa)', color: '#fff' }}>
+                                🎊 年度回顾
+                            </button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 flex-1">
@@ -3310,6 +3967,194 @@
                             )
                         })}
                     </div>
+                    {showReview && <YearReviewModal isOpen={showReview} onClose={() => setShowReview(false)} year={year} events={events} user={user} />}
+                </div>
+            );
+        };
+
+        // ── 年度回顾弹窗 ──
+        const YearReviewModal = ({ isOpen, onClose, year, events, user }) => {
+            const reviewRef = React.useRef(null);
+            if (!isOpen) return null;
+
+            const stored = (() => { try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); } catch { return {}; } })();
+            const exchRate = stored.exchangeRate || 0.048;
+            const toJPY = (amt, cur) => (cur === 'RMB' || cur === 'CNY') ? amt / exchRate : amt;
+
+            // 全年交易
+            const allTx = (stored.transactions || []).filter(t => t.date?.startsWith(`${year}`));
+            const yearTotal = Math.round(allTx.reduce((s, t) => s + toJPY(parseFloat(t.amount)||0, t.currency), 0));
+
+            // 按月汇总
+            const monthlyTotals = Array.from({ length: 12 }, (_, i) => {
+                const m = `${year}-${String(i+1).padStart(2,'0')}`;
+                return { month: i+1, total: Math.round(allTx.filter(t => t.date?.startsWith(m)).reduce((s,t) => s + toJPY(parseFloat(t.amount)||0, t.currency), 0)) };
+            });
+            const maxMonthly = Math.max(...monthlyTotals.map(m => m.total), 1);
+
+            // 分类汇总
+            const catMap = {};
+            allTx.forEach(t => { const c = t.category || '其他'; catMap[c] = (catMap[c] || 0) + toJPY(parseFloat(t.amount)||0, t.currency); });
+            const topCatsSorted = Object.entries(catMap).sort((a,b) => b[1]-a[1]).slice(0, 6);
+            const totalCatAmount = topCatsSorted.reduce((s,[,v]) => s+v, 0) || 1;
+
+            // 最贵单笔
+            const maxTx = allTx.reduce((best, t) => {
+                const v = toJPY(parseFloat(t.amount)||0, t.currency);
+                return v > toJPY(parseFloat(best?.amount||0)||0, best?.currency||'JPY') ? t : best;
+            }, null);
+
+            // 记录天数
+            const eventDays = new Set(events.filter(e => e.date?.startsWith(`${year}`)).map(e => e.date)).size;
+
+            // 经期次数
+            const periodCount = (stored.periodLog || []).filter(e => e.startDate?.startsWith(`${year}`)).length;
+
+            // 习惯最长连续
+            const habitsData = stored.habits || {};
+            let maxHabitStreak = 0;
+            (DEFAULT_HABITS || []).forEach(habit => {
+                let streak = 0, best = 0;
+                const allDays = Object.keys(habitsData).sort();
+                allDays.forEach(d => {
+                    if ((habitsData[d] || []).includes(habit)) { streak++; best = Math.max(best, streak); }
+                    else streak = 0;
+                });
+                maxHabitStreak = Math.max(maxHabitStreak, best);
+            });
+
+            // 爸爸平均抽烟
+            const smokingLog = stored.smokingLog || {};
+            const smokingEntries = Object.entries(smokingLog).filter(([k]) => k.startsWith(`${year}`));
+            const smokingAvg = smokingEntries.length > 0 ? (smokingEntries.reduce((s,[,v]) => s+v, 0) / smokingEntries.length).toFixed(1) : '0';
+
+            // 关键词（从消费分类提炼）
+            const keywords = topCatsSorted.slice(0,3).map(([name]) => {
+                if (name.includes('餐') || name.includes('饭') || name.includes('外卖') || name.includes('咖啡')) return '美食探索家 🍜';
+                if (name.includes('周边') || name.includes('玩') || name.includes('游戏')) return '周边收集家 🧸';
+                if (name.includes('化妆') || name.includes('护肤') || name.includes('衣服') || name.includes('芭蕾')) return '生活美学家 ✨';
+                if (name.includes('机票') || name.includes('交通') || name.includes('出行')) return '旅行达人 ✈️';
+                if (name.includes('医疗') || name.includes('课程') || name.includes('学习')) return '自我投资者 📚';
+                if (name.includes('超市') || name.includes('日用')) return '生活达人 🏠';
+                return name + '爱好者';
+            });
+
+            const PIE_COLORS = ['#f472b6','#a78bfa','#60a5fa','#34d399','#fbbf24','#fb7185'];
+
+            const downloadReview = () => {
+                const el = reviewRef.current;
+                if (!el) return;
+                // Use CSS print approach - open in new window
+                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+                    *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,sans-serif}
+                    body{background:#1e293b;color:#fff;padding:24px;max-width:400px;margin:0 auto}
+                </style></head><body>${el.innerHTML}</body></html>`;
+                const win = window.open('', '_blank');
+                win.document.write(html);
+                win.document.close();
+                win.print();
+            };
+
+            return (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(0,0,0,0.8)' }} onClick={onClose}>
+                    <div className="w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl animate-slide-up max-h-[92vh] flex flex-col" style={{ background: '#0f172a' }} onClick={e => e.stopPropagation()}>
+                        {/* scrollable content */}
+                        <div ref={reviewRef} className="flex-1 overflow-y-auto">
+                            {/* header */}
+                            <div className="px-6 pt-8 pb-6 text-center" style={{ background: 'linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#4c1d95 100%)' }}>
+                                <p className="text-[10px] font-black tracking-[0.3em] text-purple-300 uppercase mb-2">YEAR IN REVIEW</p>
+                                <h1 className="text-4xl font-black text-white mb-1">{year}</h1>
+                                <p className="text-sm font-bold text-purple-200">{user?.email?.split('@')[0] || 'My Life'}</p>
+                            </div>
+
+                            {/* highlight cards */}
+                            <div className="px-4 py-5">
+                                <p className="text-[10px] font-black tracking-widest text-gray-500 uppercase mb-3">年度亮点</p>
+                                <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar">
+                                    {[
+                                        { label: '记录天数', value: `${eventDays}天`, icon: '📅', color: '#6366f1' },
+                                        { label: '全年消费', value: `¥${yearTotal.toLocaleString()}`, icon: '💰', color: '#f59e0b' },
+                                        { label: '最高支出', value: topCatsSorted[0] ? topCatsSorted[0][0] : '—', icon: '📊', color: '#ec4899' },
+                                        { label: '经期记录', value: `${periodCount}次`, icon: '🌸', color: '#f472b6' },
+                                        { label: '习惯连续', value: `${maxHabitStreak}天`, icon: '🔥', color: '#f97316' },
+                                        { label: '爸爸日均', value: `${smokingAvg}根`, icon: '🚬', color: '#64748b' },
+                                    ].map(c => (
+                                        <div key={c.label} className="flex-shrink-0 rounded-2xl p-4 flex flex-col gap-1" style={{ background: c.color + '22', border: `1px solid ${c.color}44`, minWidth: '110px' }}>
+                                            <span className="text-xl">{c.icon}</span>
+                                            <span className="text-lg font-black text-white leading-none">{c.value}</span>
+                                            <span className="text-[9px] font-bold" style={{ color: c.color }}>{c.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* monthly bar chart */}
+                            <div className="px-4 pb-5">
+                                <p className="text-[10px] font-black tracking-widest text-gray-500 uppercase mb-3">月度消费走势</p>
+                                <div className="flex items-end gap-1 h-24">
+                                    {monthlyTotals.map(m => {
+                                        const barH = m.total > 0 ? Math.max(Math.round(m.total / maxMonthly * 80), 4) : 4;
+                                        const isCur = m.month === new Date().getMonth() + 1 && year === new Date().getFullYear();
+                                        return (
+                                            <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
+                                                <div className="w-full rounded-t-sm" style={{ height: `${barH}px`, background: isCur ? '#a78bfa' : '#334155' }} />
+                                                <span className="text-[7px] font-bold text-gray-600">{m.month}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* category pie */}
+                            <div className="px-4 pb-5">
+                                <p className="text-[10px] font-black tracking-widest text-gray-500 uppercase mb-3">消费分类占比</p>
+                                <div className="space-y-2">
+                                    {topCatsSorted.map(([name, total], i) => {
+                                        const pct = Math.round(total / totalCatAmount * 100);
+                                        return (
+                                            <div key={name} className="flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                                                <span className="text-xs text-gray-300 flex-1 truncate">{name}</span>
+                                                <div className="flex-1 max-w-[80px] h-1.5 rounded-full bg-gray-800 overflow-hidden">
+                                                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                                                </div>
+                                                <span className="text-[10px] font-bold text-gray-400 w-8 text-right">{pct}%</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* keywords */}
+                            <div className="px-4 pb-6">
+                                <p className="text-[10px] font-black tracking-widest text-gray-500 uppercase mb-3">今年的关键词</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {keywords.map((k, i) => (
+                                        <span key={i} className="px-3 py-1.5 rounded-full text-xs font-black" style={{ background: PIE_COLORS[i] + '33', color: PIE_COLORS[i], border: `1px solid ${PIE_COLORS[i]}55` }}>{k}</span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* best tx */}
+                            {maxTx && (
+                                <div className="mx-4 mb-6 rounded-2xl p-4" style={{ background: '#1e293b', border: '1px solid #334155' }}>
+                                    <p className="text-[9px] font-black tracking-widest text-gray-500 uppercase mb-1">年度最贵一笔</p>
+                                    <p className="text-sm font-bold text-white">{maxTx.name || maxTx.category}</p>
+                                    <p className="text-xl font-black" style={{ color: '#fbbf24' }}>{maxTx.amount} {maxTx.currency}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* footer buttons */}
+                        <div className="px-4 pb-6 pt-3 flex gap-3 flex-shrink-0" style={{ background: '#0f172a' }}>
+                            <button onClick={downloadReview}
+                                className="flex-1 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all hover:opacity-80"
+                                style={{ background: 'linear-gradient(135deg,#6366f1,#a78bfa)', color: '#fff' }}>
+                                📤 分享 / 打印
+                            </button>
+                            <button onClick={onClose} className="w-12 h-12 rounded-2xl bg-gray-800 text-gray-400 font-bold text-lg flex items-center justify-center hover:bg-gray-700">×</button>
+                        </div>
+                    </div>
                 </div>
             );
         };
@@ -3321,9 +4166,11 @@
             const [date, setDate] = useState(TODAY_STR);
             const [rating, setRating] = useState(0);
             const [review, setReview] = useState('');
+            const [coverUrl, setCoverUrl] = useState('');
+            const [coverError, setCoverError] = useState(false);
 
             const handleSave = () => {
-                onSave({ id: Date.now(), catId: category.id, title: title || `新增${category.label}记录`, date, rating, review });
+                onSave({ id: Date.now(), catId: category.id, title: title || `新增${category.label}记录`, date, rating, review, coverUrl });
                 onClose();
             };
 
@@ -3331,8 +4178,8 @@
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={onClose}>
                     <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-slide-up relative" onClick={e => e.stopPropagation()}>
                         <button onClick={onClose} className="absolute top-6 right-6 w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
-                        
-                        <div className="flex items-center gap-3 mb-6 pr-8">
+
+                        <div className="flex items-center gap-3 mb-5 pr-8">
                             <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-3xl border border-gray-100 flex-shrink-0">{category.icon}</div>
                             <div className="flex-1">
                                 <input type="text" value={title} onChange={(e)=>setTitle(e.target.value)} placeholder={`新增${category.label}记录...`} className="w-full font-black text-lg text-os-text bg-transparent outline-none placeholder-gray-300" autoFocus />
@@ -3340,11 +4187,21 @@
                             </div>
                         </div>
 
-                        {/* 照片上传占位 */}
-                        <div className="w-full h-20 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 text-xs font-bold hover:bg-gray-100 cursor-pointer transition-colors mb-4">
-                            + 点击上传照片或截图
+                        {/* 封面图 URL */}
+                        <div className="mb-4">
+                            <p className="text-xs font-bold text-gray-400 mb-1.5">封面图 URL（选填）</p>
+                            <div className="flex gap-2 items-start">
+                                <div className="flex-1">
+                                    <input type="url" value={coverUrl} onChange={e=>{setCoverUrl(e.target.value);setCoverError(false);}} placeholder="粘贴图片链接..." className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-os-purple/20" />
+                                    <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">可从豆瓣/IGDB/Google图片搜索封面，右键「复制图片地址」</p>
+                                </div>
+                                {coverUrl && !coverError && (
+                                    <img src={coverUrl} onError={()=>setCoverError(true)} className="w-10 h-14 object-cover rounded-lg border border-gray-100 flex-shrink-0" alt="" />
+                                )}
+                            </div>
+                            {coverError && <p className="text-[10px] text-red-400 mt-1">图片加载失败，请检查链接</p>}
                         </div>
-                        
+
                         <div className="bg-yellow-50/50 p-4 rounded-2xl border border-yellow-100 mb-4">
                             <p className="text-xs font-bold text-gray-400 mb-2">打分评级</p>
                             <div className="flex gap-2">
@@ -3356,7 +4213,7 @@
 
                         <div className="mb-6">
                             <p className="text-xs font-bold text-gray-400 mb-2">感受与复盘</p>
-                            <textarea value={review} onChange={e => setReview(e.target.value)} placeholder="写点什么吧，AI 以后会帮你整理的..." className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-medium outline-none resize-none h-28 focus:ring-2 focus:ring-os-purple/20 transition-all" />
+                            <textarea value={review} onChange={e => setReview(e.target.value)} placeholder="写点什么吧，AI 以后会帮你整理的..." className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-medium outline-none resize-none h-24 focus:ring-2 focus:ring-os-purple/20 transition-all" />
                         </div>
 
                         <button onClick={handleSave} className="w-full bg-os-text text-white py-4 rounded-2xl font-bold shadow-lg hover:scale-[1.02] transition-transform">
@@ -3490,6 +4347,12 @@
                     return Object.values(d.allTodos || {}).flat();
                 } catch { return []; }
             });
+            const [vaultItems, setVaultItems] = useState(() => {
+                try {
+                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    return d.vault?.items || [];
+                } catch { return []; }
+            });
             const [widgets, setWidgets] = useState(() => {
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
@@ -3523,6 +4386,7 @@
             const [showMobileSidebar, setShowMobileSidebar] = useState(false);
             const [calSearchOpen, setCalSearchOpen] = useState(false);
             const [calSearch, setCalSearch] = useState('');
+            const [showGlobalSearch, setShowGlobalSearch] = useState(false);
             const [toast, setToast] = useState(null);
             const importFileRef = useRef(null);
 
@@ -3556,6 +4420,19 @@
                 setShowQuickTx(false);
             };
 
+            const exportData = () => {
+                try {
+                    const raw = localStorage.getItem('visualLifeOS_data') || '{}';
+                    const blob = new Blob([raw], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `lifeos-backup-${new Date().toISOString().slice(0,10)}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                } catch (e) { alert('导出失败: ' + e.message); }
+            };
+
             const quickCats = (() => {
                 try {
                     const d = getFinanceStorage();
@@ -3577,6 +4454,7 @@
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     d.theme = themeId;
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                    syncToCloud();
                 } catch {}
             }, [themeId]);
 
@@ -3827,6 +4705,12 @@
                             ⚙️ 设置
                         </button>
 
+                        {/* 导出数据 */}
+                        <button onClick={exportData}
+                            className="w-full bg-white/60 py-2.5 rounded-2xl font-bold text-xs text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2">
+                            📤 导出数据
+                        </button>
+
                         {/* 用户信息 + 退出 */}
                         <div className="mb-2 bg-white/60 rounded-2xl px-3 py-2 border border-white/80 shadow-sm">
                             <p className="text-[10px] text-gray-400 truncate mb-1">{user?.email}</p>
@@ -3883,9 +4767,9 @@
                                         {syncIndicator.text}
                                     </span>
                                 )}
-                                {currentView !== 'calendar' && (
-                                    <button className="md:hidden w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-xl border border-gray-100">🔍</button>
-                                )}
+                                <button onClick={() => setShowGlobalSearch(true)}
+                                    className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm text-lg border border-gray-100 hover:bg-gray-50 transition-colors flex-shrink-0"
+                                    title="全局搜索">🔍</button>
                                 {currentView === 'home' && (<>
                                     <button onClick={openWeeklyAI}
                                         className="px-3 py-1.5 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1.5 whitespace-nowrap">
@@ -3912,11 +4796,11 @@
                         </header>
 
                         {/* 视图路由 */}
-                        <div>
+                        <div key={currentView} className="animate-view-in">
                             {currentView === 'home' && (
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[160px] pb-32 md:pb-8" style={{ gridAutoFlow: 'dense' }}>
                                     {widgets.map((widget, index) => (
-                                        <WidgetWrapper key={widget.id} size={widget.size} isEditMode={isEditMode} index={index} onMove={moveWidget} onCycleSize={() => cycleWidgetSize(index)}>
+                                        <WidgetWrapper key={widget.id} size={widget.size} isEditMode={isEditMode} onEnterEdit={() => setIsEditMode(true)} index={index} onMove={moveWidget} onCycleSize={() => cycleWidgetSize(index)}>
                                             {widget.id === 'weekly' && <WeeklyWidget events={events} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026年5月第2周'})} />}
                                             {widget.id === 'clock' && <ClockWidget />}
                                             {widget.id === 'countdown' && <CountdownWidget />}
@@ -3938,18 +4822,39 @@
                             )}
                             
                             {currentView === 'finance' && <FinanceView />}
-                            {currentView === 'calendar' && <CalendarView events={events} todos={todos} activeFilter={activeFilter} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026年 5月'})} calSearchOpen={calSearchOpen} calSearch={calSearch} setCalSearch={setCalSearch} />}
-                            {currentView === 'year' && <YearlyView events={events} activeFilter={activeFilter} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026 年度'})} />}
+                            {currentView === 'calendar' && <CalendarView events={events} todos={todos} activeFilter={activeFilter} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026年 5月'})} calSearchOpen={calSearchOpen} calSearch={calSearch} setCalSearch={setCalSearch}
+                                onUpdateEvent={(updated) => {
+                                    const next = events.map(e => e.id === updated.id ? updated : e);
+                                    setEvents(next);
+                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.lifeEvents = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                                    syncToCloud();
+                                }}
+                                onDeleteEvent={(id) => {
+                                    const next = events.filter(e => e.id !== id);
+                                    setEvents(next);
+                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.lifeEvents = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                                    syncToCloud();
+                                }}
+                            />}
+                            {currentView === 'year' && <YearlyView events={events} activeFilter={activeFilter} user={user} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026 年度'})} />}
                             {currentView === 'vault' && (
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-24">
-                                    {(activeFilter==='all'?events:events.filter(e=>e.catId===activeFilter)).map(e => (
-                                        <div key={e.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-50">
-                                            <span className="text-3xl block mb-2">{CATEGORIES.find(c=>c.id===e.catId)?.icon}</span>
-                                            <h4 className="font-bold text-sm truncate">{e.title}</h4>
-                                            <p className="text-[10px] text-gray-400 font-bold mt-1">{e.date}</p>
-                                        </div>
-                                    ))}
-                                </div>
+                                <VaultLibraryView
+                                    items={vaultItems}
+                                    onSave={(item) => {
+                                        const next = vaultItems.some(v => v.id === item.id)
+                                            ? vaultItems.map(v => v.id === item.id ? item : v)
+                                            : [item, ...vaultItems];
+                                        setVaultItems(next);
+                                        try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.vault = { items: next }; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                                        syncToCloud();
+                                    }}
+                                    onDelete={(id) => {
+                                        const next = vaultItems.filter(v => v.id !== id);
+                                        setVaultItems(next);
+                                        try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.vault = { items: next }; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                                        syncToCloud();
+                                    }}
+                                />
                             )}
                         </div>
                     </main>
@@ -4041,6 +4946,15 @@
                     <AIReportModal {...reportConfig} onClose={() => setReportConfig({...reportConfig, isOpen: false})} />
                     <AIGeneratePanel isOpen={aiPanel.isOpen} title={aiPanel.title} type={aiPanel.type} data={aiPanel.data} onClose={() => setAIPanel(p => ({ ...p, isOpen: false }))} />
                     <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
+                    {showGlobalSearch && (
+                        <GlobalSearchModal
+                            onClose={() => setShowGlobalSearch(false)}
+                            events={events}
+                            todos={todos}
+                            vaultItems={vaultItems}
+                            onNavigate={(view) => setCurrentView(view)}
+                        />
+                    )}
 
                     {/* ── 主题选择器 ── */}
                     {showThemePicker && (
@@ -4146,8 +5060,12 @@
                                     </button>
                                 </div>
 
-                                {/* 退出登录 */}
-                                <div className="px-6 pb-10">
+                                {/* 导出数据 + 退出登录 */}
+                                <div className="px-6 pb-10 flex flex-col gap-3">
+                                    <button onClick={() => { exportData(); setShowMobileSidebar(false); }}
+                                        className="w-full py-3 rounded-2xl font-bold text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center gap-2">
+                                        📤 导出数据
+                                    </button>
                                     <button onClick={() => _supabase.auth.signOut()}
                                         className="w-full py-3 rounded-2xl font-bold text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors">
                                         退出登录
@@ -4193,6 +5111,9 @@
                                     onChange={e => setQuickTxForm(f => ({ ...f, name: e.target.value }))}
                                     onKeyDown={e => e.key === 'Enter' && saveQuickTx()}
                                     className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-4" />
+                                <div className="mb-3">
+                                    <VoiceButton onResult={parsed => setQuickTxForm(f => ({ ...f, amount: parsed.amount, currency: parsed.currency, name: parsed.name }))} />
+                                </div>
                                 <button onClick={saveQuickTx} disabled={!quickTxForm.amount}
                                     className="w-full py-4 rounded-2xl font-black text-base transition-all disabled:opacity-40"
                                     style={{ background: 'var(--accent)', color: '#fff' }}>
