@@ -2153,53 +2153,82 @@
         };
 
         const VoiceButton = ({ onResult }) => {
-            const [listening, setListening] = React.useState(false);
-            const [error, setError] = React.useState('');
+            const [voiceState, setVoiceState] = React.useState('idle'); // 'idle'|'listening'|'processing'|'done'
             const recRef = React.useRef(null);
+            const timerRef = React.useRef(null);
+
+            const stopRec = () => {
+                recRef.current?.stop();
+                if (timerRef.current) clearTimeout(timerRef.current);
+            };
 
             const start = () => {
+                if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                    alert('您的浏览器不支持语音输入');
+                    return;
+                }
                 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-                if (!SpeechRec) { setError('浏览器不支持语音'); return; }
-                setError('');
                 const rec = new SpeechRec();
                 recRef.current = rec;
                 rec.lang = 'zh-CN';
                 rec.continuous = false;
                 rec.interimResults = false;
+
                 rec.onresult = (e) => {
+                    if (timerRef.current) clearTimeout(timerRef.current);
                     const text = e.results[0][0].transcript;
+                    setVoiceState('processing');
                     const parsed = parseVoiceInput(text);
                     onResult(parsed);
-                    setListening(false);
+                    setVoiceState('done');
+                    setTimeout(() => setVoiceState('idle'), 2000);
                 };
-                rec.onerror = () => { setListening(false); setError('识别失败，请重试'); };
-                rec.onend = () => setListening(false);
+
+                rec.onerror = () => {
+                    if (timerRef.current) clearTimeout(timerRef.current);
+                    setVoiceState('idle');
+                };
+
+                rec.onend = () => {
+                    setVoiceState(prev => prev === 'listening' ? 'idle' : prev);
+                };
+
                 rec.start();
-                setListening(true);
+                setVoiceState('listening');
+                timerRef.current = setTimeout(() => rec.stop(), 10000);
             };
-            const stop = () => { recRef.current?.stop(); setListening(false); };
+
+            const handleClick = () => {
+                if (voiceState === 'listening') { stopRec(); setVoiceState('idle'); }
+                else if (voiceState === 'idle') { start(); }
+            };
+
+            const UI = {
+                idle:       { cls: 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100', body: <><span>🎤</span><span>语音记账</span></> },
+                listening:  { cls: 'bg-red-50 text-red-500 border-red-200', body: (
+                    <>
+                        <div className="flex items-end gap-0.5 h-5">
+                            <span className="voice-bar" style={{height:'10px'}}/>
+                            <span className="voice-bar" style={{height:'16px'}}/>
+                            <span className="voice-bar" style={{height:'20px'}}/>
+                            <span className="voice-bar" style={{height:'16px'}}/>
+                            <span className="voice-bar" style={{height:'10px'}}/>
+                        </div>
+                        <span>正在听…点击停止</span>
+                    </>
+                )},
+                processing: { cls: 'bg-amber-50 text-amber-500 border-amber-100 cursor-wait', body: <><span>⏳</span><span>识别中…</span></> },
+                done:       { cls: 'bg-green-50 text-green-600 border-green-100', body: <><span>✅</span><span>已填入</span></> },
+            };
+            const { cls, body } = UI[voiceState];
 
             return (
-                <div className="flex flex-col items-center">
-                    <button onClick={listening ? stop : start}
-                        className={`w-full py-2.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${listening ? 'bg-red-50 text-red-500 border-2 border-red-200' : 'bg-gray-50 text-gray-500 border-2 border-gray-100 hover:bg-gray-100'}`}>
-                        {listening ? (
-                            <>
-                                <div className="flex items-end gap-0.5 h-5">
-                                    <span className="voice-bar" style={{height:'10px'}}/>
-                                    <span className="voice-bar" style={{height:'16px'}}/>
-                                    <span className="voice-bar" style={{height:'20px'}}/>
-                                    <span className="voice-bar" style={{height:'16px'}}/>
-                                    <span className="voice-bar" style={{height:'10px'}}/>
-                                </div>
-                                <span>录音中，点击停止</span>
-                            </>
-                        ) : (
-                            <><span>🎤</span><span>语音记账</span></>
-                        )}
-                    </button>
-                    {error && <p className="text-[10px] text-red-400 mt-1">{error}</p>}
-                </div>
+                <button
+                    onClick={handleClick}
+                    disabled={voiceState === 'processing' || voiceState === 'done'}
+                    className={`w-full py-2.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all border-2 ${cls}`}>
+                    {body}
+                </button>
             );
         };
 
@@ -2699,12 +2728,12 @@
                                         <button onClick={goNextMonth} className="w-8 h-8 rounded-full bg-white shadow-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0">→</button>
                                         <div className="flex items-center gap-2 flex-1 justify-end">
                                             <button onClick={() => setDisplayCurrency(isRMBCur ? 'JPY' : 'RMB')}
-                                                className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                                                className={`text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors whitespace-nowrap${searchOpen ? ' hidden md:block' : ''}`}
                                                 style={{ color: isRMBCur ? '#c2410c' : '#1e293b' }}>
                                                 ¥{isRMBCur ? 'RMB' : 'JPY'} ⇄
                                             </button>
                                             <button onClick={openRateModal}
-                                                className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-500 hover:bg-gray-50 transition-colors whitespace-nowrap">
+                                                className={`text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-500 hover:bg-gray-50 transition-colors whitespace-nowrap${searchOpen ? ' hidden md:block' : ''}`}>
                                                 汇率 {currentRate}
                                             </button>
                                             {searchOpen ? (
@@ -2937,7 +2966,7 @@
                                     <div className="divide-y divide-gray-50">
                                         {(() => {
                                             const filteredTx = (() => {
-                                                let reversed = [...monthTx].reverse();
+                                                let reversed = [...monthTx].sort((a, b) => new Date(b.date) - new Date(a.date));
                                                 if (catFilter) reversed = reversed.filter(t => t.category === catFilter);
                                                 if (!searchTx.trim()) return reversed;
                                                 const q = searchTx.toLowerCase();
@@ -3465,6 +3494,7 @@
             const [showAdd, setShowAdd] = useState(false);
             const [editItem, setEditItem] = useState(null);
             const [search, setSearch] = useState('');
+            const [searchOpen, setSearchOpen] = useState(false);
 
             const filtered = items.filter(it => {
                 const matchType = filter === 'all' || it.type === filter;
@@ -3473,27 +3503,42 @@
             }).sort((a, b) => b.id - a.id);
 
             return (
-                <div className="flex flex-col gap-4 pb-32 md:pb-0 animate-fade-in">
-                    {/* Header */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex gap-2 overflow-x-auto flex-1 pr-2">
-                            {[['all','全部'],['note','📝 笔记'],['link','🔗 链接'],['image','🖼️ 图片'],['file','📁 文件']].map(([t,l]) => (
-                                <button key={t} onClick={()=>setFilter(t)}
-                                    className={`px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all flex-shrink-0 ${filter===t?'text-white shadow-sm':'bg-white text-gray-400 hover:bg-gray-50'}`}
-                                    style={filter===t?{background:'var(--theme-text)'}:{}}>
-                                    {l}
+                <div className="flex flex-col gap-2 pb-32 md:pb-0 animate-fade-in">
+                    {/* Header：筛选栏 + 🔍 + ＋，搜索时整行替换为搜索框 */}
+                    <div className="flex items-center gap-2">
+                        {searchOpen ? (
+                            <>
+                                <div className="relative flex-1">
+                                    <input autoFocus type="text" value={search} onChange={e=>setSearch(e.target.value)}
+                                        placeholder="搜索 Vault..."
+                                        className="w-full bg-white rounded-2xl px-4 py-2 pr-9 text-sm font-medium outline-none border border-gray-100 shadow-sm" />
+                                    {search && <button onClick={()=>setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-black text-base leading-none">×</button>}
+                                </div>
+                                <button onClick={()=>{ setSearchOpen(false); setSearch(''); }}
+                                    className="px-3 py-2 rounded-xl bg-gray-100 text-gray-500 font-bold text-xs hover:bg-gray-200 transition-colors flex-shrink-0">
+                                    取消
                                 </button>
-                            ))}
-                        </div>
-                        <button onClick={()=>{ setEditItem(null); setShowAdd(true); }}
-                            className="w-9 h-9 rounded-full text-white font-bold text-xl flex items-center justify-center flex-shrink-0 shadow-md hover:scale-105 transition-transform"
-                            style={{background:'var(--theme-text)'}}>+</button>
-                    </div>
-
-                    {/* 搜索 */}
-                    <div className="relative">
-                        <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="搜索 Vault..." className="w-full bg-white rounded-2xl px-4 py-2.5 pr-9 text-sm font-medium outline-none border border-gray-100 shadow-sm" />
-                        {search && <button onClick={()=>setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-black text-base">×</button>}
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex gap-1.5 overflow-x-auto flex-1 hide-scrollbar">
+                                    {[['all','全部'],['note','📝 笔记'],['link','🔗 链接'],['image','🖼️ 图片'],['file','📁 文件']].map(([t,l]) => (
+                                        <button key={t} onClick={()=>setFilter(t)}
+                                            className={`px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all flex-shrink-0 ${filter===t?'text-white shadow-sm':'bg-white text-gray-400 hover:bg-gray-50'}`}
+                                            style={filter===t?{background:'var(--theme-text)'}:{}}>
+                                            {l}
+                                        </button>
+                                    ))}
+                                </div>
+                                <button onClick={()=>setSearchOpen(true)}
+                                    className="w-8 h-8 rounded-full bg-white border border-gray-100 flex items-center justify-center text-sm shadow-sm hover:bg-gray-50 transition-colors flex-shrink-0">
+                                    🔍
+                                </button>
+                                <button onClick={()=>{ setEditItem(null); setShowAdd(true); }}
+                                    className="w-9 h-9 rounded-full text-white font-bold text-xl flex items-center justify-center flex-shrink-0 shadow-md hover:scale-105 transition-transform"
+                                    style={{background:'var(--theme-text)'}}>+</button>
+                            </>
+                        )}
                     </div>
 
                     {/* 卡片网格 */}
@@ -4175,8 +4220,8 @@
             };
 
             return (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={onClose}>
-                    <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-slide-up relative" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[5%] px-4 pb-4 glass-overlay animate-fade-in" onClick={onClose}>
+                    <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-slide-up relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         <button onClick={onClose} className="absolute top-6 right-6 w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
 
                         <div className="flex items-center gap-3 mb-5 pr-8">
@@ -4767,9 +4812,11 @@
                                         {syncIndicator.text}
                                     </span>
                                 )}
+                                {currentView !== 'calendar' && currentView !== 'finance' && currentView !== 'vault' && (
                                 <button onClick={() => setShowGlobalSearch(true)}
                                     className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm text-lg border border-gray-100 hover:bg-gray-50 transition-colors flex-shrink-0"
                                     title="全局搜索">🔍</button>
+                                )}
                                 {currentView === 'home' && (<>
                                     <button onClick={openWeeklyAI}
                                         className="px-3 py-1.5 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-1.5 whitespace-nowrap">
@@ -4912,8 +4959,8 @@
 
                     {/* 中央悬浮添加控制台 (Center Add Modal) */}
                     {showAddCenter && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowAddCenter(false)}>
-                            <div className="bg-white/90 backdrop-blur-2xl w-full max-w-lg rounded-[2rem] p-6 shadow-2xl border border-white animate-slide-up max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[5%] px-4 pb-4 glass-overlay animate-fade-in" onClick={() => setShowAddCenter(false)}>
+                            <div className="bg-white/90 backdrop-blur-2xl w-full max-w-lg rounded-[2rem] p-6 shadow-2xl border border-white animate-slide-up max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                                 <h3 className="text-center font-black text-sm text-gray-400 tracking-widest uppercase mb-6">What's on your mind?</h3>
                                 
                                 <div className="grid grid-cols-3 gap-3">
@@ -5078,8 +5125,8 @@
 
                     {/* 快速记一笔弹窗 */}
                     {showQuickTx && (
-                        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowQuickTx(false)}>
-                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-6 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <div className="fixed inset-0 z-[90] flex items-start justify-center pt-[5%] px-4 pb-4 glass-overlay animate-fade-in" onClick={() => setShowQuickTx(false)}>
+                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-between mb-5">
                                     <h2 className="font-black text-base text-gray-800">✏️ 记一笔</h2>
                                     <input type="date" value={quickTxForm.date} max={TODAY_STR}
