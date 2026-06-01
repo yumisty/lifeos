@@ -1,120 +1,93 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>Generate PWA Icons</title>
+  <title>生成 Life OS 图标</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f1f5f9;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 48px;
-      padding: 40px 20px;
-    }
-    h1 {
-      font-size: 18px;
-      font-weight: 800;
-      color: #334155;
-      letter-spacing: 0.05em;
-    }
-    .previews {
-      display: flex;
-      gap: 48px;
-      align-items: flex-end;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    .icon-card {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-    }
-    .icon-card canvas {
-      border-radius: 22%;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-    }
-    .icon-card .label {
-      font-size: 12px;
-      font-weight: 700;
-      color: #94a3b8;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-    .btn {
-      padding: 10px 24px;
-      border-radius: 999px;
-      border: none;
-      background: #475569;
-      color: #fff;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .btn:hover { background: #334155; }
+    body { font-family: -apple-system, sans-serif; background: #1e293b; color: #f1f5f9;
+           display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 40px; }
+    h1 { font-size: 1.4rem; font-weight: 800; margin: 0; }
+    p { color: #94a3b8; font-size: .9rem; margin: 0; text-align: center; }
+    .canvases { display: flex; gap: 32px; align-items: flex-end; flex-wrap: wrap; justify-content: center; }
+    .card { background: #0f172a; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    canvas { border-radius: 12px; display: block; max-width: 200px; max-height: 200px; }
+    button { background: #E6B422; color: #1e293b; border: none; border-radius: 10px;
+             padding: 10px 24px; font-size: .9rem; font-weight: 800; cursor: pointer; transition: opacity .15s; }
+    button:hover { opacity: .85; }
+    .label { font-size: .75rem; color: #64748b; font-weight: 600; }
+    .steps { background: #0f172a; border-radius: 16px; padding: 20px 28px; max-width: 520px; }
+    .steps ol { margin: 8px 0 0; padding-left: 20px; line-height: 2; color: #94a3b8; font-size: .85rem; }
+    .steps li code { background: #1e293b; border-radius: 4px; padding: 1px 6px; color: #fbbf24; font-family: monospace; }
   </style>
 </head>
 <body>
-  <h1>Visual Life OS · PWA 图标生成器</h1>
+  <h1>Visual Life OS — 图标生成器</h1>
+  <p>点击按钮生成图标，下载后放到项目根目录再 git push</p>
 
-  <div class="previews">
-    <div class="icon-card">
+  <div class="canvases">
+    <div class="card">
       <canvas id="c192" width="192" height="192"></canvas>
-      <span class="label">192 × 192</span>
-      <button class="btn" onclick="download('c192', 'icon-192.png')">下载 icon-192.png</button>
+      <div class="label">192 × 192</div>
+      <button onclick="download('c192','icon-192.png')">⬇ 下载 icon-192.png</button>
     </div>
-    <div class="icon-card">
+    <div class="card">
       <canvas id="c512" width="512" height="512"></canvas>
-      <span class="label">512 × 512</span>
-      <button class="btn" onclick="download('c512', 'icon-512.png')">下载 icon-512.png</button>
+      <div class="label">512 × 512</div>
+      <button onclick="download('c512','icon-512.png')">⬇ 下载 icon-512.png</button>
     </div>
   </div>
 
+  <div class="steps">
+    <strong>使用步骤：</strong>
+    <ol>
+      <li>点击上方按钮下载两个 PNG 文件</li>
+      <li>将 <code>icon-192.png</code> 和 <code>icon-512.png</code> 放到项目根目录（和 index.html 同级）</li>
+      <li>终端执行 <code>git add .</code> → <code>git commit -m "update icons"</code> → <code>git push</code></li>
+      <li>iPhone Safari 重新「添加到主屏幕」即可看到新图标</li>
+    </ol>
+  </div>
+
   <script>
-    function drawIcon(canvasId) {
-      const canvas = document.getElementById(canvasId);
+    function drawIcon(canvas) {
       const size = canvas.width;
-      const ctx = canvas.getContext('2d');
+      const ctx  = canvas.getContext('2d');
 
-      // --- 背景 ---
-      const bgRadius = size * 0.2;
+      // 背景渐变
+      const grad = ctx.createLinearGradient(0, 0, size, size);
+      grad.addColorStop(0, '#475569');
+      grad.addColorStop(1, '#1e293b');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, size, size);
+
+      // 外层半透明圆角框
+      const pad = size * 0.14;
+      const sq  = size - pad * 2;
+      const r   = size * 0.14;
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      roundRect(ctx, pad, pad, sq, sq, r);
+      ctx.fill();
+
+      // 内层白色圆角正方形
+      const pad2 = size * 0.18;
+      const sq2  = size - pad2 * 2;
+      const r2   = size * 0.11;
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      roundRect(ctx, pad2, pad2, sq2, sq2, r2);
+      ctx.fill();
+
+      // 颜文字
+      const faceSize = size * 0.18;
+      ctx.fillStyle = '#1e293b';
+      ctx.font = `800 ${faceSize}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('( •̀ω•́ )', size / 2, size * 0.43);
+
+      // "Life OS" 副标题
+      const subSize = size * 0.1;
       ctx.fillStyle = '#475569';
-      roundRect(ctx, 0, 0, size, size, bgRadius);
-      ctx.fill();
-
-      // --- 白色圆角矩形 ---
-      const cardW = size * 0.7;
-      const cardH = size * 0.52;
-      const cardX = (size - cardW) / 2;
-      const cardY = size * 0.16;
-      const cardR = size * 0.1;
-
-      ctx.fillStyle = 'rgba(255,255,255,0.95)';
-      roundRect(ctx, cardX, cardY, cardW, cardH, cardR);
-      ctx.fill();
-
-      // --- 颜文字 ( •̀ω) ---
-      const faceSize = size * 0.195;
-      ctx.fillStyle = '#334155';
-      ctx.font = `900 ${faceSize}px "Segoe UI", "Arial", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('( •̀ω)', size / 2, cardY + cardH * 0.46);
-
-      // --- Life OS 小字 ---
-      const subSize = size * 0.085;
-      ctx.fillStyle = '#64748b';
-      ctx.font = `800 ${subSize}px "Segoe UI", "Arial", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.letterSpacing = `${size * 0.012}px`;
-      ctx.fillText('Life OS', size / 2, cardY + cardH * 0.82);
+      ctx.font = `900 ${subSize}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+      ctx.fillText('Life OS', size / 2, size * 0.63);
     }
 
     function roundRect(ctx, x, y, w, h, r) {
@@ -131,16 +104,14 @@
       ctx.closePath();
     }
 
-    function download(canvasId, filename) {
-      const canvas = document.getElementById(canvasId);
+    function download(id, filename) {
       const a = document.createElement('a');
-      a.href = canvas.toDataURL('image/png');
+      a.href = document.getElementById(id).toDataURL('image/png');
       a.download = filename;
       a.click();
     }
 
-    drawIcon('c192');
-    drawIcon('c512');
+    ['c192', 'c512'].forEach(id => drawIcon(document.getElementById(id)));
   </script>
 </body>
 </html>
