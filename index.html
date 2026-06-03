@@ -1594,7 +1594,7 @@
             };
 
             return (
-                <div className="h-full flex flex-col p-3 rounded-os-xl overflow-hidden" style={{ background: '#F0FDF4' }}>
+                <div className="h-full flex flex-col p-3 rounded-os-xl" style={{ background: '#F0FDF4', overflowY: 'hidden' }}>
                     {/* Header + 周切换 */}
                     <div className="flex items-center justify-between mb-2 flex-shrink-0">
                         <button onClick={() => { setWeekOffset(o => o - 1); setEditing(null); }}
@@ -2570,21 +2570,21 @@
                                         className="text-xs font-bold text-gray-500 bg-gray-50 rounded-xl px-3 py-1.5 border border-gray-200 outline-none" />
                                 </div>
 
-                                {/* 金额（70%）+ 货币（30%）同一行 */}
-                                <div className="flex gap-2 mb-3">
+                                {/* 金额 + 货币同一行 */}
+                                <div className="flex gap-2 mb-3 overflow-hidden">
                                     <input
-                                        type="number" inputMode="decimal" placeholder="金额"
+                                        type="text" inputMode="decimal" placeholder="金额"
                                         value={addForm.amount}
                                         onChange={e => setAddForm(f => ({ ...f, amount: e.target.value }))}
                                         className="bg-gray-50 rounded-2xl px-4 py-3 text-lg font-black outline-none border-2 border-transparent focus:border-yellow-400 transition-colors"
-                                        style={{ flex: '7' }}
+                                        style={{ flex: '1', minWidth: 0, maxWidth: 'calc(100% - 88px)' }}
                                         autoFocus
                                     />
                                     <select
                                         value={addForm.currency}
                                         onChange={e => setAddForm(f => ({ ...f, currency: e.target.value }))}
                                         className="bg-gray-50 rounded-2xl px-3 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors text-center"
-                                        style={{ flex: '3', minWidth: '72px' }}>
+                                        style={{ flexShrink: 0, width: '80px' }}>
                                         <option>JPY</option>
                                         <option>RMB</option>
                                     </select>
@@ -4145,6 +4145,31 @@
                                         {diarySaved ? '✓ 已保存' : '保存日记'}
                                     </button>
                                 </div>
+                                {/* 进行中项目快览 */}
+                                {projects && projects.filter(p => p.status !== '已完成' && p.status !== '已取消').length > 0 && (
+                                    <div className="bg-white p-4 rounded-[2rem] shadow-sm">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <p className="text-xs font-black text-gray-400">📋 进行中项目</p>
+                                            <button onClick={() => setCalTab('projects')} className="text-[10px] font-bold hover:underline" style={{ color: 'var(--accent)' }}>全部 →</button>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {projects.filter(p => p.status !== '已完成' && p.status !== '已取消').slice(0, 3).map(p => {
+                                                const daysLeft = Math.ceil((new Date(p.endDate + 'T00:00:00') - new Date(TODAY_STR + 'T00:00:00')) / 86400000);
+                                                return (
+                                                    <div key={p.id} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
+                                                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.color || '#a78bfa' }} />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-xs font-bold text-gray-700 truncate">{p.name}</p>
+                                                        </div>
+                                                        <span className={`text-[10px] font-black flex-shrink-0 ${daysLeft < 0 ? 'text-red-500' : daysLeft <= 7 ? 'text-orange-500' : 'text-gray-400'}`}>
+                                                            {daysLeft < 0 ? `逾期${Math.abs(daysLeft)}天` : daysLeft === 0 ? '今天截止' : `${daysLeft}天`}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="bg-white p-5 rounded-[2rem] shadow-sm flex-1 overflow-y-auto">
                                     <h3 className="text-base font-black mb-3 border-b border-gray-100 pb-2">{selectedDate} 记录</h3>
                                     {selectedEvents.length === 0 && selectedTodos.length === 0 ? (
@@ -5329,7 +5354,7 @@
                         {/* 视图路由 */}
                         <div key={currentView} className="animate-view-in">
                             {currentView === 'home' && (
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[160px] pb-32 md:pb-8" style={{ gridAutoFlow: 'dense' }}>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[200px] pb-32 md:pb-8" style={{ gridAutoFlow: 'dense' }}>
                                     {widgets.map((widget, index) => (
                                         <WidgetWrapper key={widget.id} size={widget.size} isEditMode={isEditMode} onEnterEdit={() => setIsEditMode(true)} index={index} onMove={moveWidget} onCycleSize={() => cycleWidgetSize(index)}>
                                             {widget.id === 'weekly' && <WeeklyWidget events={events} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026年5月第2周'})} />}
