@@ -202,7 +202,6 @@
                     all_meals:            local.allMeals            || {},
                     vault:                local.vault               || {},
                     diary:                local.diary               || {},
-                    projects:             local.projects             || [],
                     updated_at:           new Date().toISOString(),
                 });
                 return !error;
@@ -245,7 +244,6 @@
                     allMeals:          mergeObj(data.all_meals,             local.allMeals),
                     vault:             mergeObj(data.vault,                 local.vault),
                     diary:             mergeObj(data.diary,                 local.diary),
-                    projects:          mergeArr(data.projects,              local.projects),
                 };
                 localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
                 await syncToCloud();
@@ -675,7 +673,6 @@
             const days = ['日', '一', '二', '三', '四', '五', '六'];
             const [selectedDayIdx, setSelectedDayIdx] = useState(() => new Date().getDay());
             const [newTodoText, setNewTodoText] = useState('');
-            const [editingDue, setEditingDue] = useState(null);
 
             const weekKey = getWeek(new Date(TODAY_STR));
 
@@ -720,23 +717,11 @@
 
             const addTodo = () => {
                 if (!newTodoText.trim()) return;
-                saveTodos([...weekTodos, { id: Date.now(), title: newTodoText.trim(), date: selectedDate, dueDate: selectedDate, done: false }]);
+                saveTodos([...weekTodos, { id: Date.now(), title: newTodoText.trim(), date: selectedDate, done: false }]);
                 setNewTodoText('');
             };
             const toggleTodo = (id) => saveTodos(weekTodos.map(t => t.id === id ? { ...t, done: !t.done } : t));
             const deleteTodo = (id) => saveTodos(weekTodos.filter(t => t.id !== id));
-            const postponeTodo = (id) => {
-                saveTodos(weekTodos.map(t => {
-                    if (t.id !== id) return t;
-                    const base = t.dueDate || t.date;
-                    const d = new Date(base + 'T00:00:00'); d.setDate(d.getDate() + 1);
-                    return { ...t, dueDate: d.toISOString().split('T')[0] };
-                }));
-            };
-            const changeDueDate = (id, newDate) => {
-                if (newDate) saveTodos(weekTodos.map(t => t.id === id ? { ...t, dueDate: newDate } : t));
-                setEditingDue(null);
-            };
 
             return (
                 <div className="bg-white p-5 rounded-os-xl shadow-sm h-full flex flex-col gap-3 relative group overflow-hidden">
@@ -777,44 +762,20 @@
                                 <span className="truncate flex-1 font-bold text-gray-700">{item.title}</span>
                             </div>
                         ))}
-                        {allDayTodos.map(t => {
-                            const due = t.dueDate || t.date;
-                            const isOverdue = !t.done && due < TODAY_STR;
-                            return (
-                                <div key={t.id} className="flex items-center gap-1.5 text-xs py-1 group/item">
-                                    <button onClick={() => !t.historical && toggleTodo(t.id)}
-                                        className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-[9px] transition-colors
-                                            ${t.done ? 'bg-green-400 border-green-400 text-white' : 'border-gray-300 hover:border-green-300'}`}>
-                                        {t.done && '✓'}
-                                    </button>
-                                    <span className={`flex-1 min-w-0 truncate ${t.done ? 'line-through text-gray-400' : 'text-gray-700 font-bold'}`}>{t.title}</span>
-                                    {!t.historical && !t.done && (
-                                        <>
-                                            {editingDue === t.id ? (
-                                                <input type="date" autoFocus defaultValue={due}
-                                                    className="text-[9px] bg-gray-50 rounded border border-gray-200 outline-none flex-shrink-0"
-                                                    style={{ width: '100px', padding: '1px 3px', colorScheme: 'light' }}
-                                                    onBlur={e => changeDueDate(t.id, e.target.value)}
-                                                    onKeyDown={e => { if (e.key === 'Enter') changeDueDate(t.id, e.target.value); if (e.key === 'Escape') setEditingDue(null); }} />
-                                            ) : (
-                                                <button onClick={() => setEditingDue(t.id)}
-                                                    className={`text-[9px] font-bold flex-shrink-0 px-1 py-0.5 rounded leading-none transition-colors ${isOverdue ? 'bg-red-50 text-red-500' : 'text-gray-300 hover:text-gray-500'}`}>
-                                                    {due.slice(5)}
-                                                </button>
-                                            )}
-                                            <button onClick={() => postponeTodo(t.id)}
-                                                className="text-[9px] font-black text-gray-300 hover:text-blue-400 flex-shrink-0 opacity-0 group-hover/item:opacity-100 transition-all leading-none whitespace-nowrap">
-                                                →+1
-                                            </button>
-                                        </>
-                                    )}
-                                    {!t.historical && (
-                                        <button onClick={() => deleteTodo(t.id)}
-                                            className="text-gray-300 hover:text-red-400 transition-all text-sm leading-none flex-shrink-0 opacity-0 group-hover/item:opacity-100">×</button>
-                                    )}
-                                </div>
-                            );
-                        })}
+                        {allDayTodos.map(t => (
+                            <div key={t.id} className="flex items-center gap-2 text-xs py-1 group/item">
+                                <button onClick={() => !t.historical && toggleTodo(t.id)}
+                                    className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-[9px] transition-colors
+                                        ${t.done ? 'bg-green-400 border-green-400 text-white' : 'border-gray-300 hover:border-green-300'}`}>
+                                    {t.done && '✓'}
+                                </button>
+                                <span className={`truncate flex-1 ${t.done ? 'line-through text-gray-400' : 'text-gray-700 font-bold'}`}>{t.title}</span>
+                                {!t.historical && (
+                                    <button onClick={() => deleteTodo(t.id)}
+                                        className="opacity-0 group-hover/item:opacity-100 text-gray-300 hover:text-red-400 transition-all text-sm leading-none flex-shrink-0">×</button>
+                                )}
+                            </div>
+                        ))}
                     </div>
 
                     {/* 添加输入框 */}
@@ -1594,7 +1555,7 @@
             };
 
             return (
-                <div className="h-full flex flex-col p-3 rounded-os-xl overflow-hidden" style={{ background: '#F0FDF4' }}>
+                <div className="h-full flex flex-col p-3 rounded-os-xl" style={{ background: '#F0FDF4' }}>
                     {/* Header + 周切换 */}
                     <div className="flex items-center justify-between mb-2 flex-shrink-0">
                         <button onClick={() => { setWeekOffset(o => o - 1); setEditing(null); }}
@@ -1614,9 +1575,10 @@
                         <div style={{
                             display: 'grid',
                             gridTemplateColumns: 'repeat(7, 1fr)',
-                            gridTemplateRows: 'auto repeat(3, minmax(52px, 1fr))',
+                            gridTemplateRows: 'auto repeat(3, 1fr)',
                             gap: '4px',
                             minWidth: '560px',
+                            height: '100%',
                         }}>
                             {/* 第一行：星期标题 */}
                             {weekDays.map(({ code, label }, colIdx) => {
@@ -3947,89 +3909,13 @@
             );
         };
 
-        // ── 项目弹窗 ──
-        const PROJECT_COLORS = ['#6366f1','#ec4899','#f97316','#22c55e','#3b82f6','#a78bfa'];
-        const PROJECT_TYPES   = ['设计','开发','运营','咨询','其他'];
-        const PROJECT_STATUSES = ['进行中','待启动','已完成','暂停'];
-        const STATUS_COLORS = { '进行中':'#3b82f6','待启动':'#94a3b8','已完成':'#22c55e','暂停':'#f97316' };
-
-        const ProjectModal = ({ project, onClose, onSave }) => {
-            const [form, setForm] = useState({
-                name: project?.name || '', client: project?.client || '',
-                type: project?.type || '设计', status: project?.status || '进行中',
-                startDate: project?.startDate || TODAY_STR, endDate: project?.endDate || '',
-                color: project?.color || '#6366f1', notes: project?.notes || '',
-            });
-            const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-            const canSave = form.name.trim() && form.endDate;
-            return (
-                <div className="fixed inset-0 z-[80] flex items-start justify-center pt-[5%] px-4 pb-4 glass-overlay animate-fade-in" onClick={onClose}>
-                    <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="font-black text-base text-gray-800">{project ? '编辑项目' : '新建项目'}</h2>
-                            <button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
-                        </div>
-                        {/* 颜色选择 */}
-                        <div className="flex gap-2 mb-4">
-                            {PROJECT_COLORS.map(c => (
-                                <button key={c} onClick={() => set('color', c)}
-                                    className="w-8 h-8 rounded-full flex-shrink-0 transition-transform hover:scale-110"
-                                    style={{ background: c, outline: form.color === c ? `3px solid #1e293b` : '3px solid transparent', outlineOffset: '2px' }} />
-                            ))}
-                        </div>
-                        <div className="space-y-3">
-                            <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="项目名称 *" autoFocus
-                                className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-purple-200 transition-colors" />
-                            <input value={form.client} onChange={e => set('client', e.target.value)} placeholder="客户名称"
-                                className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none border-2 border-transparent focus:border-purple-200 transition-colors" />
-                            <div className="grid grid-cols-2 gap-2">
-                                <select value={form.type} onChange={e => set('type', e.target.value)}
-                                    className="bg-gray-50 rounded-2xl px-3 py-3 text-sm outline-none border-2 border-transparent focus:border-purple-200 transition-colors">
-                                    {PROJECT_TYPES.map(t => <option key={t}>{t}</option>)}
-                                </select>
-                                <select value={form.status} onChange={e => set('status', e.target.value)}
-                                    className="bg-gray-50 rounded-2xl px-3 py-3 text-sm outline-none border-2 border-transparent focus:border-purple-200 transition-colors">
-                                    {PROJECT_STATUSES.map(s => <option key={s}>{s}</option>)}
-                                </select>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 mb-1">开始日期</p>
-                                    <input type="date" value={form.startDate} onChange={e => set('startDate', e.target.value)}
-                                        className="w-full bg-gray-50 rounded-xl px-3 py-2 text-xs outline-none border border-gray-100" />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 mb-1">截止日期 *</p>
-                                    <input type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)}
-                                        className="w-full bg-gray-50 rounded-xl px-3 py-2 text-xs outline-none border border-gray-100" />
-                                </div>
-                            </div>
-                            <textarea value={form.notes} onChange={e => set('notes', e.target.value)}
-                                placeholder="备注（可选）" rows={2}
-                                className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none border-2 border-transparent focus:border-purple-200 transition-colors resize-none" />
-                        </div>
-                        <div className="flex gap-2 mt-5">
-                            <button onClick={onClose} className="flex-1 py-3 rounded-2xl bg-gray-100 text-gray-600 font-bold text-sm hover:bg-gray-200 transition-colors">取消</button>
-                            <button onClick={() => canSave && onSave({ ...form, id: project?.id || Date.now(), name: form.name.trim() })}
-                                disabled={!canSave}
-                                className="flex-1 py-3 rounded-2xl text-white font-black text-sm disabled:opacity-40 transition-opacity hover:opacity-90"
-                                style={{ background: form.color }}>保存</button>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const CalendarView = ({ events, todos, activeFilter, onOpenReport, diary = {}, onSaveDiary, projects = [], onSaveProject, onDeleteProject, calSearchOpen, calSearch, setCalSearch, onUpdateEvent, onDeleteEvent }) => {
+        const CalendarView = ({ events, todos, activeFilter, onOpenReport, diary = {}, onSaveDiary, calSearchOpen, calSearch, setCalSearch, onUpdateEvent, onDeleteEvent }) => {
             const [calTab, setCalTab] = useState('month');
             const [currentDate, setCurrentDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
             const [selectedDate, setSelectedDate] = useState(TODAY_STR);
             const [detailEvent, setDetailEvent] = useState(null);
             const [diaryDraft, setDiaryDraft] = useState('');
             const [diarySaved, setDiarySaved] = useState(false);
-            const [showProjectModal, setShowProjectModal] = useState(false);
-            const [editingProject, setEditingProject] = useState(null);
-            const [ganttMonth, setGanttMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
 
             // 切换选中日期时同步日记草稿
             useEffect(() => {
@@ -4060,9 +3946,9 @@
 
                     {/* Tab 切换 */}
                     <div className="flex gap-2">
-                        {[['month','📅 月历'],['year','🗓 年历'],['projects','📋 项目']].map(([t, label]) => (
+                        {[['month','📅 月历'],['year','🗓 年历']].map(([t, label]) => (
                             <button key={t} onClick={() => setCalTab(t)}
-                                className={`flex-1 md:flex-none px-4 py-2.5 rounded-2xl font-black text-sm transition-all ${calTab === t ? 'text-white shadow-sm' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+                                className={`flex-1 md:flex-none px-5 py-2.5 rounded-2xl font-black text-sm transition-all ${calTab === t ? 'text-white shadow-sm' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
                                 style={calTab === t ? { background: 'var(--theme-text, #475569)' } : {}}>
                                 {label}
                             </button>
@@ -4240,157 +4126,6 @@
                                 })}
                             </div>
                         </div>
-                    )}
-
-                    {/* ── 项目 tab ── */}
-                    {calTab === 'projects' && (() => {
-                        const gYear  = ganttMonth.getFullYear();
-                        const gMonth = ganttMonth.getMonth();
-                        const daysInGM = new Date(gYear, gMonth + 1, 0).getDate();
-                        const ganttDays = Array.from({ length: daysInGM }, (_, i) => {
-                            const d = new Date(gYear, gMonth, i + 1);
-                            return d.toISOString().split('T')[0];
-                        });
-                        const DAY_W = 26; // px per day column
-                        const todayIdx = ganttDays.indexOf(TODAY_STR);
-
-                        const getBar = (p) => {
-                            const s = p.startDate > ganttDays[0] ? p.startDate : ganttDays[0];
-                            const e = p.endDate   < ganttDays[daysInGM - 1] ? p.endDate : ganttDays[daysInGM - 1];
-                            if (s > e) return null;
-                            const si = ganttDays.indexOf(s), ei = ganttDays.indexOf(e);
-                            if (si < 0 || ei < 0) return null;
-                            return { left: si * DAY_W, width: (ei - si + 1) * DAY_W };
-                        };
-                        const daysToEnd = (p) => Math.ceil((new Date(p.endDate + 'T00:00:00') - new Date(TODAY_STR + 'T00:00:00')) / 86400000);
-
-                        return (
-                            <div className="animate-fade-in flex flex-col md:flex-row gap-4">
-                                {/* 左侧：项目卡片列表 */}
-                                <div className="w-full md:w-80 flex-shrink-0 flex flex-col gap-3">
-                                    <button onClick={() => { setEditingProject(null); setShowProjectModal(true); }}
-                                        className="w-full py-3 rounded-2xl font-black text-sm text-white flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-sm"
-                                        style={{ background: 'var(--theme-text, #475569)' }}>
-                                        + 新建项目
-                                    </button>
-                                    {projects.length === 0 && (
-                                        <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
-                                            <p className="text-2xl mb-2">📋</p>
-                                            <p className="text-sm font-bold text-gray-400">暂无项目，点击新建</p>
-                                        </div>
-                                    )}
-                                    {projects.map(p => {
-                                        const dtoe = daysToEnd(p);
-                                        const urgent = dtoe >= 0 && dtoe < 7;
-                                        const overdue = dtoe < 0;
-                                        return (
-                                            <div key={p.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 relative overflow-hidden group/pc">
-                                                {/* 左色条 */}
-                                                <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ background: p.color }} />
-                                                <div className="pl-2">
-                                                    <div className="flex items-start justify-between gap-2 mb-1">
-                                                        <div className="min-w-0">
-                                                            <p className="font-black text-sm text-gray-800 truncate">{p.name}</p>
-                                                            {p.client && <p className="text-[10px] text-gray-400 font-medium truncate">{p.client}</p>}
-                                                        </div>
-                                                        <div className="flex gap-1 flex-shrink-0">
-                                                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full text-white" style={{ background: p.color + 'cc' }}>{p.type}</span>
-                                                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full text-white" style={{ background: STATUS_COLORS[p.status] || '#94a3b8' }}>{p.status}</span>
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-[10px] text-gray-400 font-medium mb-1">{p.startDate} → {p.endDate}</p>
-                                                    <div className="flex items-center justify-between">
-                                                        <p className={`text-[10px] font-black ${overdue ? 'text-red-500' : urgent ? 'text-orange-500' : 'text-gray-400'}`}>
-                                                            {overdue ? `已逾期 ${-dtoe} 天` : dtoe === 0 ? '🔥 今天截止' : `距截止 ${dtoe} 天`}
-                                                        </p>
-                                                        <div className="flex gap-1 opacity-0 group-hover/pc:opacity-100 transition-opacity">
-                                                            <button onClick={() => { setEditingProject(p); setShowProjectModal(true); }}
-                                                                className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors">编辑</button>
-                                                            <button onClick={() => { if (window.confirm(`删除「${p.name}」？`)) onDeleteProject && onDeleteProject(p.id); }}
-                                                                className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 transition-colors">删除</button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                {/* 右侧：甘特图 */}
-                                <div className="flex-1 bg-white rounded-[2rem] shadow-sm overflow-hidden flex flex-col">
-                                    {/* 月份导航 */}
-                                    <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50 flex-shrink-0">
-                                        <button onClick={() => setGanttMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
-                                            className="w-8 h-8 rounded-full bg-gray-50 font-bold hover:bg-gray-100 transition-colors">←</button>
-                                        <span className="font-black text-sm">{gYear}年{gMonth + 1}月</span>
-                                        <button onClick={() => setGanttMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
-                                            className="w-8 h-8 rounded-full bg-gray-50 font-bold hover:bg-gray-100 transition-colors">→</button>
-                                    </div>
-                                    <div className="flex-1 overflow-x-auto overflow-y-auto hide-scrollbar">
-                                        <div style={{ minWidth: `${daysInGM * DAY_W + 8}px` }}>
-                                            {/* 日期表头 */}
-                                            <div className="flex border-b border-gray-50 sticky top-0 bg-white z-10" style={{ paddingLeft: '4px', paddingRight: '4px' }}>
-                                                {ganttDays.map((ds, i) => {
-                                                    const d = new Date(ds + 'T00:00:00');
-                                                    const isToday = ds === TODAY_STR;
-                                                    const isSun = d.getDay() === 0;
-                                                    return (
-                                                        <div key={ds} style={{ width: `${DAY_W}px`, flexShrink: 0 }}
-                                                            className={`flex flex-col items-center py-1.5 text-center ${isToday ? 'text-red-500' : isSun ? 'text-gray-400' : 'text-gray-400'}`}>
-                                                            <span style={{ fontSize: '9px', fontWeight: 700 }}>{['日','一','二','三','四','五','六'][d.getDay()]}</span>
-                                                            <span style={{ fontSize: '11px', fontWeight: isToday ? 900 : 600 }}>{d.getDate()}</span>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                            {/* 项目行 */}
-                                            {projects.length === 0 ? (
-                                                <div className="px-5 py-12 text-center text-gray-300 text-sm font-bold">新建项目后显示在这里</div>
-                                            ) : projects.map((p, pi) => {
-                                                const bar = getBar(p);
-                                                const endInMonth = p.endDate >= ganttDays[0] && p.endDate <= ganttDays[daysInGM - 1];
-                                                const endIdx = ganttDays.indexOf(p.endDate);
-                                                return (
-                                                    <div key={p.id} className={`relative flex items-center ${pi % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}
-                                                        style={{ height: '40px', paddingLeft: '4px', paddingRight: '4px' }}>
-                                                        {/* 今日红线 */}
-                                                        {todayIdx >= 0 && (
-                                                            <div className="absolute top-0 bottom-0 pointer-events-none"
-                                                                style={{ left: `${todayIdx * DAY_W + DAY_W / 2 + 4}px`, width: '1.5px', background: '#ef4444', opacity: 0.5 }} />
-                                                        )}
-                                                        {/* 颜色条 */}
-                                                        {bar && (
-                                                            <div className="absolute rounded-full"
-                                                                style={{ left: `${bar.left + 4}px`, width: `${bar.width - 4}px`, height: '18px', top: '11px',
-                                                                         background: p.color, opacity: p.status === '已完成' ? 0.4 : 0.85 }}>
-                                                                <span className="absolute inset-0 flex items-center justify-center text-white font-black truncate px-2"
-                                                                    style={{ fontSize: '9px' }}>{p.name}</span>
-                                                            </div>
-                                                        )}
-                                                        {/* 截止⚑旗 */}
-                                                        {endInMonth && endIdx >= 0 && (
-                                                            <div className="absolute pointer-events-none font-black"
-                                                                style={{ left: `${endIdx * DAY_W + DAY_W / 2 - 4 + 4}px`, top: '2px', fontSize: '10px', color: p.color }}>
-                                                                ⚑
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })()}
-
-                    {/* 项目弹窗 */}
-                    {showProjectModal && (
-                        <ProjectModal
-                            project={editingProject}
-                            onClose={() => { setShowProjectModal(false); setEditingProject(null); }}
-                            onSave={p => { onSaveProject && onSaveProject(p); setShowProjectModal(false); setEditingProject(null); }}
-                        />
                     )}
 
                 {detailEvent && (
@@ -4860,22 +4595,6 @@
                 window.addEventListener('lifeos:synced', handler);
                 return () => window.removeEventListener('lifeos:synced', handler);
             }, []);
-
-            const [projects, setProjects] = useState(() => {
-                try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}').projects || []; }
-                catch { return []; }
-            });
-            useEffect(() => {
-                const handler = () => {
-                    try {
-                        const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                        setProjects(d.projects || []);
-                    } catch {}
-                };
-                window.addEventListener('lifeos:synced', handler);
-                return () => window.removeEventListener('lifeos:synced', handler);
-            }, []);
-
             const [widgets, setWidgets] = useState(() => {
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
@@ -5329,7 +5048,7 @@
                         {/* 视图路由 */}
                         <div key={currentView} className="animate-view-in">
                             {currentView === 'home' && (
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[160px] pb-32 md:pb-8" style={{ gridAutoFlow: 'dense' }}>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[180px] pb-32 md:pb-8" style={{ gridAutoFlow: 'dense' }}>
                                     {widgets.map((widget, index) => (
                                         <WidgetWrapper key={widget.id} size={widget.size} isEditMode={isEditMode} onEnterEdit={() => setIsEditMode(true)} index={index} onMove={moveWidget} onCycleSize={() => cycleWidgetSize(index)}>
                                             {widget.id === 'weekly' && <WeeklyWidget events={events} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026年5月第2周'})} />}
@@ -5353,19 +5072,7 @@
                             )}
                             
                             {currentView === 'finance' && <FinanceView />}
-                            {currentView === 'calendar' && <CalendarView events={events} todos={todos} activeFilter={activeFilter} diary={diary} projects={projects}
-                                onSaveProject={(p) => {
-                                    const next = projects.some(x => x.id === p.id) ? projects.map(x => x.id === p.id ? p : x) : [...projects, p];
-                                    setProjects(next);
-                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.projects = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
-                                    syncToCloud();
-                                }}
-                                onDeleteProject={(id) => {
-                                    const next = projects.filter(x => x.id !== id);
-                                    setProjects(next);
-                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.projects = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
-                                    syncToCloud();
-                                }}
+                            {currentView === 'calendar' && <CalendarView events={events} todos={todos} activeFilter={activeFilter} diary={diary}
                                 onSaveDiary={(date, text) => {
                                     const next = { ...diary, [date]: text };
                                     setDiary(next);
@@ -5651,16 +5358,16 @@
                                         onChange={e => setQuickTxForm(f => ({ ...f, date: e.target.value }))}
                                         className="text-xs font-bold text-gray-500 bg-gray-50 rounded-xl px-3 py-1.5 border border-gray-200 outline-none" />
                                 </div>
-                                <div className="flex gap-2 mb-3 overflow-hidden">
+                                <div className="flex gap-2 mb-3">
                                     <input type="number" inputMode="decimal" placeholder="金额"
                                         value={quickTxForm.amount}
                                         onChange={e => setQuickTxForm(f => ({ ...f, amount: e.target.value }))}
                                         className="bg-gray-50 rounded-2xl px-4 py-3 text-lg font-black outline-none border-2 border-transparent focus:border-yellow-400 transition-colors"
-                                        style={{ flex: '1', minWidth: 0 }} autoFocus />
+                                        style={{ flex: '7' }} autoFocus />
                                     <select value={quickTxForm.currency}
                                         onChange={e => setQuickTxForm(f => ({ ...f, currency: e.target.value }))}
                                         className="bg-gray-50 rounded-2xl px-3 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors text-center"
-                                        style={{ flexShrink: 0, width: '80px' }}>
+                                        style={{ flex: '3', minWidth: '72px' }}>
                                         <option>JPY</option>
                                         <option>RMB</option>
                                     </select>
