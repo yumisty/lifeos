@@ -714,8 +714,8 @@
 
             const selectedDate = CURRENT_WEEK_DATES[selectedDayIdx];
             const dayEvents = events.filter(e => e.date === selectedDate);
-            const dayNewTodos = weekTodos.filter(t => t.date === selectedDate);
-            const dayHistTodos = historicalTodos.filter(t => t.date === selectedDate);
+            const dayNewTodos = weekTodos.filter(t => (t.dueDate || t.date) === selectedDate);
+            const dayHistTodos = historicalTodos.filter(t => (t.dueDate || t.date) === selectedDate);
             const allDayTodos = [...dayHistTodos, ...dayNewTodos];
 
             const addTodo = () => {
@@ -750,7 +750,7 @@
                             const isSelected = selectedDayIdx === idx;
                             const dStr = CURRENT_WEEK_DATES[idx];
                             const hasE = events.some(e => e.date === dStr);
-                            const hasT = weekTodos.some(t => t.date === dStr && !t.done) || historicalTodos.some(t => t.date === dStr && !t.done);
+                            const hasT = weekTodos.some(t => (t.dueDate || t.date) === dStr && !t.done) || historicalTodos.some(t => (t.dueDate || t.date) === dStr && !t.done);
                             return (
                                 <div key={day} onClick={() => setSelectedDayIdx(idx)} className="flex flex-col items-center gap-1 cursor-pointer">
                                     <div className="flex gap-0.5 h-1.5">
@@ -4339,7 +4339,7 @@
                             const d = new Date(gYear, gMonth, i + 1);
                             return d.toISOString().split('T')[0];
                         });
-                        const DAY_W = 26; // px per day column
+                        const DAY_W = 28; // px per day column
                         const todayIdx = ganttDays.indexOf(TODAY_STR);
 
                         const getBar = (p) => {
@@ -4405,7 +4405,7 @@
                                 </div>
 
                                 {/* 右侧：甘特图 */}
-                                <div className="flex-1 bg-white rounded-[2rem] shadow-sm overflow-hidden flex flex-col">
+                                <div className="flex-1 bg-white rounded-[2rem] shadow-sm overflow-hidden flex flex-col" style={{ minHeight: '300px' }}>
                                     {/* 月份导航 */}
                                     <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50 flex-shrink-0">
                                         <button onClick={() => setGanttMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
@@ -4440,7 +4440,7 @@
                                                 const endIdx = ganttDays.indexOf(p.endDate);
                                                 return (
                                                     <div key={p.id} className={`relative flex items-center ${pi % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}
-                                                        style={{ height: '40px', paddingLeft: '4px', paddingRight: '4px' }}>
+                                                        style={{ height: '28px', marginBottom: '4px', paddingLeft: '4px', paddingRight: '4px' }}>
                                                         {/* 今日红线 */}
                                                         {todayIdx >= 0 && (
                                                             <div className="absolute top-0 bottom-0 pointer-events-none"
@@ -4449,10 +4449,10 @@
                                                         {/* 颜色条 */}
                                                         {bar && (
                                                             <div className="absolute rounded-full"
-                                                                style={{ left: `${bar.left + 4}px`, width: `${bar.width - 4}px`, height: '18px', top: '11px',
+                                                                style={{ left: `${bar.left + 4}px`, width: `${bar.width - 4}px`, height: '20px', top: '4px',
                                                                          background: p.color, opacity: p.status === '已完成' ? 0.4 : 0.85 }}>
                                                                 <span className="absolute inset-0 flex items-center justify-center text-white font-black truncate px-2"
-                                                                    style={{ fontSize: '9px' }}>{p.name}</span>
+                                                                    style={{ fontSize: '11px' }}>{p.name}</span>
                                                             </div>
                                                         )}
                                                         {/* 截止⚑旗 */}
@@ -4967,7 +4967,8 @@
             const [widgets, setWidgets] = useState(() => {
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    return d.widgetConfig || INITIAL_WIDGETS;
+                    const cfg = d.widgetConfig || INITIAL_WIDGETS;
+                    return cfg.map(w => w.id === 'habits' && (w.size === '2x1' || w.size === 'medium' || w.size === 'small') ? { ...w, size: 'large' } : w);
                 } catch { return INITIAL_WIDGETS; }
             });
 
