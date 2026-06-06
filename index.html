@@ -1509,14 +1509,12 @@
                             ))}
                         </div>
                         <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
-                            className="text-xs font-bold bg-white border border-gray-100 rounded-xl px-3 py-2 outline-none shadow-sm">
+                            className="ml-auto text-xs font-bold bg-white border border-gray-100 rounded-xl px-3 py-2 outline-none shadow-sm">
                             {allYears.map(y => <option key={y}>{y}</option>)}
                         </select>
                         <button onClick={() => { setEditItem(null); setShowAddModal(true); }}
-                            className="ml-auto px-4 py-2 rounded-xl text-white text-xs font-black shadow-sm hover:opacity-90 transition-opacity"
-                            style={{ background: '#ec4899' }}>
-                            + 新增{tab==='orders'?'订单':tab==='goods'?'谷子':'谷美'}
-                        </button>
+                            className="w-9 h-9 rounded-xl text-white text-xl font-black flex items-center justify-center flex-shrink-0 hover:opacity-90"
+                            style={{ background: '#ec4899' }}>+</button>
                     </div>
                     {tab === 'orders' && (
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-50 overflow-hidden">
@@ -3106,7 +3104,7 @@
             const wWeekTotal = Math.round(weekTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
             const wTodayTotal = Math.round(todayTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
             const monthTxW = MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(nowMonth));
-            const recentThree = [...monthTxW].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 6);
+            const recentThree = [...monthTxW].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
 
             const saveNewTx = () => {
                 if (!addForm.amount || isNaN(parseFloat(addForm.amount))) return;
@@ -3172,13 +3170,13 @@
                                             {weekCur} ⇄
                                         </button>
                                     </div>
-                                    <p className="text-base font-black leading-none" style={{ color: '#c2410c' }}>
+                                    <p className="text-[20px] md:text-[18px] font-black leading-none" style={{ color: '#c2410c' }}>
                                         {weekCur === 'JPY' ? `¥${wWeekTotal.toLocaleString()}` : `¥${Math.round(wWeekTotal * exchRate).toLocaleString()}`}
                                     </p>
                                 </div>
                                 <div className="border-l pl-2 flex-shrink-0" style={{ borderColor: 'var(--finance-border)' }}>
                                     <p className="text-[9px] font-black uppercase tracking-widest mb-0.5" style={{ color: 'var(--accent)' }}>今日</p>
-                                    <p className="text-base font-black leading-none" style={{ color: '#c2410c' }}>
+                                    <p className="text-[20px] md:text-[18px] font-black leading-none" style={{ color: '#c2410c' }}>
                                         ¥{wTodayTotal.toLocaleString()}
                                     </p>
                                 </div>
@@ -3199,11 +3197,11 @@
                     </div>
 
                     {/* ② 最近 3 条记录 */}
-                    <div className="flex flex-col gap-1 z-10 flex-shrink-0">
+                    <div className="flex flex-col gap-1.5 z-10 flex-shrink-0">
                         {recentThree.length > 0 ? recentThree.map(t => {
                             const col = getCatColor(t.category);
                             return (
-                                <div key={t.id} className="flex items-center gap-2 rounded-xl px-2 py-2 group/wrow" style={{ background: 'rgba(255,255,255,0.72)' }}>
+                                <div key={t.id} className="flex items-center gap-2 rounded-xl px-2 py-1.5 group/wrow" style={{ background: 'rgba(255,255,255,0.72)' }}>
                                     <span className="text-[10px] font-black px-2 py-0.5 rounded-full flex-shrink-0 text-white" style={{ background: col }}>
                                         {t.category}
                                     </span>
@@ -5087,17 +5085,20 @@
                         const daysInGM = new Date(gYear, gMonth + 1, 0).getDate();
                         const ganttDays = Array.from({ length: daysInGM }, (_, i) => {
                             const d = new Date(gYear, gMonth, i + 1);
-                            return d.toISOString().split('T')[0];
+                            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                         });
                         const DAY_W = 36; // px per day column
                         const todayIdx = ganttDays.indexOf(TODAY_STR);
 
                         const getBar = (p) => {
                             const monthStart = ganttDays[0];
-                            const monthEnd = ganttDays[daysInGM - 1];
+                            const monthEnd = ganttDays[ganttDays.length - 1];
+                            if (!monthStart || !monthEnd) return null;
                             if (p.endDate < monthStart || p.startDate > monthEnd) return null;
-                            const startIdx = p.startDate <= monthStart ? 0 : ganttDays.indexOf(p.startDate);
-                            const endIdx = p.endDate >= monthEnd ? daysInGM - 1 : ganttDays.indexOf(p.endDate);
+                            const clampedStart = p.startDate < monthStart ? monthStart : p.startDate;
+                            const clampedEnd = p.endDate > monthEnd ? monthEnd : p.endDate;
+                            const startIdx = ganttDays.indexOf(clampedStart);
+                            const endIdx = ganttDays.indexOf(clampedEnd);
                             if (startIdx < 0 || endIdx < 0) return null;
                             return { left: startIdx * DAY_W, width: (endIdx - startIdx + 1) * DAY_W };
                         };
