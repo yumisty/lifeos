@@ -3849,104 +3849,115 @@
             { id: 'file',  icon: '📁', label: '文件' },
         ];
 
-        const VaultLibraryView = ({ items, onSave, onDelete }) => {
-            const [filter, setFilter] = useState('all');
-            const [showAdd, setShowAdd] = useState(false);
-            const [editItem, setEditItem] = useState(null);
+        const VaultLibraryView = ({ items = [], onSave, onDelete, onAdd }) => {
+            const [selectedCat, setSelectedCat] = useState('全部');
+            const [editingItem, setEditingItem] = useState(null);
             const [search, setSearch] = useState('');
-            const [searchOpen, setSearchOpen] = useState(false);
 
-            const filtered = items.filter(it => {
-                const matchType = filter === 'all' || it.type === filter;
-                const matchSearch = !search.trim() || it.title?.toLowerCase().includes(search.toLowerCase()) || it.content?.toLowerCase().includes(search.toLowerCase()) || it.url?.toLowerCase().includes(search.toLowerCase());
-                return matchType && matchSearch;
-            }).sort((a, b) => b.id - a.id);
+            const catCounts = {};
+            items.forEach(e => {
+                const cat = CATEGORIES.find(c => c.id === e.catId);
+                const label = cat?.label || '其他';
+                catCounts[label] = (catCounts[label] || 0) + 1;
+            });
+
+            const filtered = items.filter(e => {
+                const cat = CATEGORIES.find(c => c.id === e.catId);
+                const label = cat?.label || '其他';
+                const matchCat = selectedCat === '全部' || label === selectedCat;
+                const matchSearch = !search || e.title?.toLowerCase().includes(search.toLowerCase()) || e.review?.toLowerCase().includes(search.toLowerCase());
+                return matchCat && matchSearch;
+            }).sort((a, b) => new Date(b.date) - new Date(a.date));
 
             return (
-                <div className="flex flex-col gap-2 pb-32 md:pb-0 animate-fade-in">
-                    {/* Header：筛选栏 + 🔍 + ＋，搜索时整行替换为搜索框 */}
-                    <div className="flex items-center gap-2">
-                        {searchOpen ? (
-                            <>
-                                <div className="relative flex-1">
-                                    <input autoFocus type="text" value={search} onChange={e=>setSearch(e.target.value)}
-                                        placeholder="搜索 Vault..."
-                                        className="w-full bg-white rounded-2xl px-4 py-2 pr-9 text-sm font-medium outline-none border border-gray-100 shadow-sm" />
-                                    {search && <button onClick={()=>setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-black text-base leading-none">×</button>}
-                                </div>
-                                <button onClick={()=>{ setSearchOpen(false); setSearch(''); }}
-                                    className="px-3 py-2 rounded-xl bg-gray-100 text-gray-500 font-bold text-xs hover:bg-gray-200 transition-colors flex-shrink-0">
-                                    取消
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                <div className="flex gap-1.5 overflow-x-auto flex-1 hide-scrollbar">
-                                    {[['all','全部'],['note','📝 笔记'],['link','🔗 链接'],['image','🖼️ 图片'],['file','📁 文件']].map(([t,l]) => (
-                                        <button key={t} onClick={()=>setFilter(t)}
-                                            className={`px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all flex-shrink-0 ${filter===t?'text-white shadow-sm':'bg-white text-gray-400 hover:bg-gray-50'}`}
-                                            style={filter===t?{background:'var(--theme-text)'}:{}}>
-                                            {l}
-                                        </button>
-                                    ))}
-                                </div>
-                                <button onClick={()=>setSearchOpen(true)}
-                                    className="w-8 h-8 rounded-full bg-white border border-gray-100 flex items-center justify-center text-sm shadow-sm hover:bg-gray-50 transition-colors flex-shrink-0">
-                                    🔍
-                                </button>
-                                <button onClick={()=>{ setEditItem(null); setShowAdd(true); }}
-                                    className="w-9 h-9 rounded-full text-white font-bold text-xl flex items-center justify-center flex-shrink-0 shadow-md hover:scale-105 transition-transform"
-                                    style={{background:'var(--theme-text)'}}>+</button>
-                            </>
-                        )}
+                <div className="animate-fade-in">
+                    {/* 顶部搜索+添加 */}
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="flex-1 relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                            <input value={search} onChange={e => setSearch(e.target.value)}
+                                placeholder="搜索归档..."
+                                className="w-full bg-white rounded-2xl pl-8 pr-4 py-2.5 text-sm font-medium outline-none border border-gray-100 shadow-sm" />
+                        </div>
+                        <button onClick={onAdd}
+                            className="w-10 h-10 rounded-2xl text-white text-xl font-black flex items-center justify-center shadow-sm hover:opacity-90 transition-opacity flex-shrink-0"
+                            style={{ background: 'var(--theme-text, #475569)' }}>+</button>
                     </div>
 
-                    {/* 卡片网格 */}
-                    {filtered.length === 0 ? (
-                        <div className="bg-white rounded-[2rem] p-12 text-center shadow-sm">
-                            <p className="text-4xl mb-3">📂</p>
-                            <p className="font-bold text-gray-400 text-sm">Vault 是空的</p>
-                            <p className="text-xs text-gray-300 mt-1">点击 + 添加笔记、链接或文件</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {filtered.map(it => {
-                                const vt = VAULT_TYPES.find(v=>v.id===it.type) || VAULT_TYPES[0];
-                                return (
-                                    <div key={it.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 group hover:shadow-md transition-shadow">
-                                        <div className="flex items-start gap-3">
-                                            {it.type === 'image' && it.url ? (
-                                                <img src={it.url} className="w-14 h-14 object-cover rounded-xl flex-shrink-0 border border-gray-100" alt="" onError={el=>el.target.style.display='none'} />
-                                            ) : (
-                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 bg-gray-50">{vt.icon}</div>
-                                            )}
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <h4 className="font-bold text-sm text-os-text leading-snug">{it.title}</h4>
-                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                                                        <button onClick={()=>{ setEditItem(it); setShowAdd(true); }} className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center text-xs text-gray-500 hover:bg-gray-200">✏️</button>
-                                                        <button onClick={()=>onDelete(it.id)} className="w-6 h-6 rounded-lg bg-red-50 flex items-center justify-center text-xs text-red-400 hover:bg-red-100">×</button>
-                                                    </div>
-                                                </div>
-                                                {it.type === 'link' && it.url && (
-                                                    <a href={it.url} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline truncate block mt-0.5 max-w-[200px]">{it.url}</a>
-                                                )}
-                                                {it.content && <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-3">{it.content}</p>}
-                                                <p className="text-[10px] text-gray-300 font-bold mt-1.5">{vt.label} · {it.date}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                    {/* 分类筛选 */}
+                    <div className="flex gap-2 flex-wrap mb-5">
+                        {['全部', ...Object.keys(catCounts)].map(label => {
+                            const cat = CATEGORIES.find(c => c.label === label);
+                            return (
+                                <button key={label} onClick={() => setSelectedCat(label)}
+                                    className={`px-3 py-1.5 rounded-full text-xs font-black transition-all flex items-center gap-1 ${selectedCat === label ? 'text-white shadow-sm' : 'bg-white text-gray-500 border border-gray-100'}`}
+                                    style={selectedCat === label ? { background: 'var(--theme-text, #475569)' } : {}}>
+                                    {cat ? cat.icon : '📁'} {label}
+                                    {label !== '全部' && <span className="opacity-60">{catCounts[label]}</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* 空状态 */}
+                    {filtered.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-20 text-center">
+                            <div className="text-6xl mb-4">📂</div>
+                            <p className="font-bold text-gray-400 text-sm">还没有归档记录</p>
+                            <p className="text-xs text-gray-300 mt-1">点击右上角 + 开始记录</p>
                         </div>
                     )}
 
-                    {/* Add/Edit Modal */}
-                    {showAdd && (
-                        <VaultItemModal
-                            item={editItem}
-                            onClose={()=>{ setShowAdd(false); setEditItem(null); }}
-                            onSave={data=>{ onSave(data); setShowAdd(false); setEditItem(null); }}
+                    {/* 卡片网格 */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {filtered.map(item => {
+                            const cat = CATEGORIES.find(c => c.id === item.catId);
+                            return (
+                                <div key={item.id} className="bg-white rounded-2xl shadow-sm border border-gray-50 overflow-hidden hover:shadow-md transition-shadow group relative">
+                                    {/* 封面图 */}
+                                    {item.coverUrl && (
+                                        <div className="h-32 overflow-hidden">
+                                            <img src={item.coverUrl} className="w-full h-full object-cover" alt="" onError={e => e.target.style.display='none'} />
+                                        </div>
+                                    )}
+                                    {!item.coverUrl && (
+                                        <div className="h-20 flex items-center justify-center text-5xl" style={{ background: '#f3f4f6' }}>
+                                            {cat?.icon || '📌'}
+                                        </div>
+                                    )}
+                                    <div className="p-4">
+                                        <div className="flex items-start justify-between gap-2 mb-1">
+                                            <p className="font-black text-sm text-gray-800 flex-1 min-w-0 truncate">{item.title || `${cat?.label || ''}记录`}</p>
+                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                                <button onClick={() => setEditingItem(item)}
+                                                    className="w-6 h-6 rounded-lg bg-gray-100 text-gray-400 text-xs flex items-center justify-center hover:bg-gray-200">✏️</button>
+                                                <button onClick={() => onDelete && onDelete(item.id)}
+                                                    className="w-6 h-6 rounded-lg bg-red-50 text-red-400 text-xs flex items-center justify-center hover:bg-red-100">×</button>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full text-white ${cat?.color || 'bg-gray-400'}`}>{cat?.label || '其他'}</span>
+                                            <span className="text-[10px] text-gray-400">{item.date}</span>
+                                            {item.rating > 0 && (
+                                                <span className="text-[10px] text-yellow-500 font-black">{'★'.repeat(item.rating)}</span>
+                                            )}
+                                        </div>
+                                        {item.review && (
+                                            <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{item.review}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* 编辑弹窗 */}
+                    {editingItem && (
+                        <DeepLogModal
+                            category={CATEGORIES.find(c => c.id === editingItem.catId)}
+                            initialData={editingItem}
+                            onClose={() => setEditingItem(null)}
+                            onSave={(updated) => { onSave && onSave({ ...editingItem, ...updated }); setEditingItem(null); }}
                         />
                     )}
                 </div>
@@ -4539,31 +4550,50 @@
                                         const dtoe = daysToEnd(p);
                                         const urgent = dtoe >= 0 && dtoe < 7;
                                         const overdue = dtoe < 0;
+                                        const isDone = p.status === '已完成';
                                         return (
-                                            <div key={p.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 relative overflow-hidden group/pc">
+                                            <div key={p.id} className={`bg-white rounded-2xl p-4 shadow-sm border relative overflow-hidden group/pc transition-opacity ${isDone ? 'opacity-50 border-gray-100' : 'border-gray-50'}`}>
                                                 {/* 左色条 */}
                                                 <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ background: p.color }} />
                                                 <div className="pl-2">
                                                     <div className="flex items-start justify-between gap-2 mb-1">
-                                                        <div className="min-w-0">
-                                                            <p className="font-black text-sm text-gray-800 truncate">{p.name}</p>
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className={`font-black text-sm truncate ${isDone ? 'line-through text-gray-400' : 'text-gray-800'}`}>{p.name}</p>
                                                             {p.client && <p className="text-[10px] text-gray-400 font-medium truncate">{p.client}</p>}
                                                         </div>
-                                                        <div className="flex gap-1 flex-shrink-0">
+                                                        <div className="flex gap-1 flex-shrink-0 items-center">
                                                             <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full text-white" style={{ background: p.color + 'cc' }}>{p.type}</span>
                                                             <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full text-white" style={{ background: STATUS_COLORS[p.status] || '#94a3b8' }}>{p.status}</span>
                                                         </div>
                                                     </div>
-                                                    <p className="text-[10px] text-gray-400 font-medium mb-1">{p.startDate} → {p.endDate}</p>
+                                                    <p className="text-[10px] text-gray-400 font-medium mb-2">{p.startDate} → {p.endDate}</p>
                                                     <div className="flex items-center justify-between">
-                                                        <p className={`text-[10px] font-black ${overdue ? 'text-red-500' : urgent ? 'text-orange-500' : 'text-gray-400'}`}>
-                                                            {overdue ? `已逾期 ${-dtoe} 天` : dtoe === 0 ? '🔥 今天截止' : `距截止 ${dtoe} 天`}
-                                                        </p>
-                                                        <div className="flex gap-1 opacity-0 group-hover/pc:opacity-100 transition-opacity">
-                                                            <button onClick={() => { setEditingProject(p); setShowProjectModal(true); }}
-                                                                className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors">编辑</button>
-                                                            <button onClick={() => { if (window.confirm(`删除「${p.name}」？`)) onDeleteProject && onDeleteProject(p.id); }}
-                                                                className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 transition-colors">删除</button>
+                                                        {/* 倒计时 badge */}
+                                                        {!isDone && (
+                                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                                                overdue ? 'bg-red-100 text-red-600' :
+                                                                urgent  ? 'bg-orange-100 text-orange-600' :
+                                                                          'bg-gray-100 text-gray-500'
+                                                            }`}>
+                                                                {overdue ? `⚠️ 逾期${-dtoe}天` : dtoe === 0 ? '🔥 今天截止' : `⏰ 还有${dtoe}天`}
+                                                            </span>
+                                                        )}
+                                                        {isDone && <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-green-100 text-green-600">✓ 已完成</span>}
+                                                        <div className="flex gap-1 items-center">
+                                                            {/* 完成勾选按钮 */}
+                                                            <button
+                                                                onClick={() => onSaveProject && onSaveProject({ ...p, status: isDone ? '进行中' : '已完成' })}
+                                                                title={isDone ? '标记为进行中' : '标记为完成'}
+                                                                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-black transition-all flex-shrink-0
+                                                                    ${isDone ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 text-transparent hover:border-green-400'}`}>
+                                                                ✓
+                                                            </button>
+                                                            <div className="flex gap-1 opacity-0 group-hover/pc:opacity-100 transition-opacity">
+                                                                <button onClick={() => { setEditingProject(p); setShowProjectModal(true); }}
+                                                                    className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors">编辑</button>
+                                                                <button onClick={() => { if (window.confirm(`删除「${p.name}」？`)) onDeleteProject && onDeleteProject(p.id); }}
+                                                                    className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 transition-colors">删除</button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -4907,17 +4937,17 @@
         };
 
         // 深度记录表单 (还原截图2)
-        const DeepLogModal = ({ category, onClose, onSave }) => {
+        const DeepLogModal = ({ category, onClose, onSave, initialData }) => {
             if (!category) return null;
-            const [title, setTitle] = useState('');
-            const [date, setDate] = useState(TODAY_STR);
-            const [rating, setRating] = useState(0);
-            const [review, setReview] = useState('');
-            const [coverUrl, setCoverUrl] = useState('');
+            const [title, setTitle] = useState(initialData?.title || '');
+            const [date, setDate] = useState(initialData?.date || TODAY_STR);
+            const [rating, setRating] = useState(initialData?.rating || 0);
+            const [review, setReview] = useState(initialData?.review || '');
+            const [coverUrl, setCoverUrl] = useState(initialData?.coverUrl || '');
             const [coverError, setCoverError] = useState(false);
 
             const handleSave = () => {
-                onSave({ id: Date.now(), catId: category.id, title: title || `新增${category.label}记录`, date, rating, review, coverUrl });
+                onSave({ id: initialData?.id || Date.now(), catId: category.id, title: title || `新增${category.label}记录`, date, rating, review, coverUrl });
                 onClose();
             };
 
@@ -5662,21 +5692,20 @@
                             {currentView === 'year' && <YearlyView events={events} activeFilter={activeFilter} user={user} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026 年度'})} />}
                             {currentView === 'vault' && (
                                 <VaultLibraryView
-                                    items={vaultItems}
+                                    items={events}
                                     onSave={(item) => {
-                                        const next = vaultItems.some(v => v.id === item.id)
-                                            ? vaultItems.map(v => v.id === item.id ? item : v)
-                                            : [item, ...vaultItems];
-                                        setVaultItems(next);
-                                        try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.vault = { items: next }; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                                        const next = events.map(e => e.id === item.id ? item : e);
+                                        setEvents(next);
+                                        try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.lifeEvents = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
                                         syncToCloud();
                                     }}
                                     onDelete={(id) => {
-                                        const next = vaultItems.filter(v => v.id !== id);
-                                        setVaultItems(next);
-                                        try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.vault = { items: next }; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                                        const next = events.filter(e => e.id !== id);
+                                        setEvents(next);
+                                        try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.lifeEvents = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
                                         syncToCloud();
                                     }}
+                                    onAdd={() => setShowAddCenter(true)}
                                 />
                             )}
                         </div>
