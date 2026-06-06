@@ -200,7 +200,8 @@
                     smoking_log:          local.smokingLog          || {},
                     smoking_goal:         local.smokingGoal         || 20,
                     all_meals:            local.allMeals            || {},
-                    vault:                local.vault               || {},
+                    vault:                local.vault               || { items: [] },
+                    life_events:          local.lifeEvents           || [],
                     diary:                local.diary               || {},
                     projects:             local.projects             || [],
                     anime_orders:         local.animeOrders          || [],
@@ -246,7 +247,8 @@
                     smokingLog:        mergeObj(data.smoking_log,           local.smokingLog),
                     smokingGoal:       data.smoking_goal        || local.smokingGoal  || 20,
                     allMeals:          mergeObj(data.all_meals,             local.allMeals),
-                    vault:             mergeObj(data.vault,                 local.vault),
+                    vault:             { items: mergeArr(data.vault?.items || [], local.vault?.items || []) },
+                    lifeEvents:        mergeArr(data.life_events,            local.lifeEvents),
                     diary:             mergeObj(data.diary,                 local.diary),
                     projects:          mergeArr(data.projects,              local.projects),
                     animeOrders:       mergeArr(data.anime_orders,          local.animeOrders),
@@ -1785,8 +1787,8 @@
             const thisYearCount = log.filter(e => e.startDate.startsWith(`${year}`)).length;
 
             return (
-                <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={onClose}>
-                    <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl animate-slide-up flex flex-col max-h-[88vh]" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center glass-overlay animate-fade-in" onClick={onClose}>
+                    <div className="bg-white w-full max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl animate-slide-up flex flex-col" style={{maxHeight: '80vh'}} onClick={e => e.stopPropagation()}>
                         <div className="px-5 pt-5 pb-4 border-b border-gray-50 flex items-center justify-between flex-shrink-0">
                             <h2 className="font-black text-base" style={{ color: '#9d174d' }}>🌸 经期详情</h2>
                             <button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
@@ -1928,8 +1930,8 @@
             const maxYearAvg = Math.max(...yearRows.map(r => r.avgPerDay), 1);
 
             return (
-                <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 glass-overlay animate-fade-in" onClick={onClose}>
-                    <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl animate-slide-up flex flex-col" style={{ maxHeight: '92vh' }} onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center glass-overlay animate-fade-in" onClick={onClose}>
+                    <div className="bg-white w-full max-w-lg rounded-t-3xl md:rounded-3xl shadow-2xl animate-slide-up flex flex-col" style={{ maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
                         <div className="px-6 pt-5 pb-4 border-b border-gray-50 flex items-center justify-between flex-shrink-0">
                             <div>
                                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">🚬 抽烟记录</p>
@@ -3187,7 +3189,7 @@
                     </div>
 
                     {/* ② 最近 3 条记录 */}
-                    <div className="flex flex-col gap-1 z-10 flex-shrink-0 my-2">
+                    <div className="flex flex-col gap-1 z-10 flex-1 overflow-hidden">
                         {recentThree.length > 0 ? recentThree.map(t => {
                             const col = getCatColor(t.category);
                             return (
