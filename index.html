@@ -262,6 +262,7 @@
                     animeDisplay:      mergeArr(data.anime_display,         local.animeDisplay),
                 };
                 localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
+                console.log('[Vault sync] lifeEvents count:', merged.lifeEvents?.length, 'vault items:', merged.vault?.items?.length);
                 await syncToCloud();
                 return merged;
             } catch(e) {
@@ -3108,7 +3109,7 @@
             const wWeekTotal = Math.round(weekTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
             const wTodayTotal = Math.round(todayTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
             const monthTxW = MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(nowMonth));
-            const recentThree = [...monthTxW].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3);
+            const recentThree = [...monthTxW].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
 
             const saveNewTx = () => {
                 if (!addForm.amount || isNaN(parseFloat(addForm.amount))) return;
@@ -3164,7 +3165,7 @@
                     {/* ① 顶部：一行搞定，nowrap */}
                     <div className="flex items-start justify-between gap-2 z-10 flex-nowrap flex-shrink-0 overflow-hidden">
                         <div className="flex items-start gap-2 flex-nowrap min-w-0 flex-1 overflow-hidden">
-                            <div className="min-w-0 max-w-[45%]">
+                            <div className="min-w-0 max-w-[48%]">
                                 <div className="flex items-center gap-1 mb-0.5">
                                     <p className="text-[9px] font-black uppercase tracking-widest whitespace-nowrap" style={{ color: 'var(--accent)' }}>本周</p>
                                     <button onClick={() => setWeekCur(c => c === 'JPY' ? 'RMB' : 'JPY')}
@@ -3173,15 +3174,15 @@
                                         {weekCur} ⇄
                                     </button>
                                 </div>
-                                <p className="text-base font-black leading-none truncate" style={{ color: '#c2410c', fontSize: 'clamp(20px, 5vw, 22px)' }}>
+                                <p className="text-lg md:text-base font-black leading-none" style={{ color: '#c2410c', wordBreak: 'keep-all', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
                                     {weekCur === 'JPY'
                                         ? `¥${wWeekTotal.toLocaleString()}`
                                         : `¥${Math.round(wWeekTotal * exchRate).toLocaleString()}`}
                                 </p>
                             </div>
-                            <div className="border-l pl-2 flex-shrink-0 max-w-[40%] min-w-0" style={{ borderColor: 'var(--finance-border)' }}>
+                            <div className="border-l pl-2 flex-shrink-0 max-w-[38%] min-w-0" style={{ borderColor: 'var(--finance-border)' }}>
                                 <p className="text-[9px] font-black uppercase tracking-widest mb-0.5 whitespace-nowrap" style={{ color: 'var(--accent)' }}>今日</p>
-                                <p className="text-base font-black leading-none truncate" style={{ color: '#c2410c', fontSize: 'clamp(20px, 5vw, 22px)' }}>
+                                <p className="text-lg md:text-base font-black leading-none" style={{ color: '#c2410c', wordBreak: 'keep-all', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
                                     ¥{wTodayTotal.toLocaleString()}
                                 </p>
                             </div>
@@ -3205,7 +3206,7 @@
                         {recentThree.length > 0 ? recentThree.map(t => {
                             const col = getCatColor(t.category);
                             return (
-                                <div key={t.id} className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 group/wrow" style={{ background: 'rgba(255,255,255,0.72)' }}>
+                                <div key={t.id} className="flex items-center gap-2 rounded-xl px-2 py-1 group/wrow" style={{ background: 'rgba(255,255,255,0.72)' }}>
                                     <span className="text-[10px] font-black px-2 py-0.5 rounded-full flex-shrink-0 text-white" style={{ background: col }}>
                                         {t.category}
                                     </span>
@@ -5722,6 +5723,7 @@
                 const handler = () => {
                     try {
                         const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                        console.log('[lifeos:synced] fired, lifeEvents:', d.lifeEvents?.length);
                         setDiary(d.diary || {});
                         setEvents(d.lifeEvents || []);
                         setProjects(d.projects || []);
