@@ -5096,12 +5096,28 @@
                         const todayIdx = ganttDays.indexOf(TODAY_STR);
 
                         const getBar = (p) => {
-                            const s = p.startDate > ganttDays[0] ? p.startDate : ganttDays[0];
-                            const e = p.endDate   < ganttDays[daysInGM - 1] ? p.endDate : ganttDays[daysInGM - 1];
+                            const monthStart = ganttDays[0];
+                            const monthEnd = ganttDays[daysInGM - 1];
+
+                            // 项目完全在本月之前或之后，不显示
+                            if (p.endDate < monthStart || p.startDate > monthEnd) return null;
+
+                            // 裁剪到本月范围内
+                            const s = p.startDate >= monthStart ? p.startDate : monthStart;
+                            const e = p.endDate <= monthEnd ? p.endDate : monthEnd;
+
                             if (s > e) return null;
-                            const si = ganttDays.indexOf(s), ei = ganttDays.indexOf(e);
-                            if (si < 0 || ei < 0) return null;
-                            return { left: si * DAY_W, width: (ei - si + 1) * DAY_W };
+
+                            const si = ganttDays.indexOf(s);
+                            const ei = ganttDays.indexOf(e);
+
+                            // 如果裁剪后的日期在 ganttDays 里找不到，用 findIndex 找最近的
+                            const startIdx = si >= 0 ? si : ganttDays.findIndex(d => d >= s);
+                            const realEndIdx = ei >= 0 ? ei : (daysInGM - 1 - [...ganttDays].reverse().findIndex(d => d <= e));
+
+                            if (startIdx < 0 || realEndIdx < 0 || startIdx > realEndIdx) return null;
+
+                            return { left: startIdx * DAY_W, width: (realEndIdx - startIdx + 1) * DAY_W };
                         };
                         const daysToEnd = (p) => Math.ceil((new Date(p.endDate + 'T00:00:00') - new Date(TODAY_STR + 'T00:00:00')) / 86400000);
 
