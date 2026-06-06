@@ -315,9 +315,6 @@
             { id: 'countdown', size: '1x1'   },  // 1x1
             { id: 'weather',   size: '2x1'   },  // 2x1
             { id: 'habits',    size: 'large' },  // 2x2
-            { id: 'quote',     size: '2x1'   },  // 2x1
-            { id: 'music',     size: '2x1'   },  // 2x1
-            { id: 'photo',     size: 'large' },  // 2x2
             { id: 'health',    size: 'medium'},  // 2x1
             { id: 'deadline',  size: 'medium'},  // 2x1
             { id: 'meals',     size: 'large' },  // 2x2
@@ -3109,7 +3106,7 @@
             const wWeekTotal = Math.round(weekTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
             const wTodayTotal = Math.round(todayTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
             const monthTxW = MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(nowMonth));
-            const recentThree = [...monthTxW].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3);
+            const recentThree = [...monthTxW].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 6);
 
             const saveNewTx = () => {
                 if (!addForm.amount || isNaN(parseFloat(addForm.amount))) return;
@@ -3163,41 +3160,41 @@
                     <div className="absolute -right-4 -bottom-6 text-[7rem] font-black select-none pointer-events-none" style={{ color: 'var(--accent)', opacity: 0.07 }}>¥</div>
 
                     {/* ① 顶部 */}
-                    <div className="flex items-center justify-between flex-shrink-0 z-10 mb-2">
-                        <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
-                            <div className="min-w-0">
-                                <div className="flex items-center gap-1 mb-0.5">
-                                    <p className="text-[9px] font-black uppercase tracking-widest whitespace-nowrap" style={{ color: 'var(--accent)' }}>本周</p>
-                                    <button onClick={() => setWeekCur(c => c === 'JPY' ? 'RMB' : 'JPY')}
-                                        className="text-[7px] font-black px-1 py-0.5 rounded-full border transition-colors whitespace-nowrap flex-shrink-0"
-                                        style={{ color: 'var(--accent)', borderColor: 'var(--accent)', background: 'transparent', lineHeight: 1.2 }}>
-                                        {weekCur} ⇄
-                                    </button>
+                    <div className="flex-shrink-0 z-10 mb-2">
+                        <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                                <div className="min-w-0 flex-shrink-0">
+                                    <div className="flex items-center gap-1 mb-0.5">
+                                        <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--accent)' }}>本周</p>
+                                        <button onClick={() => setWeekCur(c => c === 'JPY' ? 'RMB' : 'JPY')}
+                                            className="text-[7px] font-black px-1 py-0.5 rounded-full border flex-shrink-0"
+                                            style={{ color: 'var(--accent)', borderColor: 'var(--accent)', background: 'transparent', lineHeight: 1.2 }}>
+                                            {weekCur} ⇄
+                                        </button>
+                                    </div>
+                                    <p className="text-base font-black leading-none" style={{ color: '#c2410c' }}>
+                                        {weekCur === 'JPY' ? `¥${wWeekTotal.toLocaleString()}` : `¥${Math.round(wWeekTotal * exchRate).toLocaleString()}`}
+                                    </p>
                                 </div>
-                                <p className="text-lg font-black leading-none truncate" style={{ color: '#c2410c' }}>
-                                    {weekCur === 'JPY'
-                                        ? `¥${wWeekTotal.toLocaleString()}`
-                                        : `¥${Math.round(wWeekTotal * exchRate).toLocaleString()}`}
-                                </p>
+                                <div className="border-l pl-2 flex-shrink-0" style={{ borderColor: 'var(--finance-border)' }}>
+                                    <p className="text-[9px] font-black uppercase tracking-widest mb-0.5" style={{ color: 'var(--accent)' }}>今日</p>
+                                    <p className="text-base font-black leading-none" style={{ color: '#c2410c' }}>
+                                        ¥{wTodayTotal.toLocaleString()}
+                                    </p>
+                                </div>
                             </div>
-                            <div className="border-l pl-2 flex-shrink-0" style={{ borderColor: 'var(--finance-border)' }}>
-                                <p className="text-[9px] font-black uppercase tracking-widest mb-0.5 whitespace-nowrap" style={{ color: 'var(--accent)' }}>今日</p>
-                                <p className="text-lg font-black leading-none" style={{ color: '#c2410c' }}>
-                                    ¥{wTodayTotal.toLocaleString()}
-                                </p>
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                <button onClick={() => setShowAdd(true)}
+                                    className="font-bold rounded-full hover:opacity-80"
+                                    style={{ color: '#fff', background: 'var(--accent)', fontSize: '9px', padding: '3px 7px', whiteSpace: 'nowrap' }}>
+                                    +记一笔
+                                </button>
+                                <button onClick={onOpen}
+                                    className="font-bold rounded-full hover:opacity-80"
+                                    style={{ color: 'var(--accent)', border: '1.5px solid var(--accent)', fontSize: '9px', padding: '3px 7px', whiteSpace: 'nowrap' }}>
+                                    详情→
+                                </button>
                             </div>
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0 ml-1">
-                            <button onClick={() => setShowAdd(true)}
-                                className="font-bold rounded-full transition-colors hover:opacity-80 whitespace-nowrap"
-                                style={{ color: '#fff', background: 'var(--accent)', fontSize: '9px', padding: '4px 8px' }}>
-                                +记一笔
-                            </button>
-                            <button onClick={onOpen}
-                                className="font-bold rounded-full transition-colors hover:opacity-80 whitespace-nowrap"
-                                style={{ color: 'var(--accent)', background: 'transparent', border: '1.5px solid var(--accent)', fontSize: '9px', padding: '4px 8px' }}>
-                                详情→
-                            </button>
                         </div>
                     </div>
 
@@ -3206,7 +3203,7 @@
                         {recentThree.length > 0 ? recentThree.map(t => {
                             const col = getCatColor(t.category);
                             return (
-                                <div key={t.id} className="flex items-center gap-2 rounded-xl px-2 py-1 group/wrow" style={{ background: 'rgba(255,255,255,0.72)' }}>
+                                <div key={t.id} className="flex items-center gap-2 rounded-xl px-2 py-2 group/wrow" style={{ background: 'rgba(255,255,255,0.72)' }}>
                                     <span className="text-[10px] font-black px-2 py-0.5 rounded-full flex-shrink-0 text-white" style={{ background: col }}>
                                         {t.category}
                                     </span>
@@ -5597,9 +5594,6 @@
             { id: 'weekly',    label: '本周微距', icon: '📅', defaultSize: '2x1'   },
             { id: 'weather',   label: '天气',    icon: '🌤️', defaultSize: '2x1'  },
             { id: 'habits',    label: '习惯打卡', icon: '✅', defaultSize: 'large' },
-            { id: 'quote',     label: '每日一句', icon: '💬', defaultSize: '2x1'   },
-            { id: 'music',     label: '音乐状态', icon: '🎵', defaultSize: '2x1'   },
-            { id: 'photo',     label: '每日照片', icon: '📷', defaultSize: 'large' },
             { id: 'shopping',  label: '购物清单', icon: '🛍️', defaultSize: '2x1' },
             { id: 'anime',     label: '二次元',   icon: '🌸', defaultSize: 'large' },
             { id: 'health',    label: '体感监测', icon: '🩰', defaultSize: 'medium'},
@@ -6212,9 +6206,6 @@
                                             {widget.id === 'countdown' && <CountdownWidget />}
                                             {widget.id === 'weather' && <WeatherWidget />}
                                             {widget.id === 'habits' && <HabitsWidget />}
-                                            {widget.id === 'quote' && <QuoteWidget />}
-                                            {widget.id === 'music' && <MusicWidget />}
-                                            {widget.id === 'photo' && <PhotoWidget />}
                                             {widget.id === 'shopping' && <ShoppingWidget />}
                                             {widget.id === 'anime' && <AnimeWidget onOpen={() => setCurrentView('anime')} />}
                                             {widget.id === 'health' && <HealthWidget />}
@@ -6339,10 +6330,10 @@
                             className={`flex flex-col items-center gap-0.5 w-10 transition-transform ${currentView === 'finance' ? 'scale-110' : 'opacity-40 grayscale'}`}>
                             <span className="text-xl">💰</span>
                         </button>
-                        {/* 📂 Vault */}
-                        <button onClick={() => setCurrentView('vault')}
-                            className={`flex flex-col items-center gap-0.5 w-10 transition-transform ${currentView === 'vault' ? 'scale-110' : 'opacity-40 grayscale'}`}>
-                            <span className="text-xl">📂</span>
+                        {/* 🌸 Anime */}
+                        <button onClick={() => setCurrentView('anime')}
+                            className={`flex flex-col items-center gap-0.5 w-10 transition-transform ${currentView === 'anime' ? 'scale-110' : 'opacity-40 grayscale'}`}>
+                            <span className="text-xl">🌸</span>
                         </button>
                     </nav>
 
