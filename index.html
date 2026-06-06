@@ -950,15 +950,19 @@
         };
 
         const ShoppingWidget = () => {
-            const [activeTab, setActiveTab] = useState('need');
+            const [activeTab, setActiveTab] = useState('life');
             const [newText, setNewText] = useState('');
 
             const [items, setItems] = useState(() => {
                 try {
                     const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     const wl = stored.wishlist || [];
-                    // 已有 wishlist 默认归入「想买」
-                    return wl.map(i => ({ ...i, tab: i.tab || 'want', done: i.purchased || false }));
+                    return wl.map(i => {
+                        let tab = i.tab || 'small';
+                        if (tab === 'need') tab = 'life';
+                        if (tab === 'want') tab = 'small';
+                        return { ...i, tab, done: i.purchased || false };
+                    });
                 } catch { return []; }
             });
 
@@ -981,23 +985,33 @@
             const deleteItem = (id) => saveItems(items.filter(i => i.id !== id));
 
             const [newPrice, setNewPrice] = useState('');
+            const [newAnimeType, setNewAnimeType] = useState('现货');
+            const [newPlatform, setNewPlatform] = useState('');
+            const [newPaid, setNewPaid] = useState(false);
 
             const rawTabItems = items.filter(i => i.tab === activeTab);
             // done items go to bottom
             const tabItems = [...rawTabItems.filter(i => !i.done), ...rawTabItems.filter(i => i.done)];
-            const needCount = items.filter(i => i.tab === 'need' && !i.done).length;
-            const wantCount = items.filter(i => i.tab === 'want' && !i.done).length;
-
             const tabCfg = {
-                need: { label: '需要买', color: 'text-green-700', activeBg: 'bg-green-500', dot: 'bg-green-400', check: 'bg-green-400 border-green-400' },
-                want: { label: '想买',   color: 'text-pink-700',  activeBg: 'bg-pink-500',  dot: 'bg-pink-400',  check: 'bg-pink-400 border-pink-400'  },
+                life:   { label: '必须买',  color: 'text-green-700',  activeBg: 'bg-green-500',   dot: 'bg-green-400',   check: 'bg-green-400 border-green-400'   },
+                big:    { label: '大件',    color: 'text-blue-700',   activeBg: 'bg-blue-500',    dot: 'bg-blue-400',    check: 'bg-blue-400 border-blue-400'     },
+                small:  { label: '小东西',  color: 'text-purple-700', activeBg: 'bg-purple-500',  dot: 'bg-purple-400',  check: 'bg-purple-400 border-purple-400' },
+                food:   { label: '吃的',    color: 'text-orange-700', activeBg: 'bg-orange-500',  dot: 'bg-orange-400',  check: 'bg-orange-400 border-orange-400' },
+                anime:  { label: '二次元',  color: 'text-pink-700',   activeBg: 'bg-pink-500',    dot: 'bg-pink-400',    check: 'bg-pink-400 border-pink-400'     },
             };
+            const tabCounts = Object.fromEntries(Object.keys(tabCfg).map(k => [k, items.filter(i => i.tab === k && !i.done).length]));
             const cfg = tabCfg[activeTab];
 
             const addItemWithPrice = () => {
                 if (!newText.trim()) return;
-                saveItems([...items, { id: Date.now(), name: newText.trim(), price: newPrice.trim(), currency: 'JPY', category: '', purchased: false, done: false, tab: activeTab }]);
+                const newItem = {
+                    id: Date.now(), name: newText.trim(), price: newPrice.trim(), currency: 'JPY',
+                    category: '', purchased: false, done: false, tab: activeTab,
+                    ...(activeTab === 'anime' ? { type: newAnimeType, platform: newPlatform.trim(), paid: newPaid, anime: '' } : {})
+                };
+                saveItems([...items, newItem]);
                 setNewText(''); setNewPrice('');
+                if (activeTab === 'anime') { setNewAnimeType('现货'); setNewPlatform(''); setNewPaid(false); }
             };
 
             const totalPrice = rawTabItems.filter(i => !i.done && parseFloat(i.price) > 0).reduce((s, i) => s + parseFloat(i.price), 0);
@@ -1006,15 +1020,15 @@
                 <div className="bg-white rounded-os-xl shadow-sm h-full flex flex-col overflow-hidden">
                     {/* 头部 */}
                     <div className="px-4 pt-4 pb-3 border-b border-gray-50 flex items-center justify-between flex-shrink-0">
-                        <div className="flex gap-1">
+                        <div className="flex flex-wrap gap-1">
                             {Object.entries(tabCfg).map(([key, c]) => (
                                 <button key={key} onClick={() => { setActiveTab(key); setNewText(''); setNewPrice(''); }}
                                     className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5
                                         ${activeTab === key ? c.activeBg + ' text-white shadow-sm' : 'text-gray-400 hover:bg-gray-50'}`}>
                                     {c.label}
-                                    {(key === 'need' ? needCount : wantCount) > 0 && (
+                                    {tabCounts[key] > 0 && (
                                         <span className={`text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black ${activeTab === key ? 'bg-white/30' : c.dot + ' text-white'}`}>
-                                            {key === 'need' ? needCount : wantCount}
+                                            {tabCounts[key]}
                                         </span>
                                     )}
                                 </button>
@@ -1029,15 +1043,34 @@
                             <p className="text-xs text-gray-300 italic pt-2">空空如也，快来添加吧</p>
                         )}
                         {tabItems.map(item => (
-                            <div key={item.id} className="flex items-center gap-2 py-0.5">
+                            <div key={item.id} className={`flex gap-2 py-0.5 ${activeTab === 'anime' ? 'items-start' : 'items-center'}`}>
                                 <button onClick={() => toggleItem(item.id)}
-                                    className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center text-[9px] transition-colors
+                                    className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center text-[9px] transition-colors mt-0.5
                                         ${item.done ? cfg.check + ' text-white' : 'border-gray-300'}`}>
                                     {item.done && '✓'}
                                 </button>
-                                <span className={`flex-1 min-w-0 text-xs font-bold truncate ${item.done ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                                    {item.name}
-                                </span>
+                                <div className="flex-1 min-w-0">
+                                    <span className={`text-xs font-bold block truncate ${item.done ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                                        {item.name}
+                                    </span>
+                                    {activeTab === 'anime' && (item.type || item.platform || item.paid !== undefined) && (
+                                        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                            {item.type && (
+                                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${item.type === '预售' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}>
+                                                    {item.type}
+                                                </span>
+                                            )}
+                                            {item.platform && (
+                                                <span className="text-[8px] text-gray-400 font-medium">{item.platform}</span>
+                                            )}
+                                            {item.type && (
+                                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${item.paid ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-400'}`}>
+                                                    {item.paid ? '✓已付' : '✗未付'}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                                 {item.price && (
                                     <span className={`text-[10px] font-medium flex-shrink-0 ${item.done ? 'text-gray-300 line-through' : 'text-gray-400'}`}>
                                         ¥{item.price}
@@ -1058,28 +1091,46 @@
                     )}
 
                     {/* 添加输入框 */}
-                    <div className="flex gap-2 px-4 pb-4 pt-2 border-t border-gray-50 flex-shrink-0 overflow-hidden">
-                        <input
-                            value={newText}
-                            onChange={e => setNewText(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && addItemWithPrice()}
-                            placeholder={activeTab === 'need' ? '添加需要买的…' : '添加心愿…'}
-                            className="text-xs bg-gray-50 rounded-xl px-3 py-2 outline-none border border-transparent focus:border-gray-200 transition-colors placeholder-gray-300 font-medium"
-                            style={{ flex: '1', minWidth: 0 }}
-                        />
-                        <input
-                            value={newPrice}
-                            onChange={e => setNewPrice(e.target.value)}
-                            placeholder="价格"
-                            type="text" inputMode="decimal"
-                            className="text-xs bg-gray-50 rounded-xl px-2 py-2 outline-none border border-transparent focus:border-gray-200 transition-colors placeholder-gray-300 font-medium text-center"
-                            style={{ flexShrink: 0, width: '60px' }}
-                        />
-                        <button onClick={addItemWithPrice}
-                            className={`rounded-xl text-white text-lg font-black flex items-center justify-center hover:opacity-80 transition-opacity ${cfg.activeBg}`}
-                            style={{ flexShrink: 0, width: '36px', height: '36px' }}>
-                            +
-                        </button>
+                    <div className="flex flex-col border-t border-gray-50 flex-shrink-0 overflow-hidden">
+                        <div className="flex gap-2 px-4 pb-2 pt-2">
+                            <input
+                                value={newText}
+                                onChange={e => setNewText(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && addItemWithPrice()}
+                                placeholder={`添加${tabCfg[activeTab]?.label || ''}…`}
+                                className="text-xs bg-gray-50 rounded-xl px-3 py-2 outline-none border border-transparent focus:border-gray-200 transition-colors placeholder-gray-300 font-medium"
+                                style={{ flex: '1', minWidth: 0 }}
+                            />
+                            <input
+                                value={newPrice}
+                                onChange={e => setNewPrice(e.target.value)}
+                                placeholder="价格"
+                                type="text" inputMode="decimal"
+                                className="text-xs bg-gray-50 rounded-xl px-2 py-2 outline-none border border-transparent focus:border-gray-200 transition-colors placeholder-gray-300 font-medium text-center"
+                                style={{ flexShrink: 0, width: '60px' }}
+                            />
+                            <button onClick={addItemWithPrice}
+                                className={`rounded-xl text-white text-lg font-black flex items-center justify-center hover:opacity-80 transition-opacity ${cfg.activeBg}`}
+                                style={{ flexShrink: 0, width: '36px', height: '36px' }}>
+                                +
+                            </button>
+                        </div>
+                        {activeTab === 'anime' && (
+                            <div className="flex gap-2 px-4 pb-2">
+                                <select value={newAnimeType} onChange={e => setNewAnimeType(e.target.value)}
+                                    className="text-xs bg-gray-50 rounded-xl px-2 py-1.5 outline-none border border-transparent flex-shrink-0" style={{width:'70px'}}>
+                                    <option value="现货">现货</option>
+                                    <option value="预售">预售</option>
+                                </select>
+                                <input value={newPlatform} onChange={e => setNewPlatform(e.target.value)}
+                                    placeholder="购买平台…"
+                                    className="flex-1 text-xs bg-gray-50 rounded-xl px-3 py-1.5 outline-none border border-transparent focus:border-gray-200 placeholder-gray-300 font-medium" />
+                                <button onClick={() => setNewPaid(p => !p)}
+                                    className={`text-xs font-black px-3 py-1.5 rounded-xl flex-shrink-0 transition-colors ${newPaid ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-400'}`}>
+                                    {newPaid ? '已付款' : '未付款'}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             );
@@ -2584,14 +2635,14 @@
 
             return (
                 <div
-                    className="p-5 rounded-os-xl h-full flex flex-col gap-4 overflow-hidden relative"
+                    className="p-4 rounded-os-xl h-full flex flex-col overflow-hidden relative"
                     style={{ background: 'var(--finance-bg)', border: '1.5px solid var(--accent)' }}
                 >
                     {/* 背景水印 */}
                     <div className="absolute -right-4 -bottom-6 text-[7rem] font-black select-none pointer-events-none" style={{ color: 'var(--accent)', opacity: 0.07 }}>¥</div>
 
                     {/* ① 顶部：一行搞定，nowrap */}
-                    <div className="flex items-center justify-between gap-2 z-10 flex-nowrap">
+                    <div className="flex items-center justify-between gap-2 z-10 flex-nowrap flex-shrink-0">
                         <div className="flex items-center gap-2 flex-nowrap min-w-0">
                             <div className="min-w-0">
                                 <div className="flex items-center gap-1 mb-0.5">
@@ -2630,7 +2681,7 @@
                     </div>
 
                     {/* ② 最近 3 条记录 */}
-                    <div className="flex flex-col gap-1 z-10">
+                    <div className="flex flex-col gap-1 z-10 flex-shrink-0 my-2">
                         {recentThree.length > 0 ? recentThree.map(t => {
                             const col = getCatColor(t.category);
                             return (
@@ -2659,7 +2710,7 @@
 
                     {/* ③ 底部分类色条 */}
                     {wCats.length > 0 && (
-                        <div className="z-10">
+                        <div className="z-10 mt-auto flex-shrink-0">
                             <div className="flex h-2 rounded-full overflow-hidden mb-2">
                                 {wCats.map(cat => (
                                     <div key={cat.name} style={{ width: `${(cat.total / wTotal * 100).toFixed(1)}%`, background: cat.color }} />
@@ -2679,8 +2730,8 @@
                     {/* ⑤ 快速记账弹窗 */}
                     {showAdd && (
                         <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowAdd(false)}>
-                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-6" onClick={e => e.stopPropagation()}>
-                                <div className="flex items-center justify-between mb-5">
+                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-5 overflow-y-auto" style={{maxHeight: '85vh'}} onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-between mb-3">
                                     <h2 className="font-black text-base text-gray-800">记一笔</h2>
                                     <input type="date" value={addForm.date} max={TODAY_STR}
                                         onChange={e => setAddForm(f => ({ ...f, date: e.target.value }))}
@@ -2724,19 +2775,19 @@
                                     value={addForm.name}
                                     onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
                                     onKeyDown={e => e.key === 'Enter' && saveNewTx()}
-                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-4"
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-3"
                                 />
 
                                 {/* 语音记账 */}
-                                <div className="mb-3">
+                                <div className="mb-2">
                                     <VoiceButton onResult={parsed => setAddForm(f => ({ ...f, amount: parsed.amount, currency: parsed.currency, name: parsed.name }))} />
                                 </div>
 
                                 {/* 确认按钮 */}
                                 <button onClick={saveNewTx}
                                     disabled={!addForm.amount}
-                                    className="w-full py-4 rounded-2xl font-black text-base transition-all disabled:opacity-40"
-                                    style={{ background: 'var(--accent)', color: '#fff' }}>
+                                    className="w-full py-3.5 rounded-2xl font-black text-white transition-all text-sm mt-1 disabled:opacity-40"
+                                    style={{ background: 'var(--accent)' }}>
                                     确认记账
                                 </button>
                             </div>
@@ -4539,8 +4590,8 @@
                                                     return (
                                                         <div key={ds} style={{ width: `${DAY_W}px`, flexShrink: 0 }}
                                                             className={`flex flex-col items-center py-1.5 text-center ${isToday ? 'text-red-500' : isSun ? 'text-gray-400' : 'text-gray-400'}`}>
-                                                            <span style={{ fontSize: '9px', fontWeight: 700 }}>{['日','一','二','三','四','五','六'][d.getDay()]}</span>
-                                                            <span style={{ fontSize: '11px', fontWeight: isToday ? 900 : 600 }}>{d.getDate()}</span>
+                                                            <span style={{ fontSize: '8px', fontWeight: 700, opacity: d.getDay() === 0 || d.getDay() === 6 ? 1 : 0.5 }}>{['日','一','二','三','四','五','六'][d.getDay()]}</span>
+                                                            <span style={{ fontSize: '10px', fontWeight: isToday ? 900 : 600 }}>{d.getDate()}</span>
                                                         </div>
                                                     );
                                                 })}
