@@ -3197,21 +3197,21 @@
                     </div>
 
                     {/* ② 最近 3 条记录 */}
-                    <div className="flex flex-col gap-1.5 z-10 flex-shrink-0">
+                    <div className="flex flex-col gap-2 z-10 flex-shrink-0">
                         {recentThree.length > 0 ? recentThree.map(t => {
                             const col = getCatColor(t.category);
                             return (
-                                <div key={t.id} className="flex items-center gap-2 rounded-xl px-2 py-1.5 group/wrow" style={{ background: 'rgba(255,255,255,0.72)' }}>
-                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full flex-shrink-0 text-white" style={{ background: col }}>
+                                <div key={t.id} className="flex items-center gap-2 rounded-xl px-2 py-2.5 group/wrow" style={{ background: 'rgba(255,255,255,0.72)' }}>
+                                    <span className="text-xs font-black px-2 py-0.5 rounded-full flex-shrink-0 text-white" style={{ background: col }}>
                                         {t.category}
                                     </span>
-                                    <span className="text-xs font-bold truncate flex-1" style={{ color: '#78350f' }}>
+                                    <span className="text-sm font-bold truncate flex-1" style={{ color: '#78350f' }}>
                                         {t.name}
                                     </span>
-                                    <span className="text-[10px] font-medium text-gray-400 flex-shrink-0">
+                                    <span className="text-xs font-medium text-gray-400 flex-shrink-0">
                                         {t.date.slice(5)}
                                     </span>
-                                    <span className="text-xs font-black flex-shrink-0" style={{ color: '#ea580c' }}>
+                                    <span className="text-sm font-black flex-shrink-0" style={{ color: '#ea580c' }}>
                                         ¥{parseFloat(t.amount).toLocaleString()}
                                     </span>
                                     <button onClick={() => { if (window.confirm('确定删除这条记录吗？')) deleteTxW(t.id); }}
