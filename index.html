@@ -3155,7 +3155,7 @@
 
             return (
                 <div
-                    className="p-4 rounded-os-xl h-full flex flex-col justify-between overflow-hidden relative"
+                    className="p-4 rounded-os-xl h-full flex flex-col overflow-hidden relative"
                     style={{ background: 'var(--finance-bg)', border: '1.5px solid var(--accent)' }}
                 >
                     {/* 背景水印 */}
@@ -3201,7 +3201,7 @@
                     </div>
 
                     {/* ② 最近 3 条记录 */}
-                    <div className="flex flex-col gap-1 z-10 flex-shrink-0 my-1.5">
+                    <div className="flex flex-col gap-1 z-10 flex-1 overflow-hidden pt-1.5">
                         {recentThree.length > 0 ? recentThree.map(t => {
                             const col = getCatColor(t.category);
                             return (
@@ -3230,7 +3230,7 @@
 
                     {/* ③ 底部分类色条 */}
                     {wCats.length > 0 && (
-                        <div className="z-10 flex-shrink-0">
+                        <div className="z-10 flex-shrink-0 mt-auto">
                             <div className="flex h-2 rounded-full overflow-hidden mb-2">
                                 {wCats.map(cat => (
                                     <div key={cat.name} style={{ width: `${(cat.total / wTotal * 100).toFixed(1)}%`, background: cat.color }} />
@@ -5718,6 +5718,9 @@
                     try {
                         const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                         setDiary(d.diary || {});
+                        setEvents(d.lifeEvents || []);
+                        setProjects(d.projects || []);
+                        setTodos(Object.values(d.allTodos || {}).flat());
                     } catch {}
                 };
                 window.addEventListener('lifeos:synced', handler);
