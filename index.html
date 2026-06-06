@@ -1146,64 +1146,150 @@
         };
 
         const AnimeWidget = ({ onOpen }) => {
+            const [tab, setTab] = React.useState('orders');
             const [orders, setOrders] = React.useState(() => {
                 try { return JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}').animeOrders || []; } catch { return []; }
             });
             const [goods, setGoods] = React.useState(() => {
                 try { return JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}').animeGoods || []; } catch { return []; }
             });
-
-            const unpaid = orders.filter(o => !o.paid).length;
-            const presale = orders.filter(o => o.type === '预售').length;
+            const [displays, setDisplays] = React.useState(() => {
+                try { return JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}').animeDisplay || []; } catch { return []; }
+            });
+            const saveOrders = (next) => { setOrders(next); try { const d=JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeOrders=next; localStorage.setItem('visualLifeOS_data',JSON.stringify(d)); } catch {} syncToCloud(); };
+            const saveGoods = (next) => { setGoods(next); try { const d=JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeGoods=next; localStorage.setItem('visualLifeOS_data',JSON.stringify(d)); } catch {} syncToCloud(); };
+            const saveDisplays = (next) => { setDisplays(next); try { const d=JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeDisplay=next; localStorage.setItem('visualLifeOS_data',JSON.stringify(d)); } catch {} syncToCloud(); };
+            const [oName, setOName] = React.useState('');
+            const [oPrice, setOPrice] = React.useState('');
+            const [oType, setOType] = React.useState('现货');
+            const [oPlatform, setOPlatform] = React.useState('');
+            const [oPaid, setOPaid] = React.useState(false);
+            const [gName, setGName] = React.useState('');
+            const [gWork, setGWork] = React.useState('');
+            const [gType, setGType] = React.useState('徽章');
+            const [dName, setDName] = React.useState('');
+            const [dType, setDType] = React.useState('谷子袋');
             const thisYear = new Date().getFullYear().toString();
-            const yearSpent = orders.filter(o => o.paid && o.year === thisYear).reduce((s, o) => {
-                return s + (parseFloat(o.price) || 0) * (o.currency === 'RMB' ? 15 : 1);
-            }, 0);
-            const recentOrders = [...orders].sort((a,b) => b.id - a.id).slice(0, 3);
-
+            const addOrder = () => {
+                if (!oName.trim()) return;
+                saveOrders([{ id: Date.now(), name: oName.trim(), price: oPrice, type: oType, platform: oPlatform, paid: oPaid, currency: 'JPY', year: thisYear }, ...orders]);
+                setOName(''); setOPrice(''); setOPlatform(''); setOPaid(false);
+            };
+            const addGood = () => {
+                if (!gName.trim()) return;
+                saveGoods([{ id: Date.now(), name: gName.trim(), work: gWork, type: gType, quantity: 1, year: thisYear }, ...goods]);
+                setGName(''); setGWork('');
+            };
+            const addDisplay = () => {
+                if (!dName.trim()) return;
+                saveDisplays([{ id: Date.now(), name: dName.trim(), type: dType, goodsIds: [], year: thisYear }, ...displays]);
+                setDName('');
+            };
+            const yearSpent = orders.filter(o => o.paid && o.year === thisYear).reduce((s,o) => s + (parseFloat(o.price)||0) * (o.currency==='RMB'?15:1), 0);
+            const unpaid = orders.filter(o => !o.paid).length;
+            const PLATFORMS = ['Animate','Melonbooks','Toranoana','Gamers','淘宝','微店','Yahoo拍卖','二手'];
+            const GOODS_TYPES = ['徽章','立牌','亚克力','手办','抱枕','卡片','色纸','其他'];
+            const DISPLAY_TYPES = ['谷子袋','展示架','收纳盒','相册','展示盒','其他'];
             return (
-                <div className="rounded-os-xl h-full flex flex-col overflow-hidden relative"
-                    style={{ background: 'linear-gradient(135deg, #fdf2f8 0%, #fce7f3 50%, #f5f3ff 100%)', border: '1.5px solid #f9a8d4' }}>
-                    <div className="absolute -right-3 -bottom-4 text-[6rem] font-black select-none pointer-events-none opacity-[0.07]">🌸</div>
-
-                    <div className="p-4 flex flex-col h-full z-10">
-                        <div className="flex items-center justify-between mb-3 flex-shrink-0">
-                            <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-pink-400 mb-0.5">ANIME COLLECTION</p>
-                                <p className="text-2xl font-black text-pink-700">¥{Math.round(yearSpent).toLocaleString()}</p>
-                                <p className="text-[10px] text-pink-400 font-bold">{thisYear}年已花</p>
+                <div className="rounded-os-xl h-full flex flex-col overflow-hidden"
+                    style={{ background: 'linear-gradient(135deg,#fdf2f8,#fce7f3 50%,#f5f3ff)', border: '1.5px solid #f9a8d4' }}>
+                    {/* 顶部统计 */}
+                    <div className="px-4 pt-3 pb-2 flex items-center justify-between flex-shrink-0">
+                        <div>
+                            <p className="text-[9px] font-black text-pink-400 uppercase tracking-widest">ANIME</p>
+                            <p className="text-xl font-black text-pink-700">¥{Math.round(yearSpent).toLocaleString()}</p>
+                            <p className="text-[9px] text-pink-400">{thisYear}年 · {unpaid > 0 ? <span className="text-orange-500">{unpaid}笔未付</span> : '全部已付'}</p>
+                        </div>
+                        <button onClick={onOpen} className="text-[10px] font-black px-2.5 py-1.5 rounded-xl text-white" style={{background:'#ec4899'}}>详情→</button>
+                    </div>
+                    {/* Tab 切换 */}
+                    <div className="flex gap-1 px-3 pb-2 flex-shrink-0">
+                        {[['orders','📦'],['goods','🌸'],['displays','🎒']].map(([key,icon]) => (
+                            <button key={key} onClick={() => setTab(key)}
+                                className={`flex-1 py-1 rounded-lg text-[10px] font-black transition-all ${tab===key ? 'bg-pink-500 text-white' : 'bg-white/60 text-gray-500'}`}>
+                                {icon}
+                            </button>
+                        ))}
+                    </div>
+                    {/* 列表 */}
+                    <div className="flex-1 overflow-y-auto hide-scrollbar px-3 space-y-1 min-h-0">
+                        {tab === 'orders' && orders.length === 0 && <p className="text-[10px] text-pink-300 text-center pt-3 font-bold">还没有记录，在下方添加</p>}
+                        {tab === 'orders' && orders.slice(0,4).map(o => (
+                            <div key={o.id} className="bg-white/70 rounded-xl px-2.5 py-1.5 flex items-center gap-2">
+                                <span className={`text-[8px] font-black px-1 py-0.5 rounded-full flex-shrink-0 ${o.type==='预售'?'bg-orange-100 text-orange-600':'bg-green-100 text-green-600'}`}>{o.type}</span>
+                                <span className="flex-1 text-[11px] font-bold text-gray-700 truncate">{o.name}</span>
+                                <button onClick={() => saveOrders(orders.map(x => x.id===o.id ? {...x,paid:!x.paid} : x))}
+                                    className={`text-[8px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 ${o.paid?'bg-green-100 text-green-600':'bg-red-50 text-red-400'}`}>
+                                    {o.paid?'✓':'✗'}
+                                </button>
+                                {o.price && <span className="text-[10px] text-gray-500 flex-shrink-0">¥{o.price}</span>}
                             </div>
-                            <button onClick={onOpen}
-                                className="text-[10px] font-black px-3 py-1.5 rounded-xl text-white transition-opacity hover:opacity-80"
-                                style={{ background: '#ec4899' }}>详情→</button>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 mb-3 flex-shrink-0">
-                            {[
-                                { label: '谷子总数', value: goods.reduce((s,g) => s + (parseInt(g.quantity)||1), 0), color: '#ec4899' },
-                                { label: '未付款', value: unpaid, color: unpaid > 0 ? '#f97316' : '#94a3b8' },
-                                { label: '预售中', value: presale, color: presale > 0 ? '#8b5cf6' : '#94a3b8' },
-                            ].map(s => (
-                                <div key={s.label} className="bg-white/60 rounded-xl p-2 text-center backdrop-blur-sm">
-                                    <p className="text-lg font-black" style={{ color: s.color }}>{s.value}</p>
-                                    <p className="text-[9px] text-gray-500 font-bold">{s.label}</p>
+                        ))}
+                        {tab === 'goods' && goods.length === 0 && <p className="text-[10px] text-pink-300 text-center pt-3 font-bold">还没有记录，在下方添加</p>}
+                        {tab === 'goods' && goods.slice(0,4).map(g => (
+                            <div key={g.id} className="bg-white/70 rounded-xl px-2.5 py-1.5 flex items-center gap-2">
+                                <span className="text-[8px] font-black px-1 py-0.5 rounded-full bg-pink-100 text-pink-600 flex-shrink-0">{g.type||'其他'}</span>
+                                <span className="flex-1 text-[11px] font-bold text-gray-700 truncate">{g.name}</span>
+                                {g.work && <span className="text-[9px] text-gray-400 truncate max-w-[60px]">《{g.work}》</span>}
+                                <span className="text-[9px] text-gray-400 flex-shrink-0">×{g.quantity||1}</span>
+                            </div>
+                        ))}
+                        {tab === 'displays' && displays.length === 0 && <p className="text-[10px] text-pink-300 text-center pt-3 font-bold">还没有记录，在下方添加</p>}
+                        {tab === 'displays' && displays.slice(0,4).map(d => (
+                            <div key={d.id} className="bg-white/70 rounded-xl px-2.5 py-1.5 flex items-center gap-2">
+                                <span className="text-[8px] font-black px-1 py-0.5 rounded-full bg-purple-100 text-purple-600 flex-shrink-0">{d.type||'其他'}</span>
+                                <span className="flex-1 text-[11px] font-bold text-gray-700 truncate">{d.name}</span>
+                                {d.capacity && <span className="text-[9px] text-gray-400 flex-shrink-0">{d.capacity}</span>}
+                            </div>
+                        ))}
+                    </div>
+                    {/* 底部输入条 */}
+                    <div className="px-3 pb-3 pt-2 flex-shrink-0 border-t border-pink-100/50">
+                        {tab === 'orders' && (
+                            <>
+                                <div className="flex gap-1.5 mb-1.5">
+                                    <input value={oName} onChange={e=>setOName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addOrder()}
+                                        placeholder="添加二次元..." className="flex-1 text-xs bg-white/70 rounded-xl px-3 py-2 outline-none placeholder-pink-300 font-medium min-w-0" />
+                                    <input value={oPrice} onChange={e=>setOPrice(e.target.value)} placeholder="价格" type="text" inputMode="decimal"
+                                        className="text-xs bg-white/70 rounded-xl px-2 py-2 outline-none placeholder-pink-300 text-center font-medium flex-shrink-0" style={{width:'52px'}} />
+                                    <button onClick={addOrder} className="w-8 h-8 rounded-xl text-white font-black flex items-center justify-center flex-shrink-0" style={{background:'#ec4899'}}>+</button>
                                 </div>
-                            ))}
-                        </div>
-
-                        <div className="flex-1 flex flex-col gap-1.5 overflow-hidden">
-                            {recentOrders.length === 0 && (
-                                <p className="text-xs text-pink-300 font-bold text-center pt-2">还没有订单，点详情添加</p>
-                            )}
-                            {recentOrders.map(o => (
-                                <div key={o.id} className="bg-white/60 backdrop-blur-sm rounded-xl px-3 py-2 flex items-center gap-2">
-                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 ${o.type === '预售' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}>{o.type}</span>
-                                    <span className="flex-1 text-xs font-bold text-gray-700 truncate">{o.name}</span>
-                                    <span className="text-[10px] font-black flex-shrink-0" style={{ color: o.paid ? '#22c55e' : '#f97316' }}>{o.paid ? '✓已付' : '✗未付'}</span>
-                                    <span className="text-[10px] font-medium text-gray-500 flex-shrink-0">¥{o.price}</span>
+                                <div className="flex gap-1.5 items-center">
+                                    <select value={oType} onChange={e=>setOType(e.target.value)} className="text-[10px] font-bold bg-white/70 rounded-lg px-2 py-1 outline-none flex-shrink-0">
+                                        <option>现货</option><option>预售</option>
+                                    </select>
+                                    <input value={oPlatform} onChange={e=>setOPlatform(e.target.value)} list="widget-platforms" placeholder="购买平台..."
+                                        className="flex-1 text-[10px] bg-white/70 rounded-lg px-2 py-1 outline-none placeholder-pink-300 font-medium min-w-0" />
+                                    <datalist id="widget-platforms">{PLATFORMS.map(p=><option key={p} value={p}/>)}</datalist>
+                                    <button onClick={()=>setOPaid(p=>!p)}
+                                        className={`text-[10px] font-black px-2 py-1 rounded-lg flex-shrink-0 transition-colors ${oPaid?'bg-green-100 text-green-700':'bg-red-50 text-red-400'}`}>
+                                        {oPaid?'已付':'未付'}
+                                    </button>
                                 </div>
-                            ))}
-                        </div>
+                            </>
+                        )}
+                        {tab === 'goods' && (
+                            <div className="flex gap-1.5">
+                                <input value={gName} onChange={e=>setGName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addGood()}
+                                    placeholder="谷子名称..." className="flex-1 text-xs bg-white/70 rounded-xl px-3 py-2 outline-none placeholder-pink-300 font-medium min-w-0" />
+                                <input value={gWork} onChange={e=>setGWork(e.target.value)} placeholder="作品"
+                                    className="text-xs bg-white/70 rounded-xl px-2 py-2 outline-none placeholder-pink-300 font-medium flex-shrink-0" style={{width:'60px'}} />
+                                <select value={gType} onChange={e=>setGType(e.target.value)} className="text-[10px] font-bold bg-white/70 rounded-xl px-1.5 outline-none flex-shrink-0">
+                                    {GOODS_TYPES.map(t=><option key={t}>{t}</option>)}
+                                </select>
+                                <button onClick={addGood} className="w-8 h-8 rounded-xl text-white font-black flex items-center justify-center flex-shrink-0" style={{background:'#ec4899'}}>+</button>
+                            </div>
+                        )}
+                        {tab === 'displays' && (
+                            <div className="flex gap-1.5">
+                                <input value={dName} onChange={e=>setDName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addDisplay()}
+                                    placeholder="谷美名称..." className="flex-1 text-xs bg-white/70 rounded-xl px-3 py-2 outline-none placeholder-pink-300 font-medium min-w-0" />
+                                <select value={dType} onChange={e=>setDType(e.target.value)} className="text-[10px] font-bold bg-white/70 rounded-xl px-1.5 outline-none flex-shrink-0">
+                                    {DISPLAY_TYPES.map(t=><option key={t}>{t}</option>)}
+                                </select>
+                                <button onClick={addDisplay} className="w-8 h-8 rounded-xl text-white font-black flex items-center justify-center flex-shrink-0" style={{background:'#ec4899'}}>+</button>
+                            </div>
+                        )}
                     </div>
                 </div>
             );
@@ -3056,9 +3142,9 @@
                     <div className="absolute -right-4 -bottom-6 text-[7rem] font-black select-none pointer-events-none" style={{ color: 'var(--accent)', opacity: 0.07 }}>¥</div>
 
                     {/* ① 顶部：一行搞定，nowrap */}
-                    <div className="flex items-center justify-between gap-2 z-10 flex-nowrap flex-shrink-0">
-                        <div className="flex items-center gap-2 flex-nowrap min-w-0">
-                            <div className="min-w-0">
+                    <div className="flex items-start justify-between gap-2 z-10 flex-nowrap flex-shrink-0 overflow-hidden">
+                        <div className="flex items-start gap-2 flex-nowrap min-w-0 flex-1 overflow-hidden">
+                            <div className="min-w-0 max-w-[45%]">
                                 <div className="flex items-center gap-1 mb-0.5">
                                     <p className="text-[9px] font-black uppercase tracking-widest whitespace-nowrap" style={{ color: 'var(--accent)' }}>本周</p>
                                     <button onClick={() => setWeekCur(c => c === 'JPY' ? 'RMB' : 'JPY')}
@@ -3067,15 +3153,15 @@
                                         {weekCur} ⇄
                                     </button>
                                 </div>
-                                <p className="text-base font-black leading-none whitespace-nowrap" style={{ color: '#c2410c', fontSize: 'clamp(13px,3.5vw,18px)' }}>
+                                <p className="text-base font-black leading-none truncate" style={{ color: '#c2410c', fontSize: 'clamp(12px,3vw,16px)' }}>
                                     {weekCur === 'JPY'
                                         ? `¥${wWeekTotal.toLocaleString()}`
                                         : `¥${Math.round(wWeekTotal * exchRate).toLocaleString()}`}
                                 </p>
                             </div>
-                            <div className="border-l pl-2 flex-shrink-0" style={{ borderColor: 'var(--finance-border)' }}>
+                            <div className="border-l pl-2 flex-shrink-0 max-w-[40%] min-w-0" style={{ borderColor: 'var(--finance-border)' }}>
                                 <p className="text-[9px] font-black uppercase tracking-widest mb-0.5 whitespace-nowrap" style={{ color: 'var(--accent)' }}>今日</p>
-                                <p className="text-base font-black leading-none whitespace-nowrap" style={{ color: '#c2410c', fontSize: 'clamp(13px,3.5vw,18px)' }}>
+                                <p className="text-base font-black leading-none truncate" style={{ color: '#c2410c', fontSize: 'clamp(12px,3vw,16px)' }}>
                                     ¥{wTodayTotal.toLocaleString()}
                                 </p>
                             </div>
@@ -4264,6 +4350,9 @@
             const [selectedCat, setSelectedCat] = useState('全部');
             const [editingItem, setEditingItem] = useState(null);
             const [search, setSearch] = useState('');
+            const [filterYear, setFilterYear] = useState('全部');
+
+            const allYears = ['全部', ...Array.from(new Set(items.map(e => e.date?.slice(0,4)).filter(Boolean))).sort((a,b) => b-a)];
 
             const catCounts = {};
             items.forEach(e => {
@@ -4277,7 +4366,8 @@
                 const label = cat?.label || '其他';
                 const matchCat = selectedCat === '全部' || label === selectedCat;
                 const matchSearch = !search || e.title?.toLowerCase().includes(search.toLowerCase()) || e.review?.toLowerCase().includes(search.toLowerCase());
-                return matchCat && matchSearch;
+                const matchYear = filterYear === '全部' || e.date?.startsWith(filterYear);
+                return matchCat && matchSearch && matchYear;
             }).sort((a, b) => new Date(b.date) - new Date(a.date));
 
             return (
@@ -4296,7 +4386,7 @@
                     </div>
 
                     {/* 分类筛选 */}
-                    <div className="flex gap-2 flex-wrap mb-5">
+                    <div className="flex gap-2 flex-wrap mb-3">
                         {['全部', ...Object.keys(catCounts)].map(label => {
                             const cat = CATEGORIES.find(c => c.label === label);
                             return (
@@ -4310,6 +4400,18 @@
                         })}
                     </div>
 
+                    {/* 年份筛选 */}
+                    {allYears.length > 1 && (
+                        <div className="flex gap-2 flex-wrap mb-4">
+                            {allYears.map(y => (
+                                <button key={y} onClick={() => setFilterYear(y)}
+                                    className={`px-2.5 py-1 rounded-full text-xs font-black transition-all ${filterYear === y ? 'bg-gray-700 text-white' : 'bg-white text-gray-400 border border-gray-100'}`}>
+                                    {y === '全部' ? '全部年份' : y + '年'}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     {/* 空状态 */}
                     {filtered.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -4320,41 +4422,61 @@
                     )}
 
                     {/* 卡片网格 */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                         {filtered.map(item => {
                             const cat = CATEGORIES.find(c => c.id === item.catId);
+                            const CAT_BG_MAP = {
+                                'exercise': '#dbeafe', 'food': '#fef9c3',
+                                'movie': '#fce7f3', 'create': '#ede9fe',
+                                'game': '#dcfce7', 'travel': '#fff7ed',
+                            };
+                            const bgColor = CAT_BG_MAP[item.catId] || '#f1f5f9';
                             return (
-                                <div key={item.id} className="bg-white rounded-2xl shadow-sm border border-gray-50 overflow-hidden hover:shadow-md transition-shadow group relative">
-                                    {/* 封面图 */}
-                                    {item.coverUrl && (
-                                        <div className="h-32 overflow-hidden">
-                                            <img src={item.coverUrl} className="w-full h-full object-cover" alt="" onError={e => e.target.style.display='none'} />
+                                <div key={item.id} className="group relative flex flex-col rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-lg transition-all hover:-translate-y-0.5 cursor-pointer bg-white"
+                                    style={{ aspectRatio: '2/3' }}>
+                                    {/* 海报封面 */}
+                                    <div className="flex-1 relative overflow-hidden">
+                                        {item.coverUrl && (
+                                            <img src={item.coverUrl} className="w-full h-full object-cover" alt=""
+                                                onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                                        )}
+                                        {/* 无封面占位 */}
+                                        <div className={`absolute inset-0 flex flex-col items-center justify-center ${item.coverUrl ? 'hidden' : 'flex'}`}
+                                            style={{ background: bgColor }}>
+                                            <span className="text-4xl mb-1">{cat?.icon || '📌'}</span>
+                                            <span className="text-[10px] font-bold text-gray-400">{cat?.label || '其他'}</span>
                                         </div>
-                                    )}
-                                    {!item.coverUrl && (
-                                        <div className="h-20 flex items-center justify-center text-5xl" style={{ background: '#f3f4f6' }}>
-                                            {cat?.icon || '📌'}
-                                        </div>
-                                    )}
-                                    <div className="p-4">
-                                        <div className="flex items-start justify-between gap-2 mb-1">
-                                            <p className="font-black text-sm text-gray-800 flex-1 min-w-0 truncate">{item.title || `${cat?.label || ''}记录`}</p>
-                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                                                <button onClick={() => setEditingItem(item)}
-                                                    className="w-6 h-6 rounded-lg bg-gray-100 text-gray-400 text-xs flex items-center justify-center hover:bg-gray-200">✏️</button>
-                                                <button onClick={() => onDelete && onDelete(item.id)}
-                                                    className="w-6 h-6 rounded-lg bg-red-50 text-red-400 text-xs flex items-center justify-center hover:bg-red-100">×</button>
+                                        {/* 评分（右上角） */}
+                                        {item.rating > 0 && (
+                                            <div className="absolute top-1.5 right-1.5 bg-black/50 backdrop-blur-sm rounded-lg px-1.5 py-0.5 flex items-center gap-0.5">
+                                                <span className="text-yellow-400 text-[9px]">★</span>
+                                                <span className="text-white text-[9px] font-black">{item.rating}</span>
                                             </div>
+                                        )}
+                                        {/* 分类 badge（左上角） */}
+                                        <div className="absolute top-1.5 left-1.5">
+                                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full text-white ${cat?.color || 'bg-gray-400'}`}>
+                                                {cat?.icon}
+                                            </span>
                                         </div>
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full text-white ${cat?.color || 'bg-gray-400'}`}>{cat?.label || '其他'}</span>
-                                            <span className="text-[10px] text-gray-400">{item.date}</span>
-                                            {item.rating > 0 && (
-                                                <span className="text-[10px] text-yellow-500 font-black">{'★'.repeat(item.rating)}</span>
-                                            )}
+                                        {/* hover 操作层 */}
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                            <button onClick={() => setEditingItem(item)}
+                                                className="w-8 h-8 rounded-full bg-white/90 text-gray-700 flex items-center justify-center text-xs hover:bg-white transition-colors shadow">
+                                                ✏️
+                                            </button>
+                                            <button onClick={() => onDelete && onDelete(item.id)}
+                                                className="w-8 h-8 rounded-full bg-red-500/90 text-white flex items-center justify-center text-xs hover:bg-red-500 transition-colors shadow font-black">
+                                                ×
+                                            </button>
                                         </div>
+                                    </div>
+                                    {/* 底部信息条 */}
+                                    <div className="px-2 py-2 flex-shrink-0 bg-white">
+                                        <p className="text-[11px] font-black text-gray-800 truncate leading-tight">{item.title || `${cat?.label || ''}记录`}</p>
+                                        <p className="text-[9px] text-gray-400 font-medium mt-0.5">{item.date}</p>
                                         {item.review && (
-                                            <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{item.review}</p>
+                                            <p className="text-[9px] text-gray-500 leading-tight mt-0.5 line-clamp-1 italic">{item.review}</p>
                                         )}
                                     </div>
                                 </div>
@@ -4550,6 +4672,7 @@
             const [form, setForm] = useState({
                 name: project?.name || '', client: project?.client || '',
                 type: project?.type || '设计', status: project?.status || '进行中',
+                stage: project?.stage || '',
                 startDate: project?.startDate || TODAY_STR, endDate: project?.endDate || '',
                 color: project?.color || '#6366f1', notes: project?.notes || '',
             });
@@ -4584,6 +4707,20 @@
                                     className="bg-gray-50 rounded-2xl px-3 py-3 text-sm outline-none border-2 border-transparent focus:border-purple-200 transition-colors">
                                     {PROJECT_STATUSES.map(s => <option key={s}>{s}</option>)}
                                 </select>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 mb-1">当前阶段</p>
+                                <input
+                                    value={form.stage}
+                                    onChange={e => set('stage', e.target.value)}
+                                    list="stage-options"
+                                    placeholder="如：ラフ中、清稿中、修正中..."
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none border-2 border-transparent focus:border-purple-200 transition-colors"
+                                />
+                                <datalist id="stage-options">
+                                    <option value="ラフ中"/><option value="清稿中"/><option value="修正中"/>
+                                    <option value="等待反馈"/><option value="完成"/><option value="待启动"/><option value="暂停"/>
+                                </datalist>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                                 <div>
@@ -4963,49 +5100,52 @@
                                         const overdue = dtoe < 0;
                                         const isDone = p.status === '已完成';
                                         return (
-                                            <div key={p.id} className={`bg-white rounded-2xl p-4 shadow-sm border relative overflow-hidden group/pc transition-opacity ${isDone ? 'opacity-50 border-gray-100' : 'border-gray-50'}`}>
+                                            <div key={p.id} className={`bg-white rounded-2xl shadow-sm border relative overflow-hidden group/pc ${isDone ? 'opacity-60 border-gray-100' : 'border-gray-50'}`}>
                                                 {/* 左色条 */}
-                                                <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ background: p.color }} />
-                                                <div className="pl-2">
-                                                    <div className="flex items-start justify-between gap-2 mb-1">
-                                                        <div className="min-w-0 flex-1">
-                                                            <p className={`font-black text-sm truncate ${isDone ? 'line-through text-gray-400' : 'text-gray-800'}`}>{p.name}</p>
-                                                            {p.client && <p className="text-[10px] text-gray-400 font-medium truncate">{p.client}</p>}
-                                                        </div>
-                                                        <div className="flex gap-1 flex-shrink-0 items-center">
+                                                <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl" style={{ background: p.color }} />
+                                                <div className="pl-3 pr-3 py-3 flex items-stretch gap-3">
+                                                    {/* 左侧：项目信息 */}
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                                                             <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full text-white" style={{ background: p.color + 'cc' }}>{p.type}</span>
+                                                            {p.stage && (
+                                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">{p.stage}</span>
+                                                            )}
                                                             <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full text-white" style={{ background: STATUS_COLORS[p.status] || '#94a3b8' }}>{p.status}</span>
                                                         </div>
+                                                        <p className={`font-black text-sm leading-tight mb-1 ${isDone ? 'line-through text-gray-400' : 'text-gray-800'}`}>{p.name}</p>
+                                                        {p.client && <p className="text-[10px] text-gray-400 font-medium truncate">{p.client}</p>}
+                                                        <p className="text-[10px] text-gray-400 mt-1">🗓 {p.startDate} → {p.endDate}</p>
                                                     </div>
-                                                    <p className="text-[10px] text-gray-400 font-medium mb-2">{p.startDate} → {p.endDate}</p>
-                                                    <div className="flex items-center justify-between">
-                                                        {/* 倒计时 badge */}
-                                                        {!isDone && (
-                                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                                                overdue ? 'bg-red-100 text-red-600' :
-                                                                urgent  ? 'bg-orange-100 text-orange-600' :
-                                                                          'bg-gray-100 text-gray-500'
-                                                            }`}>
-                                                                {overdue ? `⚠️ 逾期${-dtoe}天` : dtoe === 0 ? '🔥 今天截止' : `⏰ 还有${dtoe}天`}
-                                                            </span>
+                                                    {/* 右侧：倒计时大字 */}
+                                                    <div className={`flex-shrink-0 w-14 flex flex-col items-center justify-center rounded-xl ${
+                                                        isDone ? 'bg-green-50' : overdue ? 'bg-red-50' : urgent ? 'bg-orange-50' : 'bg-gray-50'
+                                                    }`}>
+                                                        {isDone ? (
+                                                            <span className="text-xl">✓</span>
+                                                        ) : (
+                                                            <>
+                                                                <span className="text-[9px] font-bold text-gray-400">剩余</span>
+                                                                <span className={`text-2xl font-black leading-none ${overdue ? 'text-red-500' : urgent ? 'text-orange-500' : 'text-gray-700'}`}>
+                                                                    {Math.abs(dtoe)}
+                                                                </span>
+                                                                <span className="text-[9px] font-bold text-gray-400">{overdue ? '逾期' : '天'}</span>
+                                                            </>
                                                         )}
-                                                        {isDone && <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-green-100 text-green-600">✓ 已完成</span>}
-                                                        <div className="flex gap-1 items-center">
-                                                            {/* 完成勾选按钮 */}
-                                                            <button
-                                                                onClick={() => onSaveProject && onSaveProject({ ...p, status: isDone ? '进行中' : '已完成' })}
-                                                                title={isDone ? '标记为进行中' : '标记为完成'}
-                                                                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-black transition-all flex-shrink-0
-                                                                    ${isDone ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 text-transparent hover:border-green-400'}`}>
-                                                                ✓
-                                                            </button>
-                                                            <div className="flex gap-1 opacity-0 group-hover/pc:opacity-100 transition-opacity">
-                                                                <button onClick={() => { setEditingProject(p); setShowProjectModal(true); }}
-                                                                    className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors">编辑</button>
-                                                                <button onClick={() => { if (window.confirm(`删除「${p.name}」？`)) onDeleteProject && onDeleteProject(p.id); }}
-                                                                    className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 transition-colors">删除</button>
-                                                            </div>
-                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {/* 底部操作（hover 显示） */}
+                                                <div className="flex items-center justify-between px-3 pb-2 opacity-0 group-hover/pc:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => onSaveProject && onSaveProject({ ...p, status: isDone ? '进行中' : '已完成' })}
+                                                        className={`text-[9px] font-black px-2 py-0.5 rounded-full transition-colors ${isDone ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500 hover:bg-green-100 hover:text-green-700'}`}>
+                                                        {isDone ? '✓ 已完成' : '标记完成'}
+                                                    </button>
+                                                    <div className="flex gap-1">
+                                                        <button onClick={() => { setEditingProject(p); setShowProjectModal(true); }}
+                                                            className="text-[9px] font-black px-2 py-0.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200">编辑</button>
+                                                        <button onClick={() => { if (window.confirm(`删除「${p.name}」？`)) onDeleteProject && onDeleteProject(p.id); }}
+                                                            className="text-[9px] font-black px-2 py-0.5 rounded-lg bg-red-50 text-red-400 hover:bg-red-100">删除</button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -5618,6 +5758,7 @@
                 { id: 'year',     icon: '🎨', label: 'Year Map' },
                 { id: 'vault',    icon: '📂', label: 'Vault Library' },
                 { id: 'finance',  icon: '💰', label: 'Finance' },
+                { id: 'anime',    icon: '🌸', label: 'Anime' },
             ];
             const mobileNavItems = navItems.filter(i => !i.desktopOnly);
 
@@ -6318,6 +6459,14 @@
                                         className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-gray-50 transition-colors text-left">
                                         <span className="text-xl">🗺️</span>
                                         <span className="font-bold text-sm text-gray-700">Year Map</span>
+                                    </button>
+                                    <button onClick={() => { setCurrentView('finance'); setShowMobileSidebar(false); }}
+                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-sm transition-colors ${currentView==='finance' ? 'bg-yellow-50 text-yellow-700' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                        <span className="text-xl">💰</span> Finance
+                                    </button>
+                                    <button onClick={() => { setCurrentView('anime'); setShowMobileSidebar(false); }}
+                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-sm transition-colors ${currentView==='anime' ? 'bg-pink-100 text-pink-700' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                        <span className="text-xl">🌸</span> Anime
                                     </button>
                                     <button onClick={() => { setShowMobileSidebar(false); setShowSettings(true); }}
                                         className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-gray-50 transition-colors text-left">
