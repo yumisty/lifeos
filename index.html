@@ -3109,7 +3109,7 @@
             const wWeekTotal = Math.round(weekTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
             const wTodayTotal = Math.round(todayTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
             const monthTxW = MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(nowMonth));
-            const recentThree = [...monthTxW].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+            const recentThree = [...monthTxW].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3);
 
             const saveNewTx = () => {
                 if (!addForm.amount || isNaN(parseFloat(addForm.amount))) return;
@@ -3174,7 +3174,7 @@
                                         {weekCur} ⇄
                                     </button>
                                 </div>
-                                <p className="text-lg md:text-base font-black leading-none" style={{ color: '#c2410c', wordBreak: 'keep-all', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+                                <p className="font-black leading-none truncate" style={{ color: '#c2410c', fontSize: '15px' }}>
                                     {weekCur === 'JPY'
                                         ? `¥${wWeekTotal.toLocaleString()}`
                                         : `¥${Math.round(wWeekTotal * exchRate).toLocaleString()}`}
@@ -3182,7 +3182,7 @@
                             </div>
                             <div className="border-l pl-2 flex-shrink-0 max-w-[38%] min-w-0" style={{ borderColor: 'var(--finance-border)' }}>
                                 <p className="text-[9px] font-black uppercase tracking-widest mb-0.5 whitespace-nowrap" style={{ color: 'var(--accent)' }}>今日</p>
-                                <p className="text-lg md:text-base font-black leading-none" style={{ color: '#c2410c', wordBreak: 'keep-all', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+                                <p className="font-black leading-none truncate" style={{ color: '#c2410c', fontSize: '15px' }}>
                                     ¥{wTodayTotal.toLocaleString()}
                                 </p>
                             </div>
