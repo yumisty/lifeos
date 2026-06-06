@@ -260,10 +260,13 @@
         const getWeekDates = (date = new Date()) => {
             const d = new Date(date);
             const day = d.getDay();
-            const diff = d.getDate() - day;
-            return Array.from({length: 7}).map((_, i) => {
-                const newDate = new Date(d.setDate(diff + i));
-                return newDate.toISOString().split('T')[0];
+            const sunday = new Date(d);
+            sunday.setDate(d.getDate() - day);
+            sunday.setHours(0, 0, 0, 0);
+            return Array.from({length: 7}, (_, i) => {
+                const nd = new Date(sunday);
+                nd.setDate(sunday.getDate() + i);
+                return nd.toISOString().split('T')[0];
             });
         };
 
@@ -732,7 +735,7 @@
                 d.setDate(d.getDate() + weekOffset * 7);
                 return getWeekDates(d);
             })();
-            const weekKey = getWeek(new Date(OFFSET_WEEK_DATES[4] || TODAY_STR));
+            const weekKey = getWeek(new Date(OFFSET_WEEK_DATES[1] || TODAY_STR));
             const weekLabel = weekOffset === 0 ? '本周 Todo'
                 : `${OFFSET_WEEK_DATES[0].slice(5).replace('-', '/')}—${OFFSET_WEEK_DATES[6].slice(5).replace('-', '/')}`;
 
