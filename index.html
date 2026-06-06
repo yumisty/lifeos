@@ -1164,6 +1164,7 @@
             const [oType, setOType] = React.useState('现货');
             const [oPlatform, setOPlatform] = React.useState('');
             const [oPaid, setOPaid] = React.useState(false);
+            const [oShipDate, setOShipDate] = React.useState('');
             const [gName, setGName] = React.useState('');
             const [gWork, setGWork] = React.useState('');
             const [gType, setGType] = React.useState('徽章');
@@ -1172,8 +1173,8 @@
             const thisYear = new Date().getFullYear().toString();
             const addOrder = () => {
                 if (!oName.trim()) return;
-                saveOrders([{ id: Date.now(), name: oName.trim(), price: oPrice, type: oType, platform: oPlatform, paid: oPaid, currency: 'JPY', year: thisYear }, ...orders]);
-                setOName(''); setOPrice(''); setOPlatform(''); setOPaid(false);
+                saveOrders([{ id: Date.now(), name: oName.trim(), price: oPrice, type: oType, platform: oPlatform, paid: oPaid, currency: 'JPY', year: thisYear, shipDate: oShipDate }, ...orders]);
+                setOName(''); setOPrice(''); setOPlatform(''); setOPaid(false); setOShipDate('');
             };
             const addGood = () => {
                 if (!gName.trim()) return;
@@ -1222,6 +1223,7 @@
                                     className={`text-[8px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 ${o.paid?'bg-green-100 text-green-600':'bg-red-50 text-red-400'}`}>
                                     {o.paid?'✓':'✗'}
                                 </button>
+                                {o.shipDate && <span className="text-[8px] text-gray-400 flex-shrink-0">📦{o.shipDate.slice(5)}</span>}
                                 {o.price && <span className="text-[10px] text-gray-500 flex-shrink-0">¥{o.price}</span>}
                             </div>
                         ))}
@@ -1251,7 +1253,7 @@
                                     <input value={oName} onChange={e=>setOName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addOrder()}
                                         placeholder="添加二次元..." className="flex-1 text-xs bg-white/70 rounded-xl px-3 py-2 outline-none placeholder-pink-300 font-medium min-w-0" />
                                     <input value={oPrice} onChange={e=>setOPrice(e.target.value)} placeholder="价格" type="text" inputMode="decimal"
-                                        className="text-xs bg-white/70 rounded-xl px-2 py-2 outline-none placeholder-pink-300 text-center font-medium flex-shrink-0" style={{width:'52px'}} />
+                                        className="text-xs bg-white/70 rounded-xl px-2 py-2 outline-none placeholder-pink-300 text-center font-medium flex-shrink-0" style={{width:'72px'}} />
                                     <button onClick={addOrder} className="w-8 h-8 rounded-xl text-white font-black flex items-center justify-center flex-shrink-0" style={{background:'#ec4899'}}>+</button>
                                 </div>
                                 <div className="flex gap-1.5 items-center">
@@ -1261,6 +1263,10 @@
                                     <input value={oPlatform} onChange={e=>setOPlatform(e.target.value)} list="widget-platforms" placeholder="购买平台..."
                                         className="flex-1 text-[10px] bg-white/70 rounded-lg px-2 py-1 outline-none placeholder-pink-300 font-medium min-w-0" />
                                     <datalist id="widget-platforms">{PLATFORMS.map(p=><option key={p} value={p}/>)}</datalist>
+                                    <input value={oShipDate} onChange={e=>setOShipDate(e.target.value)}
+                                        type="date"
+                                        className="flex-1 text-[10px] bg-white/70 rounded-lg px-2 py-1 outline-none font-medium min-w-0"
+                                        style={{minWidth:'100px'}} />
                                     <button onClick={()=>setOPaid(p=>!p)}
                                         className={`text-[10px] font-black px-2 py-1 rounded-lg flex-shrink-0 transition-colors ${oPaid?'bg-green-100 text-green-700':'bg-red-50 text-red-400'}`}>
                                         {oPaid?'已付':'未付'}
@@ -5094,7 +5100,11 @@
                                             <p className="text-sm font-bold text-gray-400">暂无项目，点击新建</p>
                                         </div>
                                     )}
-                                    {projects.map(p => {
+                                    {[...projects].sort((a, b) => {
+                                        const aDone = a.status === '已完成' ? 1 : 0;
+                                        const bDone = b.status === '已完成' ? 1 : 0;
+                                        return aDone - bDone;
+                                    }).map(p => {
                                         const dtoe = daysToEnd(p);
                                         const urgent = dtoe >= 0 && dtoe < 7;
                                         const overdue = dtoe < 0;
@@ -5118,18 +5128,19 @@
                                                         <p className="text-[10px] text-gray-400 mt-1">🗓 {p.startDate} → {p.endDate}</p>
                                                     </div>
                                                     {/* 右侧：倒计时大字 */}
-                                                    <div className={`flex-shrink-0 w-14 flex flex-col items-center justify-center rounded-xl ${
+                                                    <div className={`flex-shrink-0 flex flex-col items-center justify-center rounded-xl px-2 py-2 ${
                                                         isDone ? 'bg-green-50' : overdue ? 'bg-red-50' : urgent ? 'bg-orange-50' : 'bg-gray-50'
-                                                    }`}>
+                                                    }`} style={{minWidth:'52px', minHeight:'64px'}}>
                                                         {isDone ? (
-                                                            <span className="text-xl">✓</span>
+                                                            <span className="text-2xl">✓</span>
                                                         ) : (
                                                             <>
-                                                                <span className="text-[9px] font-bold text-gray-400">剩余</span>
-                                                                <span className={`text-2xl font-black leading-none ${overdue ? 'text-red-500' : urgent ? 'text-orange-500' : 'text-gray-700'}`}>
+                                                                <span className={`text-3xl font-black leading-none ${overdue ? 'text-red-500' : urgent ? 'text-orange-500' : 'text-gray-700'}`}>
                                                                     {Math.abs(dtoe)}
                                                                 </span>
-                                                                <span className="text-[9px] font-bold text-gray-400">{overdue ? '逾期' : '天'}</span>
+                                                                <span className={`text-[10px] font-black mt-0.5 ${overdue ? 'text-red-400' : urgent ? 'text-orange-400' : 'text-gray-400'}`}>
+                                                                    {overdue ? '逾期' : '天'}
+                                                                </span>
                                                             </>
                                                         )}
                                                     </div>
