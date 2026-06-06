@@ -223,12 +223,18 @@
                 const mergeArr = (cloud, loc) => {
                     if (!cloud || cloud.length === 0) return loc || [];
                     if (!loc   || loc.length   === 0) return cloud;
-                    return cloud.length >= loc.length ? cloud : loc;
+                    // 按 id 合并：以 cloud 为基础，本地有但 cloud 没有的追加进去
+                    const cloudIds = new Set(cloud.map(i => i.id));
+                    const localOnly = (loc || []).filter(i => !cloudIds.has(i.id));
+                    const merged = [...cloud, ...localOnly];
+                    // 按 id 去重（cloud 优先）
+                    return merged;
                 };
                 const mergeObj = (cloud, loc) => {
                     if (!cloud || Object.keys(cloud).length === 0) return loc || {};
                     if (!loc   || Object.keys(loc).length   === 0) return cloud;
-                    return Object.keys(cloud).length >= Object.keys(loc).length ? cloud : loc;
+                    // 合并两个对象的 key，cloud 的值优先，但本地独有的 key 也保留
+                    return { ...loc, ...cloud };
                 };
                 const merged = {
                     ...local,
@@ -2170,7 +2176,10 @@
                         </div>
                     </div>
 
-                    {showDetail && <PeriodDetailModal isOpen={showDetail} onClose={() => setShowDetail(false)} log={log} saveLog={saveLog} />}
+                    {showDetail && ReactDOM.createPortal(
+                        <PeriodDetailModal isOpen={showDetail} onClose={() => setShowDetail(false)} log={log} saveLog={saveLog} />,
+                        document.body
+                    )}
                 </div>
             );
         };
@@ -2450,7 +2459,10 @@
                         })}
                     </div>
                     <p className="text-[9px] text-slate-400 font-bold text-center flex-shrink-0">本月日均 <span className="font-black text-slate-600">{monthAvg}</span> 根</p>
-                    {showDetail && <SmokingDetailModal isOpen={showDetail} onClose={() => setShowDetail(false)} log={log} saveLog={saveLog} goal={goal} />}
+                    {showDetail && ReactDOM.createPortal(
+                        <SmokingDetailModal isOpen={showDetail} onClose={() => setShowDetail(false)} log={log} saveLog={saveLog} goal={goal} />,
+                        document.body
+                    )}
                 </div>
             );
         };
@@ -3189,7 +3201,7 @@
                     </div>
 
                     {/* ② 最近 3 条记录 */}
-                    <div className="flex flex-col gap-1 z-10 flex-1 overflow-hidden">
+                    <div className="flex flex-col gap-1 z-10 flex-shrink-0 my-1.5">
                         {recentThree.length > 0 ? recentThree.map(t => {
                             const col = getCatColor(t.category);
                             return (
