@@ -1171,6 +1171,7 @@
             const [oPlatform, setOPlatform] = React.useState('');
             const [oPaid, setOPaid] = React.useState(false);
             const [oShipDate, setOShipDate] = React.useState('');
+    const [oCurrencyW, setOCurrencyW] = React.useState('JPY');
             const [gName, setGName] = React.useState('');
             const [gWork, setGWork] = React.useState('');
             const [gType, setGType] = React.useState('徽章');
@@ -1179,7 +1180,7 @@
             const thisYear = new Date().getFullYear().toString();
             const addOrder = () => {
                 if (!oName.trim()) return;
-                saveOrders([{ id: Date.now(), name: oName.trim(), price: oPrice, type: oType, platform: oPlatform, paid: oPaid, currency: 'JPY', year: thisYear, shipDate: oShipDate }, ...orders]);
+                saveOrders([{ id: Date.now(), name: oName.trim(), price: oPrice, type: oType, platform: oPlatform, paid: oPaid, currency: oCurrencyW, year: thisYear, shipDate: oShipDate }, ...orders]);
                 setOName(''); setOPrice(''); setOPlatform(''); setOPaid(false); setOShipDate('');
             };
             const addGood = () => {
@@ -1230,7 +1231,7 @@
                                     {o.paid?'✓':'✗'}
                                 </button>
                                 {o.shipDate && <span className="text-[8px] text-gray-400 flex-shrink-0">📦{o.shipDate.slice(5)}</span>}
-                                {o.price && <span className="text-[10px] text-gray-500 flex-shrink-0">¥{o.price}</span>}
+                                {o.price && <span className="text-[10px] text-gray-500 flex-shrink-0">{o.currency==='RMB'?'¥':'¥'}{o.price}<span className="text-[8px] opacity-60">{o.currency||'JPY'}</span></span>}
                             </div>
                         ))}
                         {tab === 'goods' && goods.length === 0 && <p className="text-[10px] text-pink-300 text-center pt-3 font-bold">还没有记录，在下方添加</p>}
@@ -1259,7 +1260,9 @@
                                     <input value={oName} onChange={e=>setOName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addOrder()}
                                         placeholder="添加二次元..." className="flex-1 text-xs bg-white/70 rounded-xl px-3 py-2 outline-none placeholder-pink-300 font-medium min-w-0" />
                                     <input value={oPrice} onChange={e=>setOPrice(e.target.value)} placeholder="价格" type="text" inputMode="decimal"
-                                        className="text-xs bg-white/70 rounded-xl px-2 py-2 outline-none placeholder-pink-300 text-center font-medium flex-shrink-0" style={{width:'72px'}} />
+                                        className="text-xs bg-white/70 rounded-xl px-2 py-2 outline-none placeholder-pink-300 text-center font-medium flex-shrink-0" style={{width:'60px'}} />
+                                    <button onClick={()=>setOCurrencyW(c=>c==='JPY'?'RMB':'JPY')}
+                                        className="text-[9px] font-black px-1.5 py-1 rounded-lg bg-white/70 flex-shrink-0 text-pink-500">{oCurrencyW}</button>
                                     <button onClick={addOrder} className="w-8 h-8 rounded-xl text-white font-black flex items-center justify-center flex-shrink-0" style={{background:'#ec4899'}}>+</button>
                                 </div>
                                 <div className="flex gap-1.5 items-center">
@@ -1348,7 +1351,7 @@
             const labelCls = "text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1 block";
             return (
                 <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center p-4 glass-overlay animate-fade-in" onClick={onClose}>
-                    <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-5 overflow-y-auto" style={{maxHeight:'85vh'}} onClick={e=>e.stopPropagation()}>
+                    <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-5 overflow-y-auto" style={{maxHeight:'80vh', paddingBottom:'5rem'}} onClick={e=>e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="font-black text-base text-gray-800">
                                 {editItem?'编辑':'新增'}{tab==='orders'?'订单':tab==='goods'?'谷子':'谷美'}
@@ -3181,8 +3184,8 @@
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                                <button onClick={() => setShowAdd(true)}
+                            <div className="flex flex-row items-center gap-1 flex-shrink-0">
+                                <button onClick={() => { const now = new Date(); const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`; setAddForm(f => ({...f, date: today})); setShowAdd(true); }}
                                     className="font-bold rounded-full hover:opacity-80"
                                     style={{ color: '#fff', background: 'var(--accent)', fontSize: '9px', padding: '3px 7px', whiteSpace: 'nowrap' }}>
                                     +记一笔
@@ -4891,6 +4894,7 @@
                                                 });
                                                 // 当周项目条
                                                 const wkPjs = (projects||[]).filter(p => {
+                                                    if (p.endDate < mFirst || p.startDate > mLast) return false;
                                                     const sd = p.startDate < mFirst ? 1 : parseInt(p.startDate.slice(8));
                                                     const ed = p.endDate > mLast ? daysInMonth : parseInt(p.endDate.slice(8));
                                                     return sd <= Math.min(wkLast, daysInMonth) && ed >= Math.max(wkFirst, 1);
@@ -6104,7 +6108,11 @@
                             ⚙️ 设置
                         </button>
 
-                        {/* 导出数据 */}
+                        {/* 导出数据 + 导入数据 */}
+                        <button onClick={() => importFileRef.current?.click()}
+                            className="mt-auto w-full bg-white/60 py-3 rounded-2xl font-bold text-sm text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2">
+                            📂 导入数据
+                        </button>
                         <button onClick={exportData}
                             className="w-full bg-white/60 py-2.5 rounded-2xl font-bold text-xs text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2">
                             📤 导出数据
@@ -6183,15 +6191,7 @@
                                     <button onClick={() => setIsEditMode(!isEditMode)} className={`px-3 py-1.5 rounded-full flex items-center justify-center shadow-sm text-sm font-bold border border-gray-100 transition-colors whitespace-nowrap ${isEditMode ? 'bg-os-text text-white' : 'bg-white hover:bg-gray-50'}`}>
                                         {isEditMode ? 'Done' : 'Edit Layout'}
                                     </button>
-                                    <div className="relative group">
-                                        <button onClick={() => importFileRef.current?.click()}
-                                            className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors text-base">
-                                            📂
-                                        </button>
-                                        <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold bg-gray-800 text-white px-2.5 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                            导入历史数据
-                                        </span>
-                                    </div>
+
                                 </>)}
                             </div>
                         </header>
