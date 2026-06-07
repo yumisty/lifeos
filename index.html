@@ -596,8 +596,17 @@
                         const eventSummary = (monthEvents || []).map(e => `${e.date} ${e.title}`).join('、') || '无记录';
                         promptText = `请根据以下${year}年${month}月生活数据生成温暖的月度总结（400字以内）：\n\n本月事件：${eventSummary}\n日记摘要：${diaryText}\n本月消费：${monthTotal || 0}JPY，主要花在${topCat || '无'}\n习惯完成：${habitsSummary || '无记录'}\n\n请包含：本月亮点、成长收获、下月期待，语气像好朋友一样温暖，可加 emoji`;
                     } else {
-                        const { year, yearTotal, monthlyData, topCats } = data || {};
-                        promptText = `你是我的财务助手，请根据${year}年消费数据生成年度总结（500字以内）：\n全年共消费${Math.round(yearTotal || 0)}日元\n月度数据：${JSON.stringify(monthlyData || [])}\n主要分类：${JSON.stringify(topCats || [])}\n请包含：年度消费特点、花钱最多的地方、理财建议，语气温暖鼓励`;
+                        const { year, yearTotal, monthlyData, topCats, animeTotal, animeCount, yearSmoke } = data || {};
+                        const topCatStr = (topCats||[]).map(c=>`${c.name}¥${c.amount}`).join('、');
+                        const monthStr = (monthlyData||[]).map(m=>`${m.month}月¥${m.amount}`).join('、');
+                        promptText = `你是我的私人生活助手，我叫Amy，请用闺蜜聊天的语气帮我总结${year}年这一整年（500字以内，不要用标题分项，就像发微信一样自然）：
+
+这一年我总共花了¥${Math.round(yearTotal||0)}日元，主要花在${topCatStr||'各种地方'}。
+按月来看：${monthStr}。
+${animeCount>0?`谷子方面一共买了${animeCount}笔，已付总额¥${animeTotal}日元。`:'今年没有买谷子。'}
+${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
+
+请根据这些数据，像闺蜜一样聊聊这一年——花钱最多的地方值不值、哪个月最壕气、有没有什么值得骄傲的消费控制。然后给我一些真的有用的具体建议，是那种观察到了我全年消费习惯之后给的，不是空话。最后一句真心的话给我收尾这一年。语气全程轻松，像发微信一样。`;
                     }
                     const response = await fetch(
                         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`,
@@ -6182,24 +6191,27 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                             ⚙️ 设置
                         </button>
 
-                        {/* 同步 + 导出 + 导入 */}
-                        <button onClick={async () => {
-                            setSyncStatus('syncing');
-                            const ok = await syncToCloud();
-                            setSyncStatus(ok ? 'done' : 'error');
-                            setTimeout(() => setSyncStatus('idle'), 3000);
-                        }} className="mt-auto w-full py-2.5 rounded-2xl font-bold text-xs text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2"
-                            style={{ background: syncStatus === 'done' ? '#dcfce7' : syncStatus === 'error' ? '#fee2e2' : 'rgba(255,255,255,0.6)' }}>
-                            {syncStatus === 'syncing' ? '⟳ 同步中…' : syncStatus === 'done' ? '✓ 已同步' : syncStatus === 'error' ? '✗ 同步失败' : '☁ 立即同步'}
-                        </button>
-                        <button onClick={() => importFileRef.current?.click()}
-                            className="w-full bg-white/60 py-2.5 rounded-2xl font-bold text-xs text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2">
-                            📂 导入数据
-                        </button>
-                        <button onClick={exportData}
-                            className="w-full bg-white/60 py-2.5 rounded-2xl font-bold text-xs text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2">
-                            📤 导出数据
-                        </button>
+                        {/* 同步 + 导入 + 导出 三合一 */}
+                        <div className="mt-auto flex gap-1.5 mb-2">
+                            <button onClick={async () => {
+                                setSyncStatus('syncing');
+                                const ok = await syncToCloud();
+                                setSyncStatus(ok ? 'done' : 'error');
+                                setTimeout(() => setSyncStatus('idle'), 3000);
+                            }} className="flex-1 py-2 rounded-xl font-bold text-[10px] text-gray-600 flex flex-col items-center gap-0.5 border border-white/80 shadow-sm hover:bg-white/90 transition-colors"
+                                style={{ background: syncStatus === 'done' ? '#dcfce7' : syncStatus === 'error' ? '#fee2e2' : 'rgba(255,255,255,0.6)' }}>
+                                <span>{syncStatus === 'syncing' ? '⟳' : syncStatus === 'done' ? '✓' : syncStatus === 'error' ? '✗' : '☁'}</span>
+                                <span>{syncStatus === 'syncing' ? '同步中' : syncStatus === 'done' ? '已同步' : syncStatus === 'error' ? '失败' : '同步'}</span>
+                            </button>
+                            <button onClick={() => importFileRef.current?.click()}
+                                className="flex-1 py-2 rounded-xl font-bold text-[10px] text-gray-600 flex flex-col items-center gap-0.5 bg-white/60 border border-white/80 shadow-sm hover:bg-white/90 transition-colors">
+                                <span>📂</span><span>导入</span>
+                            </button>
+                            <button onClick={exportData}
+                                className="flex-1 py-2 rounded-xl font-bold text-[10px] text-gray-600 flex flex-col items-center gap-0.5 bg-white/60 border border-white/80 shadow-sm hover:bg-white/90 transition-colors">
+                                <span>📤</span><span>导出</span>
+                            </button>
+                        </div>
 
                         {/* 用户信息 + 退出 */}
                         <div className="mb-2 bg-white/60 rounded-2xl px-3 py-2 border border-white/80 shadow-sm">
@@ -6353,7 +6365,24 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                                     syncToCloud();
                                 }}
                             />}
-                            {currentView === 'year' && <YearlyView events={events} activeFilter={activeFilter} user={user} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026 年度'})} />}
+                            {currentView === 'year' && <YearlyView events={events} activeFilter={activeFilter} user={user} onOpenReport={(type) => {
+                                const stored = getFinanceStorage();
+                                const yearNow = new Date().getFullYear();
+                                const yearTotal = (stored.transactions||[]).filter(t=>t.date?.startsWith(String(yearNow))).reduce((s,t)=>s+(parseFloat(t.amount)||0)*(t.currency==='RMB'?15:1),0);
+                                const monthlyData = Array.from({length:12},(_,i)=>{
+                                    const m = String(i+1).padStart(2,'0');
+                                    const amt = (stored.transactions||[]).filter(t=>t.date?.startsWith(`${yearNow}-${m}`)).reduce((s,t)=>s+(parseFloat(t.amount)||0)*(t.currency==='RMB'?15:1),0);
+                                    return { month: i+1, amount: Math.round(amt) };
+                                });
+                                const catMap = {};
+                                (stored.transactions||[]).filter(t=>t.date?.startsWith(String(yearNow))).forEach(t=>{ catMap[t.category||'其他']=(catMap[t.category||'其他']||0)+(parseFloat(t.amount)||0); });
+                                const topCats = Object.entries(catMap).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k,v])=>({name:k,amount:Math.round(v)}));
+                                const weekAnime = (stored.animeOrders||[]).filter(o=>o.year===String(yearNow));
+                                const animeTotal = Math.round(weekAnime.filter(o=>o.paid).reduce((s,o)=>s+(parseFloat(o.price)||0)*(o.currency==='RMB'?15:1),0));
+                                const smokingLog = stored.smokingLog||{};
+                                const yearSmoke = Object.entries(smokingLog).filter(([d])=>d.startsWith(String(yearNow))).reduce((s,[,v])=>s+v,0);
+                                setAIPanel({ isOpen:true, title:`✨ AI 年度总结 · ${yearNow}`, type:'annual', data:{ year:yearNow, yearTotal:Math.round(yearTotal), monthlyData, topCats, animeTotal, animeCount:weekAnime.length, yearSmoke, period:`${yearNow}年度总结` } });
+                            }} />}
                             {currentView === 'vault' && (
                                 <VaultLibraryView
                                     items={events}
