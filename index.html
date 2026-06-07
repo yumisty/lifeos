@@ -6342,13 +6342,34 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                         </div>
 
                         {/* 导航 */}
-                        <nav className="flex-1 space-y-2">
+                        <nav className="space-y-2 flex-shrink-0">
                             {navItems.map(item => (
                                 <button key={item.id} onClick={() => setCurrentView(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${currentView === item.id ? 'bg-white shadow-sm font-bold text-os-text' : 'text-gray-500 hover:bg-white/50 font-medium'}`}>
                                     <span className="text-xl">{item.icon}</span> <span>{item.label}</span>
                                 </button>
                             ))}
                         </nav>
+
+                        {/* 侧边栏立绘 */}
+                        {charTheme.url && (
+                            <div className="relative flex-1 flex items-end justify-center overflow-hidden pointer-events-none min-h-0">
+                                <img src={charTheme.url} alt=""
+                                    className="w-full object-contain object-bottom select-none"
+                                    style={{
+                                        opacity: charTheme.opacity,
+                                        maxHeight: '100%',
+                                        maskImage: 'linear-gradient(to top, black 50%, transparent 100%)',
+                                        WebkitMaskImage: 'linear-gradient(to top, black 50%, transparent 100%)',
+                                    }}
+                                />
+                                {charTheme.border && (
+                                    <div className="absolute inset-0"
+                                        style={{
+                                            background: `radial-gradient(ellipse at 50% 80%, ${theme?.accent || '#f9a8d4'}33 0%, transparent 70%)`,
+                                        }} />
+                                )}
+                            </div>
+                        )}
 
                         {/* 底部：用户信息 + 设置 + 退出 */}
                         <div className="mt-auto space-y-2">
@@ -6372,20 +6393,19 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                         </button>
                     </aside>
 
-                    {/* 角色立绘层 */}
+                    {/* 角色立绘层 - 手机端显示在页面右下角 */}
                     {charTheme.url && (
-                        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-                            <div className="absolute right-0 bottom-0 h-full flex items-end justify-end"
-                                style={{ width: '45%' }}>
+                        <div className="md:hidden fixed inset-0 pointer-events-none z-0 overflow-hidden">
+                            <div className="absolute right-0 bottom-16 h-[70%] flex items-end justify-end"
+                                style={{ width: '50%' }}>
                                 <img src={charTheme.url} alt=""
-                                    className="h-[90%] w-auto object-contain object-bottom select-none"
+                                    className="h-full w-auto object-contain object-bottom select-none"
                                     style={{
                                         opacity: charTheme.opacity,
-                                        maskImage: 'linear-gradient(to right, transparent 0%, black 30%, black 80%, transparent 100%), linear-gradient(to top, black 60%, transparent 100%)',
-                                        WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 30%, black 80%, transparent 100%), linear-gradient(to top, black 60%, transparent 100%)',
+                                        maskImage: 'linear-gradient(to right, transparent 0%, black 40%, black 90%, transparent 100%), linear-gradient(to top, black 50%, transparent 100%)',
+                                        WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 40%, black 90%, transparent 100%), linear-gradient(to top, black 50%, transparent 100%)',
                                         maskComposite: 'intersect',
                                         WebkitMaskComposite: 'source-in',
-                                        filter: 'blur(0.3px)',
                                     }}
                                 />
                             </div>
