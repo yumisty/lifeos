@@ -573,11 +573,9 @@
                 try {
                     let promptText;
                     if (type === 'weekly') {
-                        const { weekTxSummary, weekTotal, weekSmokingTotal, weekSmokingAvg, periodStatus, weekMealsSummary, habitsSummary, completedTodos, totalTodos } = data || {};
-                        promptText = `你是我的贴心生活助手，请根据以下本周数据生成温暖有趣的中文周报（400字以内）：\n\n本周消费：共${weekTotal || 0}日元，明细：${JSON.stringify(weekTxSummary || [])}\n爸爸抽烟情况：本周共${weekSmokingTotal || 0}根，日均${weekSmokingAvg || 0}根\n我的经期状态：${periodStatus || '无记录'}\n本周饮食：${JSON.stringify(weekMealsSummary || [])}\n习惯完成情况：${habitsSummary || '无记录'}\nTodo完成：${completedTodos || 0}/${totalTodos || 0}\n\n请包含：\n1. 本周生活亮点\n2. 消费小结（花最多的地方）\n3. 爸爸健康提醒（抽烟情况）\n4. 下周生活建议\n语气像闺蜜一样温暖可爱，可以加 emoji`;
+                        promptText = data.promptText || '（无法生成周报）';
                     } else if (type === 'monthly') {
-                        const { year, month, monthTotal, catSummary, maxTx, busiestDay, compareText } = data || {};
-                        promptText = `请分析以下${year}年${month}月消费数据，给出温暖实用的建议（300字以内）：\n本月支出：${Math.round(monthTotal || 0)}JPY\n分类占比：${JSON.stringify(catSummary || [])}\n最大单笔：${maxTx?.name || '无'} ${maxTx?.amount || 0}${maxTx?.currency || 'JPY'}\n消费最多日期：${busiestDay || '无'}\n和上月对比：${compareText || '暂无上月数据'}\n\n请包含：消费特点、哪里花多了、下月节省建议，语气像理财闺蜜`;
+                        promptText = data.promptText || '（无法生成月度分析）';
                     } else if (type === 'life_month') {
                         const { year, month, monthEvents, monthDiary, monthTotal, topCat, habitsSummary } = data || {};
                         const diaryText = Object.values(monthDiary || {}).filter(Boolean).join('；') || '无日记记录';
@@ -588,7 +586,7 @@
                         promptText = `你是我的财务助手，请根据${year}年消费数据生成年度总结（500字以内）：\n全年共消费${Math.round(yearTotal || 0)}日元\n月度数据：${JSON.stringify(monthlyData || [])}\n主要分类：${JSON.stringify(topCats || [])}\n请包含：年度消费特点、花钱最多的地方、理财建议，语气温暖鼓励`;
                     }
                     const response = await fetch(
-                        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+                        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`,
                         {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -822,7 +820,7 @@
                 if (!key) { setAiError('请先在设置里填入 Gemini API Key'); setAiResult(null); setShowAiModal(true); return; }
                 setAiError(null); setAiResult(null); setAiLoading(true); setShowAiModal(true);
                 const todos = weekTodos.map(t => ({ title: t.title, done: t.done, date: t.dueDate || t.date }));
-                fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+                fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${key}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ contents: [{ parts: [{ text: `根据我本周的待办和完成情况，帮我建议3个下周应该做的事情，简洁一点。以JSON数组格式返回，每项只有"title"字段，例如[{"title":"..."},{"title":"..."},{"title":"..."}]。\n本周待办：${JSON.stringify(todos)}` }] }] })
                 }).then(r => r.json()).then(d => {
@@ -3604,6 +3602,37 @@
                                                 className={`text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-500 hover:bg-gray-50 transition-colors whitespace-nowrap${searchOpen ? ' hidden md:block' : ''}`}>
                                                 汇率 {currentRate}
                                             </button>
+                                            <button onClick={() => {
+                                                const stored2 = getFinanceStorage();
+                                                const monthTx2 = (stored2.transactions||[]).filter(t => t.date?.startsWith(monthStr));
+                                                const monthTotal2 = Math.round(monthTx2.reduce((s,t) => s+(parseFloat(t.amount)||0)*(t.currency==='RMB'?15:1),0));
+                                                const catMap2 = {};
+                                                monthTx2.forEach(t => { catMap2[t.category||'其他'] = (catMap2[t.category||'其他']||0)+(parseFloat(t.amount)||0); });
+                                                const topCats = Object.entries(catMap2).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k}¥${Math.round(v)}`).join('、');
+                                                const bigTx2 = [...monthTx2].sort((a,b)=>(parseFloat(b.amount)||0)-(parseFloat(a.amount)||0)).slice(0,3)
+                                                    .map(t=>`${t.category||''}${t.name?'的'+t.name:''}¥${t.amount}`).join('、');
+                                                const monthAnime2 = (stored2.animeOrders||[]).filter(o => o.year === String(displayYear));
+                                                const animeTotal2 = Math.round(monthAnime2.filter(o=>o.paid).reduce((s,o)=>s+(parseFloat(o.price)||0)*(o.currency==='RMB'?15:1),0));
+                                                const monthEvents2 = (stored2.lifeEvents||[]).filter(e => e.date?.startsWith(monthStr));
+                                                const monthProjects2 = (stored2.projects||[]).filter(p =>
+                                                    p.startDate?.startsWith(monthStr) || p.endDate?.startsWith(monthStr) || p.status === '进行中'
+                                                );
+                                                const smokingLog2 = stored2.smokingLog || {};
+                                                const daysInMonth2 = new Date(displayYear, displayMonth, 0).getDate();
+                                                const monthSmokeDays2 = Array.from({length:daysInMonth2},(_,i)=>{
+                                                    const d = `${monthStr}-${String(i+1).padStart(2,'0')}`;
+                                                    return smokingLog2[d]||0;
+                                                });
+                                                const monthSmokeTotal2 = monthSmokeDays2.reduce((s,n)=>s+n,0);
+                                                const smokeRecordDays2 = monthSmokeDays2.filter(n=>n>0).length;
+                                                const monthSmokeAvg2 = smokeRecordDays2>0?(monthSmokeTotal2/smokeRecordDays2).toFixed(1):0;
+                                                const goal2 = stored2.smokingGoal||20;
+                                                const promptMonth = `你是我的私人生活助手，我叫Amy，请用闺蜜聊天的语气帮我总结${displayYear}年${displayMonth}月（500字以内，不要用标题分项，就像发微信一样自然）：\n\n这个月我花了¥${monthTotal2}，主要花在${topCats||'暂无消费记录'}，比较大的几笔是${bigTx2||'没有特别大的支出'}。\n\n谷子这个月${monthAnime2.length>0?`买了${monthAnime2.length}笔，已付¥${animeTotal2}，入手了${monthAnime2.slice(0,3).map(o=>o.name).join('、')}等`:'没有新增谷子订单'}。\n\nVault里${monthEvents2.length>0?`记录了${monthEvents2.map(e=>e.title||'一条内容').slice(0,4).join('、')}`:'这个月没有新增归档记录'}。\n\n项目方面${monthProjects2.length>0?monthProjects2.map(p=>`${p.name}${p.stage?'('+p.stage+')':''}`).join('、'):'这个月没有进行中的项目'}。\n\n我爸这个月抽了${monthSmokeTotal2}根烟，日均${monthSmokeAvg2}根${parseFloat(monthSmokeAvg2)>goal2?'，超标了不少':'，整体控制还可以'}。\n\n请根据这些内容，像闺蜜一样聊聊这个月过得怎么样——有什么值得开心的、有什么可以更好的。然后给我一些真的有用的具体建议，比如哪个消费类别下个月可以控制一下、谷子买了多少值不值、爸爸的烟要怎么继续改善。最后给我一句真心的鼓励。语气全程轻松，像发微信一样，不要冰冷的报告书格式。`;
+                                                setAIPanel({ isOpen: true, title: `AI 月度分析 · ${displayYear}年${displayMonth}月`, type: 'monthly',
+                                                    data: { promptText: promptMonth, period: `${displayYear}年${displayMonth}月分析` } });
+                                            }} className={`text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap flex items-center gap-1${searchOpen ? ' hidden md:flex' : ''}`}>
+                                                ✨ AI分析
+                                            </button>
                                             {searchOpen ? (
                                                 <div className="flex items-center gap-1 flex-1 animate-fade-in">
                                                     <input autoFocus value={searchTx} onChange={e=>setSearchTx(e.target.value)}
@@ -3877,24 +3906,6 @@
                                     </div>
                                 </div>
 
-                                {/* AI 分析本月账单 */}
-                                <button onClick={() => {
-                                    const catSummary = allMonthCats.map(c => ({ 分类: c.name, 金额: Math.round(c.total) }));
-                                    const maxTx = [...monthTx].sort((a, b) => toJPY(parseFloat(b.amount)||0, b.currency) - toJPY(parseFloat(a.amount)||0, a.currency))[0];
-                                    const dayMap = {};
-                                    monthTx.forEach(t => { dayMap[t.date] = (dayMap[t.date] || 0) + toJPY(parseFloat(t.amount)||0, t.currency); });
-                                    const busiestDay = Object.entries(dayMap).sort((a,b)=>b[1]-a[1])[0]?.[0] || '无';
-                                    const prevMonthStr = displayMonth === 1 ? `${displayYear-1}-12` : `${displayYear}-${String(displayMonth-1).padStart(2,'0')}`;
-                                    const prevMonthTotal = Math.round(getFinanceStorage().transactions.filter(t=>t.date?.startsWith(prevMonthStr)).reduce((s,t)=>s+toJPY(parseFloat(t.amount)||0,t.currency),0));
-                                    const diff = Math.round(monthTotal) - prevMonthTotal;
-                                    const compareText = prevMonthTotal > 0 ? `上月${prevMonthTotal}JPY，本月${diff>=0?'多花':'少花'}了${Math.abs(diff)}JPY` : '暂无上月数据';
-                                    setAIPanel({ isOpen: true, title: `AI 月度分析 · ${displayYear}年${displayMonth}月`, type: 'monthly',
-                                        data: { year: displayYear, month: displayMonth, monthTotal: Math.round(monthTotal), catSummary, maxTx, busiestDay, compareText, period: `${displayYear}年${displayMonth}月分析` } });
-                                }}
-                                    className="w-full py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all hover:opacity-80"
-                                    style={{ background: '#1e293b', color: '#fff' }}>
-                                    🤖 AI 分析本月账单
-                                </button>
                             </div>
                         )}
 
@@ -6012,81 +6023,74 @@
 
             // 收集本周数据并打开 AI 周报面板
             const openWeeklyAI = () => {
-                const stored = (() => { try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); } catch { return {}; } })();
-                const exchRate = stored.exchangeRate || 0.048;
-                // Mon–Sun week range
                 const now = new Date();
-                const day = now.getDay();
-                const diffToMonday = day === 0 ? -6 : 1 - day;
-                const monday = new Date(now);
-                monday.setDate(now.getDate() + diffToMonday);
-                monday.setHours(0, 0, 0, 0);
-                const sunday = new Date(monday);
-                sunday.setDate(monday.getDate() + 6);
-                sunday.setHours(23, 59, 59, 999);
-                // week date strings Mon-Sun
-                const weekDateStrs = Array.from({ length: 7 }, (_, i) => {
-                    const d = new Date(monday); d.setDate(monday.getDate() + i);
-                    return d.toISOString().split('T')[0];
-                });
-                // 消费
-                const allTx = stored.transactions || [];
-                const weekTx = allTx.filter(t => { const d = new Date(t.date); return d >= monday && d <= sunday; });
-                const weekTotal = Math.round(weekTx.reduce((s, t) => s + (t.currency === 'JPY' ? parseFloat(t.amount) || 0 : (parseFloat(t.amount) || 0) / exchRate), 0));
-                const weekTxSummary = weekTx.map(t => ({ 名称: t.name, 金额: t.amount, 货币: t.currency, 分类: t.category }));
+                const weekStart = OFFSET_WEEK_DATES[0];
+                const weekEnd = OFFSET_WEEK_DATES[6];
+
+                const stored = getFinanceStorage();
+
+                // 本周消费
+                const weekTx = (stored.transactions || []).filter(t => t.date >= weekStart && t.date <= weekEnd);
+                const weekTotal = Math.round(weekTx.reduce((s,t) => s + (parseFloat(t.amount)||0) * (t.currency==='RMB'?15:1), 0));
+                const catMap = {};
+                weekTx.forEach(t => { catMap[t.category||'其他'] = (catMap[t.category||'其他']||0) + (parseFloat(t.amount)||0); });
+                const topCategories = Object.entries(catMap).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k])=>k).join('、');
+                const biggestTx = [...weekTx].sort((a,b)=>(parseFloat(b.amount)||0)-(parseFloat(a.amount)||0))[0];
+
+                // 本年谷子
+                const weekAnime = (stored.animeOrders||[]).filter(o => o.year === String(now.getFullYear()));
+
+                // 本周 Vault
+                const weekEvents = (stored.lifeEvents||[]).filter(e => e.date >= weekStart && e.date <= weekEnd);
+
+                // 项目
+                const activeProjects = (stored.projects||[]).filter(p => p.status !== '已完成');
+                const projectSummary = activeProjects.length > 0
+                    ? activeProjects.map(p => {
+                        const days = Math.ceil((new Date(p.endDate) - now) / 86400000);
+                        return `${p.name}${p.stage ? '('+p.stage+')' : ''}还有${days}天截止`;
+                    }).join('、')
+                    : '本周没有进行中的项目';
+
+                // Todo
+                const allTodos = stored.allTodos || {};
+                const weekTodosAll = OFFSET_WEEK_DATES.flatMap(d => allTodos[d] || []);
+                const doneTodos = weekTodosAll.filter(t => t.done).length;
+                const undoneTodos = weekTodosAll.filter(t => !t.done).length;
+                const completedNames = weekTodosAll.filter(t=>t.done).map(t=>t.title).slice(0,5).join('、');
+
                 // 抽烟
                 const smokingLog = stored.smokingLog || {};
-                const weekSmoking = weekDateStrs.reduce((obj, d) => { if (smokingLog[d] != null) obj[d] = smokingLog[d]; return obj; }, {});
-                const weekSmokingTotal = Object.values(weekSmoking).reduce((s, v) => s + v, 0);
-                const smokingDays = Object.keys(weekSmoking).length;
-                const weekSmokingAvg = smokingDays > 0 ? (weekSmokingTotal / smokingDays).toFixed(1) : 0;
-                // 经期
-                const periodLog = stored.periodLog || [];
-                const sorted = [...periodLog].sort((a, b) => a.startDate.localeCompare(b.startDate));
-                const lastPeriod = sorted[sorted.length - 1];
-                let periodStatus = '无经期记录';
-                if (lastPeriod) {
-                    const todayD = new Date(TODAY_STR + 'T00:00:00');
-                    const startD = new Date(lastPeriod.startDate + 'T00:00:00');
-                    const endD = new Date(lastPeriod.endDate + 'T00:00:00');
-                    if (todayD >= startD && todayD <= endD) {
-                        periodStatus = `经期中，第${Math.floor((todayD - startD) / 86400000) + 1}天`;
-                    } else {
-                        const daysSince = Math.floor((todayD - endD) / 86400000);
-                        periodStatus = `距上次结束${daysSince}天`;
-                    }
-                }
-                // 饮食
-                const _getISOWeekKey = (date) => {
-                    const d = new Date(date); d.setHours(0,0,0,0);
-                    d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
-                    const w1 = new Date(d.getFullYear(), 0, 4);
-                    return `${d.getFullYear()}-w${1 + Math.round(((d - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7)}`;
-                };
-                const mealsKey = _getISOWeekKey(now);
-                const allMeals = stored.allMeals || {};
-                const weekMealsRaw = allMeals[mealsKey] || {};
-                const weekMealsSummary = weekDateStrs.filter(d => weekMealsRaw[d]).map(d => ({ 日期: d, 早: weekMealsRaw[d].b, 午: weekMealsRaw[d].l, 晚: weekMealsRaw[d].d }));
-                // 习惯
-                const habitsData = stored.habits || {};
-                const weekHabits = {};
-                weekDateStrs.forEach(d => { if (habitsData[d]?.length) weekHabits[d] = habitsData[d]; });
-                const habitsSummary = DEFAULT_HABITS.map(h => {
-                    const doneDays = weekDateStrs.filter(d => (habitsData[d] || []).includes(h)).length;
-                    return `${h}：${doneDays}/7天`;
-                }).join('、');
-                // todos
-                const weekKey = getWeek(new Date(TODAY_STR));
-                const weekTodos = stored.allTodos?.[weekKey] || [];
-                const completedTodos = weekTodos.filter(t => t.done).length;
-                const totalTodos = weekTodos.length;
+                const weekSmokeData = OFFSET_WEEK_DATES.map(d => smokingLog[d] || 0);
+                const weekSmoke = weekSmokeData.reduce((s,n)=>s+n,0);
+                const smokeDays = weekSmokeData.filter(n=>n>0).length;
+                const avgSmoke = smokeDays > 0 ? (weekSmoke/smokeDays).toFixed(1) : 0;
+                const goal = stored.smokingGoal || 20;
+
                 const weekNum = Math.ceil(now.getDate() / 7);
                 const period = `${now.getFullYear()}年${now.getMonth() + 1}月第${weekNum}周`;
+
+                const prompt = `你是我的私人生活助手，我叫Amy，请用闺蜜聊天的语气帮我总结这一周（400字以内，不要用标题分项，就像发微信一样自然）：
+
+这周我花了¥${weekTotal}，主要花在${topCategories||'暂无消费记录'}${biggestTx ? `，最大的一笔是${biggestTx.category||''}${biggestTx.name?'的'+biggestTx.name:''}花了¥${biggestTx.amount}` : ''}。
+
+${weekAnime.length > 0 ? `谷子方面入手了${weekAnime.slice(0,3).map(o=>o.name).join('、')}` : '这周没有买谷子'}。
+
+${weekEvents.length > 0 ? `Vault里记了${weekEvents.map(e=>e.title||'一条记录').slice(0,3).join('、')}` : '这周没有新增Vault记录'}。
+
+项目方面：${projectSummary}。
+
+Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没做完` : '，全部搞定了'}${completedNames ? `，完成了${completedNames}` : ''}。
+
+我爸这周抽了${weekSmoke}根烟，日均${avgSmoke}根${parseFloat(avgSmoke) > goal ? '，超标了有点多' : '，控制得还不错'}。
+
+请根据这些内容，像闺蜜一样聊聊这周——有什么开心的事值得记一下，有什么花销有点肉疼但也没关系，爸爸的烟有没有控制住。然后给我一些真的有用的建议，不要那种「要好好休息哦」这种废话，是那种你真的观察到了我这周的状态之后，具体告诉我下周可以怎么做得更好的建议，比如哪个类别可以少花一点、谷子是不是可以等发货了再下单、项目截止日快到了要注意什么。最后一句话给我打个气。语气全程轻松，像发微信一样。`;
+
                 setAIPanel({
                     isOpen: true,
                     title: `AI 周报 · ${period}`,
                     type: 'weekly',
-                    data: { weekTxSummary, weekTotal, weekSmokingTotal, weekSmokingAvg, periodStatus, weekMealsSummary, habitsSummary, completedTodos, totalTodos, period }
+                    data: { promptText: prompt, period }
                 });
             };
 
