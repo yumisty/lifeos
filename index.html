@@ -802,13 +802,27 @@
             };
             const toggleTodo = (id) => saveTodos(weekTodos.map(t => t.id === id ? { ...t, done: !t.done } : t));
             const deleteTodo = (id) => saveTodos(weekTodos.filter(t => t.id !== id));
-            const postponeTodo = (id) => {
-                saveTodos(weekTodos.map(t => {
-                    if (t.id !== id) return t;
-                    const base = t.dueDate || t.date;
-                    const d = new Date(base + 'T00:00:00'); d.setDate(d.getDate() + 1);
-                    return { ...t, dueDate: d.toISOString().split('T')[0] };
-                }));
+            const postponeTodo = (todo, currentDate) => {
+                const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                if (!stored.allTodos) stored.allTodos = {};
+
+                // 从当前周数组删除
+                stored.allTodos[weekKey] = (stored.allTodos[weekKey] || []).filter(t => t.id !== todo.id);
+
+                // 计算第二天日期
+                const nextDate = new Date(currentDate + 'T00:00:00');
+                nextDate.setDate(nextDate.getDate() + 1);
+                const nextDateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth()+1).padStart(2,'0')}-${String(nextDate.getDate()).padStart(2,'0')}`;
+                const nextWeekKey = getWeek(nextDate);
+
+                // 加入目标周数组（跨周也正确）
+                stored.allTodos[nextWeekKey] = [...(stored.allTodos[nextWeekKey] || []), { ...todo, date: nextDateStr, dueDate: nextDateStr }];
+
+                localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                syncToCloud();
+
+                // 刷新当前周的显示
+                setWeekTodos(stored.allTodos[weekKey] || []);
             };
             const changeDueDate = (id, newDate) => {
                 if (newDate) saveTodos(weekTodos.map(t => t.id === id ? { ...t, dueDate: newDate } : t));
@@ -872,19 +886,19 @@
 
                     {/* 星期选择器 */}
                     <div className="flex justify-between flex-shrink-0">
-                        {days.map((day, idx) => {
+                        {OFFSET_WEEK_DATES.map((dStr, idx) => {
                             const isSelected = selectedDayIdx === idx;
-                            const dStr = OFFSET_WEEK_DATES[idx];
                             const hasE = events.some(e => e.date === dStr);
                             const hasT = weekTodos.some(t => (t.dueDate || t.date) === dStr && !t.done) || historicalTodos.some(t => (t.dueDate || t.date) === dStr && !t.done);
+                            const dayLabel = ['日','一','二','三','四','五','六'][new Date(dStr).getDay()];
                             return (
-                                <div key={day} onClick={() => setSelectedDayIdx(idx)} className="flex flex-col items-center gap-1 cursor-pointer">
+                                <div key={dStr} onClick={() => setSelectedDayIdx(idx)} className="flex flex-col items-center gap-1 cursor-pointer">
                                     <div className="flex gap-0.5 h-1.5">
                                         {hasE && <span className="w-1.5 h-1.5 rounded-full bg-os-purple"></span>}
                                         {hasT && <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span>}
                                     </div>
                                     <div className={`w-9 h-10 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${isSelected ? 'bg-os-text text-white shadow-md' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>
-                                        <span className="text-[9px] font-bold leading-none">{day}</span>
+                                        <span className="text-[9px] font-bold leading-none">{dayLabel}</span>
                                         <span className="text-[11px] font-black leading-none">{dStr.slice(8)}</span>
                                     </div>
                                 </div>
@@ -928,7 +942,7 @@
                                                     {due.slice(5)}
                                                 </button>
                                             )}
-                                            <button onClick={() => postponeTodo(t.id)}
+                                            <button onClick={() => postponeTodo(t, selectedDate)}
                                                 className="text-[9px] font-black text-gray-300 hover:text-blue-400 flex-shrink-0 opacity-0 group-hover/item:opacity-100 transition-all leading-none whitespace-nowrap">
                                                 →+1
                                             </button>
