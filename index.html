@@ -406,8 +406,75 @@
             }, ms);
         };
 
+        // ── 粒子效果层 ──
+        const ParticleLayer = ({ type, accentColor }) => {
+            const canvasRef = React.useRef(null);
+            React.useEffect(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+
+                const particles = Array.from({ length: 25 }, () => ({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height - canvas.height,
+                    size: Math.random() * 10 + 5,
+                    speedY: Math.random() * 1.2 + 0.3,
+                    speedX: Math.random() * 0.6 - 0.3,
+                    rotation: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 0.03,
+                    opacity: Math.random() * 0.4 + 0.1,
+                }));
+
+                const EMOJIS = { sakura: '🌸', star: '✦', bubble: '○' };
+                const emoji = EMOJIS[type] || '🌸';
+
+                let animId;
+                const draw = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    particles.forEach(p => {
+                        ctx.save();
+                        ctx.globalAlpha = p.opacity;
+                        ctx.translate(p.x, p.y);
+                        ctx.rotate(p.rotation);
+                        if (type === 'star') {
+                            ctx.fillStyle = accentColor;
+                            ctx.font = `${p.size}px serif`;
+                            ctx.fillText('✦', -p.size/2, p.size/2);
+                        } else if (type === 'bubble') {
+                            ctx.strokeStyle = accentColor;
+                            ctx.lineWidth = 1.5;
+                            ctx.beginPath();
+                            ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
+                            ctx.stroke();
+                        } else {
+                            ctx.font = `${p.size}px serif`;
+                            ctx.fillText(emoji, -p.size/2, p.size/2);
+                        }
+                        ctx.restore();
+                        p.y += p.speedY;
+                        p.x += p.speedX;
+                        p.rotation += p.rotSpeed;
+                        if (p.y > canvas.height + 20) {
+                            p.y = -20;
+                            p.x = Math.random() * canvas.width;
+                        }
+                    });
+                    animId = requestAnimationFrame(draw);
+                };
+                draw();
+
+                const onResize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+                window.addEventListener('resize', onResize);
+                return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', onResize); };
+            }, [type, accentColor]);
+
+            return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none" style={{ zIndex: 1 }} />;
+        };
+
         // ── 设置弹窗（API Key 管理 + 通知设置）──
-        const SettingsModal = ({ isOpen, onClose, syncStatus, setSyncStatus, syncToCloud, exportData, importFileRef, themeId, setThemeId }) => {
+        const SettingsModal = ({ isOpen, onClose, syncStatus, setSyncStatus, syncToCloud, exportData, importFileRef, themeId, setThemeId, charTheme, saveCharTheme }) => {
             const [apiKey, setApiKey] = useState(() => localStorage.getItem('lifeos_gemini_key') || '');
             const [saveStatus, setSaveStatus] = useState(null); // null | 'ok' | 'fail'
             const [notify, setNotify] = useState(() => getFinanceStorage().notifySettings || { smokingEnabled: false, smokingTime: '21:00', dailyEnabled: false, dailyTime: '21:00' });
@@ -512,6 +579,51 @@
                                     style={{ background: notifySaved ? '#22c55e' : '#1e293b' }}>
                                     {notifySaved ? '✅ 已保存' : '保存通知设置'}
                                 </button>
+                            </div>
+
+                        <div className="border-t border-gray-100" />
+
+                            {/* 角色主题 */}
+                            <div>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-3">🎭 角色主题</label>
+                                <div className="space-y-3">
+                                    <div>
+                                        <p className="text-xs text-gray-500 font-medium mb-1.5">立绘图片 URL</p>
+                                        <input value={charTheme.url} onChange={e => saveCharTheme({...charTheme, url: e.target.value})}
+                                            placeholder="粘贴图片链接..."
+                                            className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-xs outline-none border border-gray-100 focus:border-gray-300" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500 font-medium mb-1.5">透明度：{Math.round(charTheme.opacity * 100)}%</p>
+                                        <input type="range" min="5" max="40" value={Math.round(charTheme.opacity * 100)}
+                                            onChange={e => saveCharTheme({...charTheme, opacity: parseInt(e.target.value)/100})}
+                                            className="w-full accent-pink-500" />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold text-gray-700">✨ 粒子效果</span>
+                                        <button onClick={() => saveCharTheme({...charTheme, particles: !charTheme.particles})}
+                                            className={`w-11 h-6 rounded-full transition-colors relative ${charTheme.particles ? 'bg-pink-500' : 'bg-gray-300'}`}>
+                                            <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${charTheme.particles ? 'translate-x-6' : 'translate-x-1'}`} />
+                                        </button>
+                                    </div>
+                                    {charTheme.particles && (
+                                        <div className="flex gap-2">
+                                            {[['sakura','🌸 樱花'],['star','⭐ 星星'],['bubble','🫧 气泡']].map(([key,label]) => (
+                                                <button key={key} onClick={() => saveCharTheme({...charTheme, particleType: key})}
+                                                    className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-colors ${charTheme.particleType === key ? 'bg-pink-100 text-pink-700 border border-pink-300' : 'bg-gray-50 text-gray-500 border border-gray-100'}`}>
+                                                    {label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold text-gray-700">🖼 主题边框光晕</span>
+                                        <button onClick={() => saveCharTheme({...charTheme, border: !charTheme.border})}
+                                            className={`w-11 h-6 rounded-full transition-colors relative ${charTheme.border ? 'bg-pink-500' : 'bg-gray-300'}`}>
+                                            <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${charTheme.border ? 'translate-x-6' : 'translate-x-1'}`} />
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
 
                         <div className="border-t border-gray-100" />
@@ -5723,6 +5835,11 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             { id: 'lavender', name: '薰衣草', bg: '#F5F3FF', accent: '#8B5CF6', text: '#3b0764', financeBg: '#F3F0FF', financeBorder: '#d4c8f8' },
             { id: 'dark',     name: '深夜',   bg: '#1e293b', accent: '#60a5fa', text: '#f1f5f9', financeBg: '#1e3a5f', financeBorder: '#2d5a8e' },
             { id: 'matcha',   name: '抹茶',   bg: '#F0FDF4', accent: '#16a34a', text: '#14532d', financeBg: '#F0FDF4', financeBorder: '#bbf7d0' },
+            { id: 'sakura',   name: '樱花',   bg: '#fff5f7', text: '#6b2737', accent: '#f472b6', border: '#fce7f3', financeBg: '#fdf2f8', financeBorder: '#f9a8d4' },
+            { id: 'midnight', name: '深夜2',  bg: '#0f0f1a', text: '#e2e8f0', accent: '#818cf8', border: '#1e1b4b', financeBg: '#13131f', financeBorder: '#312e81' },
+            { id: 'matcha2',  name: '抹茶2',  bg: '#f0fdf4', text: '#14532d', accent: '#4ade80', border: '#dcfce7', financeBg: '#f0fdf4', financeBorder: '#86efac' },
+            { id: 'momo',     name: '桃子',   bg: '#fff7ed', text: '#7c2d12', accent: '#fb923c', border: '#ffedd5', financeBg: '#fff7ed', financeBorder: '#fed7aa' },
+            { id: 'marine',   name: '海洋',   bg: '#eff6ff', text: '#1e3a5f', accent: '#38bdf8', border: '#dbeafe', financeBg: '#eff6ff', financeBorder: '#bae6fd' },
         ];
 
         const ALL_WIDGETS_DEF = [
@@ -5888,6 +6005,16 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     return cfg.map(w => w.id === 'habits' && (w.size === '2x1' || w.size === 'medium' || w.size === 'small') ? { ...w, size: 'large' } : w);
                 } catch { return INITIAL_WIDGETS; }
             });
+
+            // 角色主题
+            const [charTheme, setCharTheme] = React.useState(() => {
+                try { return JSON.parse(localStorage.getItem('lifeos_char_theme') || 'null') || { url: '', opacity: 0.18, particles: true, particleType: 'sakura', border: true }; }
+                catch { return { url: '', opacity: 0.18, particles: true, particleType: 'sakura', border: true }; }
+            });
+            const saveCharTheme = (next) => {
+                setCharTheme(next);
+                localStorage.setItem('lifeos_char_theme', JSON.stringify(next));
+            };
 
             // 主题
             const [themeId, setThemeId] = useState(() => {
@@ -6245,6 +6372,38 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                         </button>
                     </aside>
 
+                    {/* 角色立绘层 */}
+                    {charTheme.url && (
+                        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+                            <div className="absolute right-0 bottom-0 h-full flex items-end justify-end"
+                                style={{ width: '45%' }}>
+                                <img src={charTheme.url} alt=""
+                                    className="h-[90%] w-auto object-contain object-bottom select-none"
+                                    style={{
+                                        opacity: charTheme.opacity,
+                                        maskImage: 'linear-gradient(to right, transparent 0%, black 30%, black 80%, transparent 100%), linear-gradient(to top, black 60%, transparent 100%)',
+                                        WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 30%, black 80%, transparent 100%), linear-gradient(to top, black 60%, transparent 100%)',
+                                        maskComposite: 'intersect',
+                                        WebkitMaskComposite: 'source-in',
+                                        filter: 'blur(0.3px)',
+                                    }}
+                                />
+                            </div>
+                            {charTheme.border && (
+                                <div className="absolute inset-0"
+                                    style={{
+                                        background: `radial-gradient(ellipse at 85% 50%, ${theme.accent}22 0%, transparent 60%)`,
+                                        pointerEvents: 'none',
+                                    }} />
+                            )}
+                        </div>
+                    )}
+
+                    {/* 粒子效果层 */}
+                    {charTheme.particles && charTheme.url && (
+                        <ParticleLayer type={charTheme.particleType} accentColor={theme.accent} />
+                    )}
+
                     {/* 主内容区 */}
                     <main className="flex-1 overflow-y-auto p-4 md:p-8 relative w-full hide-scrollbar">
                         
@@ -6507,7 +6666,7 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                     }} />
                     <AIReportModal {...reportConfig} onClose={() => setReportConfig({...reportConfig, isOpen: false})} />
                     <AIGeneratePanel isOpen={aiPanel.isOpen} title={aiPanel.title} type={aiPanel.type} data={aiPanel.data} onClose={() => setAIPanel(p => ({ ...p, isOpen: false }))} />
-                    <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} syncStatus={syncStatus} setSyncStatus={setSyncStatus} syncToCloud={syncToCloud} exportData={exportData} importFileRef={importFileRef} themeId={themeId} setThemeId={setThemeId} />
+                    <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} syncStatus={syncStatus} setSyncStatus={setSyncStatus} syncToCloud={syncToCloud} exportData={exportData} importFileRef={importFileRef} themeId={themeId} setThemeId={setThemeId} charTheme={charTheme} saveCharTheme={saveCharTheme} />
                     {showGlobalSearch && (
                         <GlobalSearchModal
                             onClose={() => setShowGlobalSearch(false)}
