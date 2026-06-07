@@ -2055,6 +2055,17 @@
             const [endDate, setEndDate] = useState(todayStr);
             const [showDetail, setShowDetail] = useState(false);
 
+            useEffect(() => {
+                const handler = () => {
+                    try {
+                        const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                        setLog(d.periodLog || []);
+                    } catch {}
+                };
+                window.addEventListener('lifeos:reload', handler);
+                return () => window.removeEventListener('lifeos:reload', handler);
+            }, []);
+
             const saveLog = (next) => {
                 setLog(next);
                 try {
@@ -2376,6 +2387,18 @@
             const [editingGoal, setEditingGoal] = useState(false);
             const [goalInput, setGoalInput] = useState('');
             const [showDetail, setShowDetail] = useState(false);
+
+            useEffect(() => {
+                const handler = () => {
+                    try {
+                        const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                        setLog(d.smokingLog || {});
+                        setGoal(d.smokingGoal || 20);
+                    } catch {}
+                };
+                window.addEventListener('lifeos:reload', handler);
+                return () => window.removeEventListener('lifeos:reload', handler);
+            }, []);
 
             const saveLog = (next) => {
                 setLog(next);
@@ -3075,6 +3098,11 @@
             const [showAdd, setShowAdd] = useState(false);
             const [addForm, setAddForm] = useState({ amount: '', currency: 'JPY', category: '', name: '', date: TODAY_STR });
             const [txKey, setTxKey] = useState(0); // triggers re-read of MOCK_TRANSACTIONS
+            useEffect(() => {
+                const handler = () => setTxKey(k => k + 1);
+                window.addEventListener('lifeos:reload', handler);
+                return () => window.removeEventListener('lifeos:reload', handler);
+            }, []);
             const [weekCur, setWeekCur] = useState('JPY');
 
             const cats = (() => {
@@ -5725,6 +5753,8 @@
                         setDiary(d.diary || {});
                         setEvents(d.lifeEvents || []);
                         setTodos(Object.values(d.allTodos || {}).flat());
+                        // 强制 Finance/Smoking/Period widget 重新读取 localStorage
+                        window.dispatchEvent(new CustomEvent('lifeos:reload'));
                     } catch {}
                 };
                 window.addEventListener('lifeos:synced', handler);
