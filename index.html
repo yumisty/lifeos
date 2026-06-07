@@ -262,8 +262,6 @@
                     animeDisplay:      mergeArr(data.anime_display,         local.animeDisplay),
                 };
                 localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
-                console.log('[Vault sync] lifeEvents count:', merged.lifeEvents?.length, 'vault items:', merged.vault?.items?.length);
-                await syncToCloud();
                 return merged;
             } catch(e) {
                 console.log('sync from cloud failed:', e);
