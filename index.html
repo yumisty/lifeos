@@ -6108,9 +6108,18 @@
                             ⚙️ 设置
                         </button>
 
-                        {/* 导出数据 + 导入数据 */}
+                        {/* 同步 + 导出 + 导入 */}
+                        <button onClick={async () => {
+                            setSyncStatus('syncing');
+                            const ok = await syncToCloud();
+                            setSyncStatus(ok ? 'done' : 'error');
+                            setTimeout(() => setSyncStatus('idle'), 3000);
+                        }} className="mt-auto w-full py-2.5 rounded-2xl font-bold text-xs text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2"
+                            style={{ background: syncStatus === 'done' ? '#dcfce7' : syncStatus === 'error' ? '#fee2e2' : 'rgba(255,255,255,0.6)' }}>
+                            {syncStatus === 'syncing' ? '⟳ 同步中…' : syncStatus === 'done' ? '✓ 已同步' : syncStatus === 'error' ? '✗ 同步失败' : '☁ 立即同步'}
+                        </button>
                         <button onClick={() => importFileRef.current?.click()}
-                            className="mt-auto w-full bg-white/60 py-3 rounded-2xl font-bold text-sm text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2">
+                            className="w-full bg-white/60 py-2.5 rounded-2xl font-bold text-xs text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2">
                             📂 导入数据
                         </button>
                         <button onClick={exportData}
@@ -6459,9 +6468,24 @@
                                         {user?.email?.[0]?.toUpperCase() || '?'}
                                     </div>
                                     <p className="font-bold text-sm text-gray-800 truncate">{user?.email}</p>
-                                    {syncIndicator && (
-                                        <p className="text-xs font-bold mt-1" style={{ color: syncIndicator.color }}>{syncIndicator.text}</p>
-                                    )}
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <button onClick={async () => {
+                                            setSyncStatus('syncing');
+                                            const ok = await syncToCloud();
+                                            if (ok) {
+                                                setSyncStatus('done');
+                                                setTimeout(() => setSyncStatus('idle'), 3000);
+                                            } else {
+                                                setSyncStatus('error');
+                                                setTimeout(() => setSyncStatus('idle'), 3000);
+                                            }
+                                        }} className="text-[11px] font-black px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                                            ↑ 立即同步
+                                        </button>
+                                        {syncIndicator && (
+                                            <p className="text-xs font-bold" style={{ color: syncIndicator.color }}>{syncIndicator.text}</p>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* 主题选择 */}
