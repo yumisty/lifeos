@@ -280,11 +280,14 @@
             return Array.from({length: 7}, (_, i) => {
                 const nd = new Date(sunday);
                 nd.setDate(sunday.getDate() + i);
-                return nd.toISOString().split('T')[0];
+                const y = nd.getFullYear();
+                const m = String(nd.getMonth()+1).padStart(2,'0');
+                const dd = String(nd.getDate()).padStart(2,'0');
+                return `${y}-${m}-${dd}`;
             });
         };
 
-        const TODAY_STR = new Date().toISOString().split('T')[0];
+        const TODAY_STR = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; })();
         const CURRENT_WEEK_DATES = getWeekDates(new Date());
 
         const getWeek = (date) => {
@@ -823,6 +826,16 @@
 
                 // 刷新当前周的显示
                 setWeekTodos(stored.allTodos[weekKey] || []);
+
+                // 自动跳转到下一天
+                const nextIdx = OFFSET_WEEK_DATES.indexOf(nextDateStr);
+                if (nextIdx >= 0) {
+                    setSelectedDayIdx(nextIdx);
+                } else {
+                    // 下一天在下一周，切换到下一周
+                    setWeekOffset(wo => wo + 1);
+                    setSelectedDayIdx(0);
+                }
             };
             const changeDueDate = (id, newDate) => {
                 if (newDate) saveTodos(weekTodos.map(t => t.id === id ? { ...t, dueDate: newDate } : t));
