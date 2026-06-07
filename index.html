@@ -183,6 +183,7 @@
             if (!CURRENT_USER_ID) return false;
             try {
                 const local = getFinanceStorage();
+                console.log('[sync] uploading for user:', CURRENT_USER_ID);
                 const { error } = await _supabase.from('lifeos_data').upsert({
                     id:                   CURRENT_USER_ID,
                     transactions:         local.transactions        || [],
@@ -209,8 +210,10 @@
                     anime_display:        local.animeDisplay         || [],
                     updated_at:           new Date().toISOString(),
                 });
+                if (error) console.error('[sync] error:', JSON.stringify(error));
+                else console.log('[sync] success');
                 return !error;
-            } catch { return false; }
+            } catch(e) { console.error('[sync] exception:', e.message); return false; }
         };
 
         const syncFromCloud = async () => {
@@ -221,20 +224,18 @@
                 if (error || !data) return null;
                 const local = getFinanceStorage();
                 const mergeArr = (cloud, loc) => {
-                    if (!cloud || cloud.length === 0) return loc || [];
-                    if (!loc   || loc.length   === 0) return cloud;
-                    // 按 id 合并：以 cloud 为基础，本地有但 cloud 没有的追加进去
-                    const cloudIds = new Set(cloud.map(i => i.id));
-                    const localOnly = (loc || []).filter(i => !cloudIds.has(i.id));
-                    const merged = [...cloud, ...localOnly];
-                    // 按 id 去重（cloud 优先）
-                    return merged;
+                    const c = Array.isArray(cloud) ? cloud : [];
+                    const l = Array.isArray(loc)   ? loc   : [];
+                    if (c.length === 0) return l;
+                    if (l.length === 0) return c;
+                    const cloudIds = new Set(c.map(i => i.id));
+                    const localOnly = l.filter(i => !cloudIds.has(i.id));
+                    return [...c, ...localOnly];
                 };
                 const mergeObj = (cloud, loc) => {
-                    if (!cloud || Object.keys(cloud).length === 0) return loc || {};
-                    if (!loc   || Object.keys(loc).length   === 0) return cloud;
-                    // 合并两个对象的 key，cloud 的值优先，但本地独有的 key 也保留
-                    return { ...loc, ...cloud };
+                    const c = (cloud && typeof cloud === 'object' && !Array.isArray(cloud)) ? cloud : {};
+                    const l = (loc   && typeof loc   === 'object' && !Array.isArray(loc))   ? loc   : {};
+                    return { ...l, ...c };
                 };
                 const merged = {
                     ...local,
