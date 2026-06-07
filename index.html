@@ -407,7 +407,7 @@
         };
 
         // ── 设置弹窗（API Key 管理 + 通知设置）──
-        const SettingsModal = ({ isOpen, onClose }) => {
+        const SettingsModal = ({ isOpen, onClose, syncStatus, setSyncStatus, syncToCloud, exportData, importFileRef, themeId, setThemeId }) => {
             const [apiKey, setApiKey] = useState(() => localStorage.getItem('lifeos_gemini_key') || '');
             const [saveStatus, setSaveStatus] = useState(null); // null | 'ok' | 'fail'
             const [notify, setNotify] = useState(() => getFinanceStorage().notifySettings || { smokingEnabled: false, smokingTime: '21:00', dailyEnabled: false, dailyTime: '21:00' });
@@ -512,6 +512,50 @@
                                     style={{ background: notifySaved ? '#22c55e' : '#1e293b' }}>
                                     {notifySaved ? '✅ 已保存' : '保存通知设置'}
                                 </button>
+                            </div>
+
+                        <div className="border-t border-gray-100" />
+
+                            {/* 主题 */}
+                            <div>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-3">🎨 主题</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {THEMES.map(t => (
+                                        <button key={t.id} onClick={() => setThemeId(t.id)}
+                                            className="flex flex-col items-center gap-1.5 py-2.5 rounded-2xl border-2 transition-all"
+                                            style={{ borderColor: themeId === t.id ? t.accent : '#e5e7eb', background: t.bg }}>
+                                            <div className="w-5 h-5 rounded-full" style={{ background: t.accent }} />
+                                            <span className="text-[8px] font-black leading-none" style={{ color: t.text }}>{t.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="border-t border-gray-100" />
+
+                            {/* 数据管理 */}
+                            <div>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-3">☁ 数据管理</label>
+                                <div className="flex gap-2">
+                                    <button onClick={async () => {
+                                        setSyncStatus('syncing');
+                                        const ok = await syncToCloud();
+                                        setSyncStatus(ok ? 'done' : 'error');
+                                        setTimeout(() => setSyncStatus('idle'), 3000);
+                                    }} className="flex-1 py-2.5 rounded-xl font-bold text-xs flex flex-col items-center gap-1 border border-gray-100 hover:bg-gray-50 transition-colors"
+                                        style={{ background: syncStatus === 'done' ? '#dcfce7' : syncStatus === 'error' ? '#fee2e2' : '#f9fafb', color: syncStatus === 'done' ? '#16a34a' : syncStatus === 'error' ? '#dc2626' : '#4b5563' }}>
+                                        <span className="text-base">{syncStatus === 'syncing' ? '⟳' : syncStatus === 'done' ? '✓' : syncStatus === 'error' ? '✗' : '☁'}</span>
+                                        <span>{syncStatus === 'syncing' ? '同步中…' : syncStatus === 'done' ? '已同步' : syncStatus === 'error' ? '同步失败' : '立即同步'}</span>
+                                    </button>
+                                    <button onClick={() => { importFileRef.current?.click(); onClose(); }}
+                                        className="flex-1 py-2.5 rounded-xl font-bold text-xs bg-gray-50 text-gray-600 flex flex-col items-center gap-1 border border-gray-100 hover:bg-gray-100 transition-colors">
+                                        <span className="text-base">📂</span><span>导入数据</span>
+                                    </button>
+                                    <button onClick={() => { exportData(); onClose(); }}
+                                        className="flex-1 py-2.5 rounded-xl font-bold text-xs bg-gray-50 text-gray-600 flex flex-col items-center gap-1 border border-gray-100 hover:bg-gray-100 transition-colors">
+                                        <span className="text-base">📤</span><span>导出数据</span>
+                                    </button>
+                                </div>
                             </div>
 
                         </div>
@@ -6179,47 +6223,20 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                             ))}
                         </nav>
 
-                        {/* 主题切换按钮 */}
-                        <button onClick={() => setShowThemePicker(true)}
-                            className="mt-auto w-full bg-white/60 py-3 rounded-2xl font-bold text-sm text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2">
-                            🎨 主题
-                        </button>
-
-                        {/* 设置按钮 */}
-                        <button onClick={() => setShowSettings(true)}
-                            className="w-full bg-white/60 py-3 rounded-2xl font-bold text-sm text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm mb-2">
-                            ⚙️ 设置
-                        </button>
-
-                        {/* 同步 + 导入 + 导出 三合一 */}
-                        <div className="mt-auto flex gap-1.5 mb-2">
-                            <button onClick={async () => {
-                                setSyncStatus('syncing');
-                                const ok = await syncToCloud();
-                                setSyncStatus(ok ? 'done' : 'error');
-                                setTimeout(() => setSyncStatus('idle'), 3000);
-                            }} className="flex-1 py-2 rounded-xl font-bold text-[10px] text-gray-600 flex flex-col items-center gap-0.5 border border-white/80 shadow-sm hover:bg-white/90 transition-colors"
-                                style={{ background: syncStatus === 'done' ? '#dcfce7' : syncStatus === 'error' ? '#fee2e2' : 'rgba(255,255,255,0.6)' }}>
-                                <span>{syncStatus === 'syncing' ? '⟳' : syncStatus === 'done' ? '✓' : syncStatus === 'error' ? '✗' : '☁'}</span>
-                                <span>{syncStatus === 'syncing' ? '同步中' : syncStatus === 'done' ? '已同步' : syncStatus === 'error' ? '失败' : '同步'}</span>
+                        {/* 底部：用户信息 + 设置 + 退出 */}
+                        <div className="mt-auto space-y-2">
+                            <button onClick={() => setShowSettings(true)}
+                                className="w-full bg-white/60 py-2.5 rounded-2xl font-bold text-sm text-gray-600 hover:bg-white/90 transition-colors flex items-center justify-center gap-2 border border-white/80 shadow-sm">
+                                ⚙️ 设置
                             </button>
-                            <button onClick={() => importFileRef.current?.click()}
-                                className="flex-1 py-2 rounded-xl font-bold text-[10px] text-gray-600 flex flex-col items-center gap-0.5 bg-white/60 border border-white/80 shadow-sm hover:bg-white/90 transition-colors">
-                                <span>📂</span><span>导入</span>
-                            </button>
-                            <button onClick={exportData}
-                                className="flex-1 py-2 rounded-xl font-bold text-[10px] text-gray-600 flex flex-col items-center gap-0.5 bg-white/60 border border-white/80 shadow-sm hover:bg-white/90 transition-colors">
-                                <span>📤</span><span>导出</span>
-                            </button>
-                        </div>
-
-                        {/* 用户信息 + 退出 */}
-                        <div className="mb-2 bg-white/60 rounded-2xl px-3 py-2 border border-white/80 shadow-sm">
-                            <p className="text-[10px] text-gray-400 truncate mb-1">{user?.email}</p>
-                            <button onClick={() => _supabase.auth.signOut()}
-                                className="w-full py-1.5 rounded-xl font-bold text-xs text-gray-500 hover:bg-white/90 transition-colors">
-                                退出登录
-                            </button>
+                            <div className="bg-white/60 rounded-2xl px-3 py-2 border border-white/80 shadow-sm flex items-center justify-between gap-2">
+                                <p className="text-[10px] text-gray-400 truncate flex-1">{user?.email}</p>
+                                {syncIndicator && <span className="text-[9px] font-bold flex-shrink-0" style={{color: syncIndicator.color}}>{syncIndicator.text}</span>}
+                                <button onClick={() => _supabase.auth.signOut()}
+                                    className="text-[10px] font-bold text-gray-400 hover:text-gray-600 flex-shrink-0">
+                                    退出
+                                </button>
+                            </div>
                         </div>
 
                         {/* 大屏居中悬浮添加按钮 */}
@@ -6490,7 +6507,7 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                     }} />
                     <AIReportModal {...reportConfig} onClose={() => setReportConfig({...reportConfig, isOpen: false})} />
                     <AIGeneratePanel isOpen={aiPanel.isOpen} title={aiPanel.title} type={aiPanel.type} data={aiPanel.data} onClose={() => setAIPanel(p => ({ ...p, isOpen: false }))} />
-                    <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
+                    <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} syncStatus={syncStatus} setSyncStatus={setSyncStatus} syncToCloud={syncToCloud} exportData={exportData} importFileRef={importFileRef} themeId={themeId} setThemeId={setThemeId} />
                     {showGlobalSearch && (
                         <GlobalSearchModal
                             onClose={() => setShowGlobalSearch(false)}
