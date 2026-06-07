@@ -271,12 +271,23 @@
         };
 
         // 获取当前周的日期数组 (周日到周六)
+        // 统一用东京时区算今天日期
+        const getTodayStr = () => {
+            return new Intl.DateTimeFormat('ja-JP', {
+                timeZone: 'Asia/Tokyo',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).format(new Date()).replace(/\//g, '-');
+        };
+
         const getWeekDates = (date = new Date()) => {
-            const d = new Date(date);
-            const day = d.getDay();
+            // 用东京时间算星期几
+            const tokyoStr = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(date);
+            const d = new Date(tokyoStr + 'T00:00:00');
+            const day = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
             const sunday = new Date(d);
             sunday.setDate(d.getDate() - day);
-            sunday.setHours(0, 0, 0, 0);
             return Array.from({length: 7}, (_, i) => {
                 const nd = new Date(sunday);
                 nd.setDate(sunday.getDate() + i);
@@ -287,7 +298,7 @@
             });
         };
 
-        const TODAY_STR = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; })();
+        const TODAY_STR = getTodayStr();
         const CURRENT_WEEK_DATES = getWeekDates(new Date());
 
         const getWeek = (date) => {
@@ -360,7 +371,7 @@
             const ms = next - now;
             setTimeout(() => {
                 const log = (getFinanceStorage().smokingLog) || {};
-                const today = new Date().toISOString().split('T')[0];
+                const n = new Date(); const today = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
                 if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && !log[today]) {
                     new Notification('🚬 记录提醒', {
                         body: '今天还没有记录爸爸的抽烟数量哦～',
@@ -382,7 +393,7 @@
             if (next <= now) next.setDate(next.getDate() + 1);
             const ms = next - now;
             setTimeout(() => {
-                const today = new Date().toISOString().split('T')[0];
+                const n = new Date(); const today = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
                 const stored = getFinanceStorage();
                 const hasTxToday = (stored.transactions || []).some(t => t.date === today);
                 if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && !hasTxToday) {
@@ -733,7 +744,10 @@
         const WeeklyWidget = ({ events, onOpenReport }) => {
             const days = ['日', '一', '二', '三', '四', '五', '六'];
             const [weekOffset, setWeekOffset] = useState(0);
-            const [selectedDayIdx, setSelectedDayIdx] = useState(() => new Date().getDay());
+            const [selectedDayIdx, setSelectedDayIdx] = useState(() => {
+                const tokyoStr = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date());
+                return new Date(tokyoStr + 'T12:00:00').getDay();
+            });
             const [newTodoText, setNewTodoText] = useState('');
             const [editingDue, setEditingDue] = useState(null);
             const [showAiModal, setShowAiModal] = useState(false);
@@ -890,10 +904,10 @@
 
                     {/* 标题 + 前后周导航 */}
                     <div className="flex items-center gap-1 flex-shrink-0 pr-7">
-                        <button onClick={() => { setWeekOffset(o => o - 1); setSelectedDayIdx(new Date().getDay()); }}
+                        <button onClick={() => { setWeekOffset(o => o - 1); const ts = new Intl.DateTimeFormat('sv-SE', {timeZone:'Asia/Tokyo'}).format(new Date()); setSelectedDayIdx(new Date(ts+'T12:00:00').getDay()); }}
                             className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-600 font-black text-sm flex-shrink-0 transition-colors">←</button>
                         <h3 className="font-black text-xs text-gray-400 uppercase tracking-widest flex-1 text-center truncate">{weekLabel}</h3>
-                        <button onClick={() => { setWeekOffset(o => o + 1); setSelectedDayIdx(new Date().getDay()); }}
+                        <button onClick={() => { setWeekOffset(o => o + 1); const ts = new Intl.DateTimeFormat('sv-SE', {timeZone:'Asia/Tokyo'}).format(new Date()); setSelectedDayIdx(new Date(ts+'T12:00:00').getDay()); }}
                             className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-600 font-black text-sm flex-shrink-0 transition-colors">→</button>
                     </div>
 
@@ -903,7 +917,7 @@
                             const isSelected = selectedDayIdx === idx;
                             const hasE = events.some(e => e.date === dStr);
                             const hasT = weekTodos.some(t => (t.dueDate || t.date) === dStr && !t.done) || historicalTodos.some(t => (t.dueDate || t.date) === dStr && !t.done);
-                            const dayLabel = ['日','一','二','三','四','五','六'][new Date(dStr).getDay()];
+                            const dayLabel = ['日','一','二','三','四','五','六'][new Date(dStr + 'T12:00:00').getDay()];
                             return (
                                 <div key={dStr} onClick={() => setSelectedDayIdx(idx)} className="flex flex-col items-center gap-1 cursor-pointer">
                                     <div className="flex gap-0.5 h-1.5">
@@ -1674,7 +1688,7 @@
         };
 
         const HealthWidget = () => {
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; })();
             const [heatLevel, setHeatLevel] = useState(() => {
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
@@ -2069,7 +2083,7 @@
         };
 
         const PeriodWidget = () => {
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; })();
             const today = new Date(todayStr + 'T00:00:00');
 
             const [log, setLog] = useState(() => {
@@ -2261,13 +2275,13 @@
             const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
             const weekKey = getISOWeekKey(monday);
             const meals = allMeals[weekKey] || {};
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; })();
 
             // 周列定义：code 作为 meals 的 key，label 用于显示
             const DAY_CODES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
             const weekDays = Array.from({ length: 7 }, (_, i) => {
                 const d = new Date(monday); d.setDate(monday.getDate() + i);
-                return { date: d.toISOString().split('T')[0], code: DAY_CODES[i], label: ['一','二','三','四','五','六','日'][i] };
+                return { date: (() => { const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; })(), code: DAY_CODES[i], label: ['一','二','三','四','五','六','日'][i] };
             });
             // 今天是第几列（0-6），用于整列高亮
             const todayColIdx = weekDays.findIndex(d => d.date === todayStr);
@@ -2399,7 +2413,7 @@
         };
 
         const SmokingWidget = () => {
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; })();
 
             const [log, setLog] = useState(() => {
                 try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); return d.smokingLog || {}; }
@@ -2435,13 +2449,13 @@
             };
 
             const todayCount = log[todayStr] || 0;
-            const yesterdayStr = (() => { const d = new Date(); d.setDate(d.getDate()-1); return d.toISOString().split('T')[0]; })();
+            const yesterdayStr = (() => { const d = new Date(new Date().toLocaleString('en-US', {timeZone:'Asia/Tokyo'})); d.setDate(d.getDate()-1); const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; })();
             const yesterdayCount = log[yesterdayStr] ?? null;
             const change = (delta) => saveLog({ ...log, [todayStr]: Math.max(0, todayCount + delta) });
 
             const last7 = Array.from({ length: 7 }, (_, i) => {
                 const d = new Date(); d.setDate(d.getDate() - 6 + i);
-                const key = d.toISOString().split('T')[0];
+                const key = (() => { const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; })();
                 return { key, label: `${d.getMonth()+1}/${d.getDate()}`, count: log[key] || 0, isToday: key === todayStr };
             });
             const maxBar = Math.max(...last7.map(d => d.count), goal, 1);
@@ -2585,7 +2599,7 @@
         // ── 习惯打卡 Widget ──
         const DEFAULT_HABITS = ['喝水💧', '运动🏃', '早睡🌙', '维生素💊'];
         const HabitsWidget = () => {
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; })();
             const [habitsData, setHabitsData] = useState(() => {
                 try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}').habits || {}; }
                 catch { return {}; }
@@ -2606,7 +2620,7 @@
                 let streak = 0;
                 const d = new Date();
                 while (true) {
-                    const key = d.toISOString().split('T')[0];
+                    const key = (() => { const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; })();
                     if (key === todayStr && !checked.includes(habit)) { d.setDate(d.getDate() - 1); continue; }
                     if (!(habitsData[key] || []).includes(habit)) break;
                     streak++;
@@ -2723,7 +2737,7 @@
                 syncToCloud();
                 setEditing(false);
             };
-            const days = Math.ceil((new Date(data.date + 'T00:00:00') - new Date(new Date().toISOString().split('T')[0] + 'T00:00:00')) / 86400000);
+            const days = Math.ceil((new Date(data.date + 'T00:00:00') - new Date(getTodayStr() + 'T00:00:00')) / 86400000);
             if (editing) return (
                 <div className="h-full flex flex-col justify-between p-4 rounded-os-xl" style={{ background: '#4c1d95' }}>
                     <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
@@ -2758,7 +2772,7 @@
             '与其诅咒黑暗，不如点亮蜡烛。',
         ];
         const QuoteWidget = () => {
-            const todayKey = new Date().toISOString().split('T')[0];
+            const todayKey = getTodayStr();
             const defaultIdx = Math.abs(todayKey.split('-').join('').slice(-4).split('').reduce((a, c) => a + parseInt(c), 0)) % QUOTES.length;
             const [idx, setIdx] = useState(() => {
                 try {
@@ -2877,7 +2891,7 @@
 
         // ── 每日照片 Widget ──
         const PhotoWidget = () => {
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; })();
             const fileRef = React.useRef(null);
 
             const getPhotos = () => {
@@ -2958,7 +2972,7 @@
             // History modal: last 30 days grid
             const last30 = Array.from({ length: 30 }, (_, i) => {
                 const d = new Date(); d.setDate(d.getDate() - (29 - i));
-                return d.toISOString().split('T')[0];
+                const y=d.getFullYear(),mo=String(d.getMonth()+1).padStart(2,'0'),dy=String(d.getDate()).padStart(2,'0'); return `${y}-${mo}-${dy}`;
             });
 
             return (
@@ -5346,7 +5360,7 @@
             const [year, setYear] = useState(new Date().getFullYear());
             const [showReview, setShowReview] = useState(false);
             const months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; })();
 
             const filteredEvents = activeFilter === 'all' ? events : events.filter(e => e.catId === activeFilter);
 
@@ -6572,22 +6586,21 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
 
                                 {/* 同步/导入/导出 + 退出登录 */}
                                 <div className="px-6 pb-10 flex flex-col gap-3">
-                                    <div className="flex gap-2 mt-2">
+                                    <div className="flex gap-2">
                                         <button onClick={async () => {
                                             setSyncStatus('syncing');
                                             const ok = await syncToCloud();
                                             setSyncStatus(ok ? 'done' : 'error');
                                             setTimeout(() => setSyncStatus('idle'), 3000);
-                                            setShowMobileSidebar(false);
-                                        }} className="flex-1 py-2 rounded-xl text-xs font-bold bg-gray-100 text-gray-600 flex flex-col items-center gap-0.5">
+                                        }} className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-gray-100 text-gray-600 flex flex-col items-center gap-0.5 hover:bg-gray-200">
                                             <span>☁</span><span>同步</span>
                                         </button>
                                         <button onClick={() => { importFileRef.current?.click(); setShowMobileSidebar(false); }}
-                                            className="flex-1 py-2 rounded-xl text-xs font-bold bg-gray-100 text-gray-600 flex flex-col items-center gap-0.5">
+                                            className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-gray-100 text-gray-600 flex flex-col items-center gap-0.5 hover:bg-gray-200">
                                             <span>📂</span><span>导入</span>
                                         </button>
                                         <button onClick={() => { exportData(); setShowMobileSidebar(false); }}
-                                            className="flex-1 py-2 rounded-xl text-xs font-bold bg-gray-100 text-gray-600 flex flex-col items-center gap-0.5">
+                                            className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-gray-100 text-gray-600 flex flex-col items-center gap-0.5 hover:bg-gray-200">
                                             <span>📤</span><span>导出</span>
                                         </button>
                                     </div>
