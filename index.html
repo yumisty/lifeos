@@ -3793,20 +3793,16 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                             <div className="flex flex-col gap-4 animate-fade-in pb-32 md:pb-8">
 
                                 <div className="flex flex-col gap-2">
-                                    {/* 第一行：← 年月 → 两端对齐 ¥JPY⇄ 汇率 🔍 */}
+                                    {/* 第一行：← 年月 → ¥JPY⇄ ✨AI分析 */}
                                     <div className="flex items-center gap-2">
                                         <button onClick={goPrevMonth} className="w-8 h-8 rounded-full bg-white shadow-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0">←</button>
                                         <span className="font-black text-lg min-w-[90px] text-center flex-shrink-0">{displayYear}年{displayMonth}月</span>
                                         <button onClick={goNextMonth} className="w-8 h-8 rounded-full bg-white shadow-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0">→</button>
-                                        <div className="flex items-center gap-2 flex-1 justify-end">
+                                        <div className="flex items-center gap-2 ml-auto">
                                             <button onClick={() => setDisplayCurrency(isRMBCur ? 'JPY' : 'RMB')}
-                                                className={`text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors whitespace-nowrap${searchOpen ? ' hidden md:block' : ''}`}
+                                                className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors whitespace-nowrap"
                                                 style={{ color: isRMBCur ? '#c2410c' : '#1e293b' }}>
                                                 ¥{isRMBCur ? 'RMB' : 'JPY'} ⇄
-                                            </button>
-                                            <button onClick={openRateModal}
-                                                className={`text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-500 hover:bg-gray-50 transition-colors whitespace-nowrap${searchOpen ? ' hidden md:block' : ''}`}>
-                                                汇率 {currentRate}
                                             </button>
                                             <button onClick={() => {
                                                 const stored2 = getFinanceStorage();
@@ -3836,23 +3832,30 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                                 const promptMonth = `你是我的私人生活助手，我叫Amy，请用闺蜜聊天的语气帮我总结${displayYear}年${displayMonth}月（500字以内，不要用标题分项，就像发微信一样自然）：\n\n这个月我花了¥${monthTotal2}，主要花在${topCats||'暂无消费记录'}，比较大的几笔是${bigTx2||'没有特别大的支出'}。\n\n谷子这个月${monthAnime2.length>0?`买了${monthAnime2.length}笔，已付¥${animeTotal2}，入手了${monthAnime2.slice(0,3).map(o=>o.name).join('、')}等`:'没有新增谷子订单'}。\n\nVault里${monthEvents2.length>0?`记录了${monthEvents2.map(e=>e.title||'一条内容').slice(0,4).join('、')}`:'这个月没有新增归档记录'}。\n\n项目方面${monthProjects2.length>0?monthProjects2.map(p=>`${p.name}${p.stage?'('+p.stage+')':''}`).join('、'):'这个月没有进行中的项目'}。\n\n我爸这个月抽了${monthSmokeTotal2}根烟，日均${monthSmokeAvg2}根${parseFloat(monthSmokeAvg2)>goal2?'，超标了不少':'，整体控制还可以'}。\n\n请根据这些内容，像闺蜜一样聊聊这个月过得怎么样——有什么值得开心的、有什么可以更好的。然后给我一些真的有用的具体建议，比如哪个消费类别下个月可以控制一下、谷子买了多少值不值、爸爸的烟要怎么继续改善。最后给我一句真心的鼓励。语气全程轻松，像发微信一样，不要冰冷的报告书格式。`;
                                                 setAIPanel({ isOpen: true, title: `AI 月度分析 · ${displayYear}年${displayMonth}月`, type: 'monthly',
                                                     data: { promptText: promptMonth, period: `${displayYear}年${displayMonth}月分析` } });
-                                            }} className={`text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap flex items-center gap-1${searchOpen ? ' hidden md:flex' : ''}`}>
+                                            }} className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap flex items-center gap-1">
                                                 ✨ AI分析
                                             </button>
-                                            {searchOpen ? (
-                                                <div className="flex items-center gap-1 flex-1 animate-fade-in">
-                                                    <input autoFocus value={searchTx} onChange={e=>setSearchTx(e.target.value)}
-                                                        placeholder="搜索…"
-                                                        className="flex-1 min-w-0 bg-white rounded-xl px-3 py-1.5 text-xs outline-none border border-gray-200 shadow-sm font-medium" />
-                                                    <button onClick={()=>{setSearchOpen(false);setSearchTx('');}} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-black text-sm flex-shrink-0">×</button>
-                                                </div>
-                                            ) : (
-                                                <button onClick={() => setSearchOpen(true)}
-                                                    className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0">
-                                                    🔍
-                                                </button>
-                                            )}
                                         </div>
+                                    </div>
+                                    {/* 第二行：汇率 + 🔍 右对齐 */}
+                                    <div className="flex items-center gap-2 justify-end">
+                                        <button onClick={openRateModal}
+                                            className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white shadow-sm border border-gray-100 text-gray-500 hover:bg-gray-50 transition-colors whitespace-nowrap">
+                                            汇率 {currentRate}
+                                        </button>
+                                        {searchOpen ? (
+                                            <div className="flex items-center gap-1 animate-fade-in">
+                                                <input autoFocus value={searchTx} onChange={e=>setSearchTx(e.target.value)}
+                                                    placeholder="搜索…"
+                                                    className="w-36 bg-white rounded-xl px-3 py-1.5 text-xs outline-none border border-gray-200 shadow-sm font-medium" />
+                                                <button onClick={()=>{setSearchOpen(false);setSearchTx('');}} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-black text-sm flex-shrink-0">×</button>
+                                            </div>
+                                        ) : (
+                                            <button onClick={() => setSearchOpen(true)}
+                                                className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0">
+                                                🔍
+                                            </button>
+                                        )}
                                     </div>
                                     {/* 第二行：手机两行 / 桌面横排 */}
                                     <div className="flex flex-col md:flex-row md:items-end gap-2 md:gap-4">
@@ -4338,7 +4341,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     {/* ── 编辑记录弹窗 ── */}
                     {editingTx && (
                         <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setEditingTx(null)}>
-                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-6" onClick={e => e.stopPropagation()}>
+                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-6 overflow-y-auto" style={{maxHeight:'80vh',paddingBottom:'5rem'}} onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-between mb-5">
                                     <h2 className="font-black text-base text-gray-800">编辑记录</h2>
                                     <button onClick={() => setEditingTx(null)} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200">×</button>
