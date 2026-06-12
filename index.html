@@ -243,7 +243,14 @@
                     categories:        mergeArr(data.categories,           local.categories),
                     fixedItemsByMonth: mergeObj(data.fixed_items_by_month, local.fixedItemsByMonth),
                     wishlist:          mergeArr(data.wishlist,              local.wishlist),
-                    allTodos:          mergeObj(data.todos,                 local.allTodos),
+                    allTodos:          (() => {
+                        const c = (data.todos && typeof data.todos === 'object') ? data.todos : {};
+                        const l = (local.allTodos && typeof local.allTodos === 'object') ? local.allTodos : {};
+                        const merged = { ...c };
+                        // 每个周的 todos：本地有就用本地（保留刚改的），本地没有才用云端
+                        Object.keys(l).forEach(k => { merged[k] = l[k]; });
+                        return merged;
+                    })(),
                     habits:            mergeObj(data.habits,                local.habits),
                     periodLog:         mergeArr(data.period_log,            local.periodLog),
                     countdowns:        data.countdowns || local.countdowns || { name: '回国 🛫', date: '2026-08-31' },
@@ -253,7 +260,13 @@
                     theme:             local.theme              || data.theme         || 'cream',
                     smokingLog:        mergeObj(data.smoking_log,           local.smokingLog),
                     smokingGoal:       data.smoking_goal        || local.smokingGoal  || 20,
-                    allMeals:          mergeObj(data.all_meals,             local.allMeals),
+                    allMeals:          (() => {
+                        const c = (data.all_meals && typeof data.all_meals === 'object') ? data.all_meals : {};
+                        const l = (local.allMeals && typeof local.allMeals === 'object') ? local.allMeals : {};
+                        const merged = { ...c };
+                        Object.keys(l).forEach(k => { merged[k] = l[k]; });
+                        return merged;
+                    })(),
                     vault:             { items: mergeArr(data.vault?.items || [], local.vault?.items || []) },
                     lifeEvents:        mergeArr(data.life_events,            local.lifeEvents),
                     diary:             mergeObj(data.diary,                 local.diary),
@@ -765,7 +778,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 请根据这些数据，像闺蜜一样聊聊这一年——花钱最多的地方值不值、哪个月最壕气、有没有什么值得骄傲的消费控制。然后给我一些真的有用的具体建议，是那种观察到了我全年消费习惯之后给的，不是空话。最后一句真心的话给我收尾这一年。语气全程轻松，像发微信一样。`;
                     }
                     const response = await fetch(
-                        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`,
+                        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`,
                         {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -1026,7 +1039,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 if (!key) { setAiError('请先在设置里填入 Gemini API Key'); setAiResult(null); setShowAiModal(true); return; }
                 setAiError(null); setAiResult(null); setAiLoading(true); setShowAiModal(true);
                 const todos = weekTodos.map(t => ({ title: t.title, done: t.done, date: t.dueDate || t.date }));
-                fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${key}`, {
+                fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${key}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ contents: [{ parts: [{ text: `根据我本周的待办和完成情况，帮我建议3个下周应该做的事情，简洁一点。以JSON数组格式返回，每项只有"title"字段，例如[{"title":"..."},{"title":"..."},{"title":"..."}]。\n本周待办：${JSON.stringify(todos)}` }] }] })
                 }).then(r => r.json()).then(d => {
@@ -2892,6 +2905,17 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             });
             const [editing, setEditing] = useState(false);
             const [draft, setDraft] = useState(data);
+            useEffect(() => {
+                const handler = () => {
+                    try {
+                        const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                        if (d.countdowns) setData(d.countdowns);
+                    } catch {}
+                };
+                window.addEventListener('lifeos:reload', handler);
+                window.addEventListener('lifeos:synced', handler);
+                return () => { window.removeEventListener('lifeos:reload', handler); window.removeEventListener('lifeos:synced', handler); };
+            }, []);
             const save = () => {
                 setData(draft);
                 try {
