@@ -323,6 +323,12 @@
             return `${d.getFullYear()}-w${weekNo}`;
         };
 
+        const getTodoWeekKey = (date) => {
+            const base = typeof date === 'string' ? new Date(date + 'T12:00:00') : date;
+            const weekDates = getWeekDates(base);
+            return getWeek(new Date((weekDates[1] || weekDates[0]) + 'T12:00:00'));
+        };
+
         const getTodoDate = (todo) => todo?.dueDate || todo?.date || '';
         const flattenTodos = (allTodos = {}) => Object.values(allTodos).flat();
         const getTodosInRange = (allTodos = {}, start, end) =>
@@ -947,14 +953,14 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 d.setDate(d.getDate() + weekOffset * 7);
                 return getWeekDates(d);
             })();
-            const weekKey = getWeek(new Date(OFFSET_WEEK_DATES[1] || TODAY_STR));
+            const weekKey = getTodoWeekKey(OFFSET_WEEK_DATES[0] || TODAY_STR);
             const weekLabel = weekOffset === 0 ? '本周 Todo'
                 : `${OFFSET_WEEK_DATES[0].slice(5).replace('-', '/')}—${OFFSET_WEEK_DATES[6].slice(5).replace('-', '/')}`;
 
             const [weekTodos, setWeekTodos] = useState(() => {
                 try {
                     const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    return stored.allTodos?.[getWeek(new Date(TODAY_STR))] || [];
+                    return stored.allTodos?.[getTodoWeekKey(TODAY_STR)] || [];
                 } catch { return []; }
             });
 
@@ -1017,7 +1023,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 const nextDate = new Date(currentDate + 'T00:00:00');
                 nextDate.setDate(nextDate.getDate() + 1);
                 const nextDateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth()+1).padStart(2,'0')}-${String(nextDate.getDate()).padStart(2,'0')}`;
-                const nextWeekKey = getWeek(nextDate);
+                const nextWeekKey = getTodoWeekKey(nextDateStr);
 
                 // 加入目标周数组（跨周也正确）
                 stored.allTodos[nextWeekKey] = [...(stored.allTodos[nextWeekKey] || []), { ...todo, date: nextDateStr, dueDate: nextDateStr }];
@@ -1044,7 +1050,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     try {
                         const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                         if (!stored.allTodos) stored.allTodos = {};
-                        const targetWeekKey = getWeek(newDate);
+                        const targetWeekKey = getTodoWeekKey(newDate);
                         let movedTodo = null;
 
                         Object.keys(stored.allTodos).forEach(key => {
@@ -1084,6 +1090,26 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 }).catch(e => setAiError(e.message)).finally(() => setAiLoading(false));
             };
 
+            const addAiSuggestion = (item, index) => {
+                if (!item?.title) return;
+                const target = new Date((OFFSET_WEEK_DATES[1] || TODAY_STR) + 'T12:00:00');
+                target.setDate(target.getDate() + 7);
+                const targetDate = `${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,'0')}-${String(target.getDate()).padStart(2,'0')}`;
+                const targetWeekKey = getTodoWeekKey(targetDate);
+                const newTodo = { id: Date.now() + index, title: item.title, date: targetDate, dueDate: targetDate, done: false };
+                try {
+                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    if (!stored.allTodos) stored.allTodos = {};
+                    stored.allTodos[targetWeekKey] = [...(stored.allTodos[targetWeekKey] || []), newTodo];
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                    if (targetWeekKey === weekKey) setWeekTodos(stored.allTodos[weekKey] || []);
+                    setAiResult(list => (list || []).filter((_, i) => i !== index));
+                    window.dispatchEvent(new CustomEvent('lifeos:todos-updated'));
+                    haptic(30);
+                    syncToCloud();
+                } catch {}
+            };
+
             return (
                 <div className="bg-white p-5 rounded-os-xl shadow-sm h-full flex flex-col gap-3 relative group overflow-hidden">
                     {/* ✨ Gemini AI 建议按钮 */}
@@ -1103,13 +1129,12 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                     {aiResult.map((item, i) => (
                                         <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
                                             <span className="flex-1 text-xs font-bold text-gray-700 min-w-0">{item.title}</span>
-                                            <button onClick={() => {
-                                                const nextDate = OFFSET_WEEK_DATES[1] || TODAY_STR;
-                                                saveTodos([...weekTodos, { id: Date.now() + i, title: item.title, date: nextDate, dueDate: nextDate, done: false }]);
-                                                setShowAiModal(false);
-                                            }} className="text-[10px] font-black px-2 py-1 bg-os-text text-white rounded-lg flex-shrink-0 hover:opacity-80 transition-opacity">+添加</button>
+                                            <button onClick={() => addAiSuggestion(item, i)} className="text-[10px] font-black px-2 py-1 bg-os-text text-white rounded-lg flex-shrink-0 hover:opacity-80 transition-opacity">+添加</button>
                                         </div>
                                     ))}
+                                    {aiResult.length === 0 && (
+                                        <p className="text-xs text-green-600 text-center py-3 font-bold">已全部添加到下周</p>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -3539,17 +3564,17 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
                     {/* ⑤ 快速记账弹窗 */}
                     {showAdd && (
-                        <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowAdd(false)}>
+                        <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center p-3 glass-overlay animate-fade-in" onClick={() => setShowAdd(false)}>
                             <form
                                 onSubmit={e => { e.preventDefault(); saveNewTx(); }}
-                                className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-4 overflow-y-auto"
-                                style={{maxHeight: '92vh'}}
+                                className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-3 overflow-y-auto"
+                                style={{maxHeight: '96vh'}}
                                 onClick={e => e.stopPropagation()}>
-                                <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center justify-between mb-2">
                                     <h2 className="font-black text-base text-gray-800">记一笔</h2>
                                     <input type="date" value={addForm.date} max={TODAY_STR}
                                         onChange={e => setAddForm(f => ({ ...f, date: e.target.value }))}
-                                        className="text-xs font-bold text-gray-500 bg-gray-50 rounded-xl px-3 py-1.5 border border-gray-200 outline-none" />
+                                        className="text-[11px] font-bold text-gray-500 bg-gray-50 rounded-xl px-2 py-1 border border-gray-200 outline-none" />
                                 </div>
 
                                 {/* 金额 + 货币同一行 */}
@@ -3558,14 +3583,14 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                         type="text" inputMode="decimal" placeholder="金额"
                                         value={addForm.amount}
                                         onChange={e => setAddForm(f => ({ ...f, amount: e.target.value }))}
-                                        className="bg-gray-50 rounded-2xl px-4 py-2.5 text-lg font-black outline-none border-2 border-transparent focus:border-yellow-400 transition-colors"
+                                        className="bg-gray-50 rounded-2xl px-4 py-2 text-lg font-black outline-none border-2 border-transparent focus:border-yellow-400 transition-colors"
                                         style={{ flex: '1', minWidth: 0, maxWidth: 'calc(100% - 88px)' }}
                                         autoFocus
                                     />
                                     <select
                                         value={addForm.currency}
                                         onChange={e => setAddForm(f => ({ ...f, currency: e.target.value }))}
-                                        className="bg-gray-50 rounded-2xl px-3 py-2.5 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors text-center"
+                                        className="bg-gray-50 rounded-2xl px-3 py-2 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors text-center"
                                         style={{ flexShrink: 0, width: '80px' }}>
                                         <option>JPY</option>
                                         <option>RMB</option>
@@ -3576,7 +3601,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                 <select
                                     value={addForm.category}
                                     onChange={e => setAddForm(f => ({ ...f, category: e.target.value }))}
-                                    className="w-full bg-gray-50 rounded-2xl px-4 py-2.5 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-2">
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-2 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-2">
                                     <option value="">选择分类…</option>
                                     {cats.map(c => (
                                         <option key={c} value={c}>{c}</option>
@@ -3588,7 +3613,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                     type="text" placeholder="备注（可选）"
                                     value={addForm.name}
                                     onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
-                                    className="w-full bg-gray-50 rounded-2xl px-4 py-2.5 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-2"
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-2 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-2"
                                 />
 
                                 {/* 语音记账 */}
@@ -3597,12 +3622,14 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                 </div>
 
                                 {/* 确认按钮 */}
-                                <button type="submit"
-                                    disabled={!addForm.amount}
-                                    className="w-full py-3 rounded-2xl font-black text-white transition-all text-sm mt-1 disabled:opacity-40"
-                                    style={{ background: 'var(--accent)' }}>
-                                    确认记账
-                                </button>
+                                <div className="sticky bottom-0 bg-white pt-2 pb-1">
+                                    <button type="submit"
+                                        disabled={!addForm.amount}
+                                        className="w-full py-3 rounded-2xl font-black text-white transition-all text-sm disabled:opacity-40 shadow-sm"
+                                        style={{ background: 'var(--accent)' }}>
+                                        确认记账
+                                    </button>
+                                </div>
                             </form>
                         </div>
                     )}
@@ -6915,26 +6942,26 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
 
                     {/* 快速记一笔弹窗 */}
                     {showQuickTx && (
-                        <div className="fixed inset-0 z-[90] flex items-start justify-center pt-[5%] px-4 pb-4 glass-overlay animate-fade-in" onClick={() => setShowQuickTx(false)}>
+                        <div className="fixed inset-0 z-[90] flex items-start justify-center pt-[4%] px-3 pb-3 glass-overlay animate-fade-in" onClick={() => setShowQuickTx(false)}>
                             <form
                                 onSubmit={e => { e.preventDefault(); saveQuickTx(); }}
-                                className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-4 max-h-[92vh] overflow-y-auto"
+                                className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-3 max-h-[96vh] overflow-y-auto"
                                 onClick={e => e.stopPropagation()}>
-                                <div className="flex items-center justify-between mb-5">
+                                <div className="flex items-center justify-between mb-3">
                                     <h2 className="font-black text-base text-gray-800">✏️ 记一笔</h2>
                                     <input type="date" value={quickTxForm.date} max={TODAY_STR}
                                         onChange={e => setQuickTxForm(f => ({ ...f, date: e.target.value }))}
-                                        className="text-xs font-bold text-gray-500 bg-gray-50 rounded-xl px-3 py-1.5 border border-gray-200 outline-none" />
+                                        className="text-[11px] font-bold text-gray-500 bg-gray-50 rounded-xl px-2 py-1 border border-gray-200 outline-none" />
                                 </div>
-                                <div className="flex gap-2 mb-3 overflow-hidden">
+                                <div className="flex gap-2 mb-2 overflow-hidden">
                                     <input type="number" inputMode="decimal" placeholder="金额"
                                         value={quickTxForm.amount}
                                         onChange={e => setQuickTxForm(f => ({ ...f, amount: e.target.value }))}
-                                        className="bg-gray-50 rounded-2xl px-4 py-2.5 text-lg font-black outline-none border-2 border-transparent focus:border-yellow-400 transition-colors"
+                                        className="bg-gray-50 rounded-2xl px-4 py-2 text-lg font-black outline-none border-2 border-transparent focus:border-yellow-400 transition-colors"
                                         style={{ flex: '1', minWidth: 0 }} autoFocus />
                                     <select value={quickTxForm.currency}
                                         onChange={e => setQuickTxForm(f => ({ ...f, currency: e.target.value }))}
-                                        className="bg-gray-50 rounded-2xl px-3 py-2.5 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors text-center"
+                                        className="bg-gray-50 rounded-2xl px-3 py-2 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors text-center"
                                         style={{ flexShrink: 0, width: '80px' }}>
                                         <option>JPY</option>
                                         <option>RMB</option>
@@ -6942,22 +6969,24 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                                 </div>
                                 <select value={quickTxForm.category}
                                     onChange={e => setQuickTxForm(f => ({ ...f, category: e.target.value }))}
-                                    className="w-full bg-gray-50 rounded-2xl px-4 py-2.5 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-3">
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-2 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-2">
                                     <option value="">选择分类…</option>
                                     {quickCats.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                                 <input type="text" placeholder="备注（可选）"
                                     value={quickTxForm.name}
                                     onChange={e => setQuickTxForm(f => ({ ...f, name: e.target.value }))}
-                                    className="w-full bg-gray-50 rounded-2xl px-4 py-2.5 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-4" />
-                                <div className="mb-3">
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-2 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-2" />
+                                <div className="mb-2">
                                     <VoiceButton onResult={parsed => setQuickTxForm(f => ({ ...f, amount: parsed.amount, currency: parsed.currency, name: parsed.name }))} />
                                 </div>
-                                <button type="submit" disabled={!quickTxForm.amount}
-                                    className="w-full py-3 rounded-2xl font-black text-base transition-all disabled:opacity-40"
-                                    style={{ background: 'var(--accent)', color: '#fff' }}>
-                                    确认记账
-                                </button>
+                                <div className="sticky bottom-0 bg-white pt-2 pb-1">
+                                    <button type="submit" disabled={!quickTxForm.amount}
+                                        className="w-full py-3 rounded-2xl font-black text-base transition-all disabled:opacity-40 shadow-sm"
+                                        style={{ background: 'var(--accent)', color: '#fff' }}>
+                                        确认记账
+                                    </button>
+                                </div>
                             </form>
                         </div>
                     )}
