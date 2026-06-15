@@ -323,6 +323,14 @@
             return `${d.getFullYear()}-w${weekNo}`;
         };
 
+        const getTodoDate = (todo) => todo?.dueDate || todo?.date || '';
+        const flattenTodos = (allTodos = {}) => Object.values(allTodos).flat();
+        const getTodosInRange = (allTodos = {}, start, end) =>
+            flattenTodos(allTodos).filter(t => {
+                const d = getTodoDate(t);
+                return d >= start && d <= end;
+            });
+
         const CATEGORIES = [
             { id: 'sport', icon: '🩰', label: '运动', color: 'bg-pink-400' },
             { id: 'food', icon: '🥩', label: '饮食', color: 'bg-yellow-400' },
@@ -980,6 +988,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     if (!stored.allTodos) stored.allTodos = {};
                     stored.allTodos[weekKey] = todos;
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                    window.dispatchEvent(new CustomEvent('lifeos:todos-updated'));
                 } catch {}
                 syncToCloud();
             };
@@ -1014,6 +1023,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 stored.allTodos[nextWeekKey] = [...(stored.allTodos[nextWeekKey] || []), { ...todo, date: nextDateStr, dueDate: nextDateStr }];
 
                 localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                window.dispatchEvent(new CustomEvent('lifeos:todos-updated'));
                 syncToCloud();
 
                 // 刷新当前周的显示
@@ -1030,7 +1040,32 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 }
             };
             const changeDueDate = (id, newDate) => {
-                if (newDate) saveTodos(weekTodos.map(t => t.id === id ? { ...t, dueDate: newDate } : t));
+                if (newDate) {
+                    try {
+                        const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                        if (!stored.allTodos) stored.allTodos = {};
+                        const targetWeekKey = getWeek(newDate);
+                        let movedTodo = null;
+
+                        Object.keys(stored.allTodos).forEach(key => {
+                            stored.allTodos[key] = (stored.allTodos[key] || []).filter(t => {
+                                if (t.id === id) {
+                                    movedTodo = { ...t, date: newDate, dueDate: newDate };
+                                    return false;
+                                }
+                                return true;
+                            });
+                        });
+
+                        if (movedTodo) {
+                            stored.allTodos[targetWeekKey] = [...(stored.allTodos[targetWeekKey] || []), movedTodo];
+                            localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                            setWeekTodos(stored.allTodos[weekKey] || []);
+                            window.dispatchEvent(new CustomEvent('lifeos:todos-updated'));
+                            syncToCloud();
+                        }
+                    } catch {}
+                }
                 setEditingDue(null);
             };
 
@@ -3314,6 +3349,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
             return (
                 <button
+                    type="button"
                     onClick={handleClick}
                     disabled={voiceState === 'processing' || voiceState === 'done'}
                     className={`w-full py-2.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all border-2 ${cls}`}>
@@ -3504,7 +3540,11 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     {/* ⑤ 快速记账弹窗 */}
                     {showAdd && (
                         <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center p-4 glass-overlay animate-fade-in" onClick={() => setShowAdd(false)}>
-                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-5 overflow-y-auto" style={{maxHeight: '85vh'}} onClick={e => e.stopPropagation()}>
+                            <form
+                                onSubmit={e => { e.preventDefault(); saveNewTx(); }}
+                                className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-4 overflow-y-auto"
+                                style={{maxHeight: '92vh'}}
+                                onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-between mb-3">
                                     <h2 className="font-black text-base text-gray-800">记一笔</h2>
                                     <input type="date" value={addForm.date} max={TODAY_STR}
@@ -3513,19 +3553,19 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                 </div>
 
                                 {/* 金额 + 货币同一行 */}
-                                <div className="flex gap-2 mb-3 overflow-hidden">
+                                <div className="flex gap-2 mb-2 overflow-hidden">
                                     <input
                                         type="text" inputMode="decimal" placeholder="金额"
                                         value={addForm.amount}
                                         onChange={e => setAddForm(f => ({ ...f, amount: e.target.value }))}
-                                        className="bg-gray-50 rounded-2xl px-4 py-3 text-lg font-black outline-none border-2 border-transparent focus:border-yellow-400 transition-colors"
+                                        className="bg-gray-50 rounded-2xl px-4 py-2.5 text-lg font-black outline-none border-2 border-transparent focus:border-yellow-400 transition-colors"
                                         style={{ flex: '1', minWidth: 0, maxWidth: 'calc(100% - 88px)' }}
                                         autoFocus
                                     />
                                     <select
                                         value={addForm.currency}
                                         onChange={e => setAddForm(f => ({ ...f, currency: e.target.value }))}
-                                        className="bg-gray-50 rounded-2xl px-3 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors text-center"
+                                        className="bg-gray-50 rounded-2xl px-3 py-2.5 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors text-center"
                                         style={{ flexShrink: 0, width: '80px' }}>
                                         <option>JPY</option>
                                         <option>RMB</option>
@@ -3536,7 +3576,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                 <select
                                     value={addForm.category}
                                     onChange={e => setAddForm(f => ({ ...f, category: e.target.value }))}
-                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-3">
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-2.5 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-2">
                                     <option value="">选择分类…</option>
                                     {cats.map(c => (
                                         <option key={c} value={c}>{c}</option>
@@ -3548,8 +3588,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                     type="text" placeholder="备注（可选）"
                                     value={addForm.name}
                                     onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
-                                    onKeyDown={e => e.key === 'Enter' && saveNewTx()}
-                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-3"
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-2.5 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-2"
                                 />
 
                                 {/* 语音记账 */}
@@ -3558,13 +3597,13 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                 </div>
 
                                 {/* 确认按钮 */}
-                                <button onClick={saveNewTx}
+                                <button type="submit"
                                     disabled={!addForm.amount}
-                                    className="w-full py-3.5 rounded-2xl font-black text-white transition-all text-sm mt-1 disabled:opacity-40"
+                                    className="w-full py-3 rounded-2xl font-black text-white transition-all text-sm mt-1 disabled:opacity-40"
                                     style={{ background: 'var(--accent)' }}>
                                     确认记账
                                 </button>
-                            </div>
+                            </form>
                         </div>
                     )}
                 </div>
@@ -5075,7 +5114,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 ? baseEvents.filter(e => e.title?.toLowerCase().includes(calSearch.toLowerCase()))
                 : baseEvents;
             const selectedEvents = filteredEvents.filter(e => e.date === selectedDate);
-            const selectedTodos = todos.filter(t => t.date === selectedDate);
+            const selectedTodos = todos.filter(t => getTodoDate(t) === selectedDate);
 
             const calYear = currentDate.getFullYear();
             const MONTH_LABELS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
@@ -5145,6 +5184,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                                     if (d < 1 || d > daysInMonth) return <div key={`e-${wk}-${ci}`} />;
                                                     const dateStr = `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                                                     const dayEvents = filteredEvents.filter(e => e.date === dateStr);
+                                                    const dayTodos = todos.filter(t => getTodoDate(t) === dateStr);
                                                     const isSelected = dateStr === selectedDate;
                                                     const hasDiary = !!diary[dateStr];
                                                     return (
@@ -5159,6 +5199,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                                                     const color = CATEGORIES.find(c=>c.id===e.catId)?.color||'bg-gray-400';
                                                                     return <span key={idx} className={`w-1.5 h-1.5 rounded-full ${color}`}></span>;
                                                                 })}
+                                                                {dayTodos.some(t => !t.done) && <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span>}
+                                                                {dayTodos.length > 0 && dayTodos.every(t => t.done) && <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>}
                                                             </div>
                                                         </div>
                                                     );
@@ -5980,7 +6022,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const [todos, setTodos] = useState(() => {
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    return Object.values(d.allTodos || {}).flat();
+                    return flattenTodos(d.allTodos || {});
                 } catch { return []; }
             });
             const [vaultItems, setVaultItems] = useState(() => {
@@ -6001,13 +6043,17 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                         const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                         setDiary(d.diary || {});
                         setEvents(d.lifeEvents || []);
-                        setTodos(Object.values(d.allTodos || {}).flat());
+                        setTodos(flattenTodos(d.allTodos || {}));
                         // 强制 Finance/Smoking/Period widget 重新读取 localStorage
                         window.dispatchEvent(new CustomEvent('lifeos:reload'));
                     } catch {}
                 };
                 window.addEventListener('lifeos:synced', handler);
-                return () => window.removeEventListener('lifeos:synced', handler);
+                window.addEventListener('lifeos:todos-updated', handler);
+                return () => {
+                    window.removeEventListener('lifeos:synced', handler);
+                    window.removeEventListener('lifeos:todos-updated', handler);
+                };
             }, []);
 
             const [projects, setProjects] = useState(() => {
@@ -6272,8 +6318,9 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             // 收集本周数据并打开 AI 周报面板
             const openWeeklyAI = () => {
                 const now = new Date();
-                const weekStart = OFFSET_WEEK_DATES[0];
-                const weekEnd = OFFSET_WEEK_DATES[6];
+                const weekDates = getWeekDates(now);
+                const weekStart = weekDates[0];
+                const weekEnd = weekDates[6];
 
                 const stored = getFinanceStorage();
 
@@ -6302,14 +6349,14 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
                 // Todo
                 const allTodos = stored.allTodos || {};
-                const weekTodosAll = OFFSET_WEEK_DATES.flatMap(d => allTodos[d] || []);
+                const weekTodosAll = getTodosInRange(allTodos, weekStart, weekEnd);
                 const doneTodos = weekTodosAll.filter(t => t.done).length;
                 const undoneTodos = weekTodosAll.filter(t => !t.done).length;
                 const completedNames = weekTodosAll.filter(t=>t.done).map(t=>t.title).slice(0,5).join('、');
 
                 // 抽烟
                 const smokingLog = stored.smokingLog || {};
-                const weekSmokeData = OFFSET_WEEK_DATES.map(d => smokingLog[d] || 0);
+                const weekSmokeData = weekDates.map(d => smokingLog[d] || 0);
                 const weekSmoke = weekSmokeData.reduce((s,n)=>s+n,0);
                 const smokeDays = weekSmokeData.filter(n=>n>0).length;
                 const avgSmoke = smokeDays > 0 ? (weekSmoke/smokeDays).toFixed(1) : 0;
@@ -6869,7 +6916,10 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                     {/* 快速记一笔弹窗 */}
                     {showQuickTx && (
                         <div className="fixed inset-0 z-[90] flex items-start justify-center pt-[5%] px-4 pb-4 glass-overlay animate-fade-in" onClick={() => setShowQuickTx(false)}>
-                            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                            <form
+                                onSubmit={e => { e.preventDefault(); saveQuickTx(); }}
+                                className="bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-slide-up p-4 max-h-[92vh] overflow-y-auto"
+                                onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-between mb-5">
                                     <h2 className="font-black text-base text-gray-800">✏️ 记一笔</h2>
                                     <input type="date" value={quickTxForm.date} max={TODAY_STR}
@@ -6880,11 +6930,11 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                                     <input type="number" inputMode="decimal" placeholder="金额"
                                         value={quickTxForm.amount}
                                         onChange={e => setQuickTxForm(f => ({ ...f, amount: e.target.value }))}
-                                        className="bg-gray-50 rounded-2xl px-4 py-3 text-lg font-black outline-none border-2 border-transparent focus:border-yellow-400 transition-colors"
+                                        className="bg-gray-50 rounded-2xl px-4 py-2.5 text-lg font-black outline-none border-2 border-transparent focus:border-yellow-400 transition-colors"
                                         style={{ flex: '1', minWidth: 0 }} autoFocus />
                                     <select value={quickTxForm.currency}
                                         onChange={e => setQuickTxForm(f => ({ ...f, currency: e.target.value }))}
-                                        className="bg-gray-50 rounded-2xl px-3 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors text-center"
+                                        className="bg-gray-50 rounded-2xl px-3 py-2.5 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors text-center"
                                         style={{ flexShrink: 0, width: '80px' }}>
                                         <option>JPY</option>
                                         <option>RMB</option>
@@ -6892,24 +6942,23 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                                 </div>
                                 <select value={quickTxForm.category}
                                     onChange={e => setQuickTxForm(f => ({ ...f, category: e.target.value }))}
-                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-3">
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-2.5 text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-3">
                                     <option value="">选择分类…</option>
                                     {quickCats.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                                 <input type="text" placeholder="备注（可选）"
                                     value={quickTxForm.name}
                                     onChange={e => setQuickTxForm(f => ({ ...f, name: e.target.value }))}
-                                    onKeyDown={e => e.key === 'Enter' && saveQuickTx()}
-                                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-4" />
+                                    className="w-full bg-gray-50 rounded-2xl px-4 py-2.5 text-sm font-medium outline-none border-2 border-transparent focus:border-yellow-400 transition-colors mb-4" />
                                 <div className="mb-3">
                                     <VoiceButton onResult={parsed => setQuickTxForm(f => ({ ...f, amount: parsed.amount, currency: parsed.currency, name: parsed.name }))} />
                                 </div>
-                                <button onClick={saveQuickTx} disabled={!quickTxForm.amount}
-                                    className="w-full py-4 rounded-2xl font-black text-base transition-all disabled:opacity-40"
+                                <button type="submit" disabled={!quickTxForm.amount}
+                                    className="w-full py-3 rounded-2xl font-black text-base transition-all disabled:opacity-40"
                                     style={{ background: 'var(--accent)', color: '#fff' }}>
                                     确认记账
                                 </button>
-                            </div>
+                            </form>
                         </div>
                     )}
 
