@@ -149,7 +149,15 @@
 <body>
     <div id="root"></div>
 
-    <script type="text/babel">
+    <script>
+        Babel.registerPreset('lifeos-classic-react', {
+            presets: [
+                [Babel.availablePresets.env, { modules: false }],
+                [Babel.availablePresets.react, { runtime: 'classic' }]
+            ]
+        });
+    </script>
+    <script type="text/babel" data-presets="lifeos-classic-react">
         const { useState, useEffect, useMemo, useRef } = React;
 
         // ── Supabase 初始化 ──

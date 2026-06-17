@@ -1,4 +1,4 @@
-const CACHE_NAME = 'visual-life-os-v1';
+const CACHE_NAME = 'visual-life-os-v2';
 const ASSETS = [
   '/',
   '/index.html',
@@ -27,6 +27,20 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   // 跳过非 GET 请求和 chrome-extension 协议
   if (e.request.method !== 'GET' || !e.request.url.startsWith('http')) return;
+
+  if (e.request.mode === 'navigate' || e.request.headers.get('accept')?.includes('text/html')) {
+    e.respondWith(
+      fetch(e.request)
+        .then(response => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(e.request, copy));
+          return response;
+        })
+        .catch(() => caches.match(e.request).then(r => r || caches.match('/index.html')))
+    );
+    return;
+  }
+
   e.respondWith(
     caches.match(e.request).then(r => r || fetch(e.request))
   );
