@@ -245,6 +245,16 @@
                     const l = (loc   && typeof loc   === 'object' && !Array.isArray(loc))   ? loc   : {};
                     return { ...l, ...c };
                 };
+                const mergePeriodLog = (cloud, loc) => {
+                    const byStart = new Map();
+                    (Array.isArray(loc) ? loc : []).forEach(item => {
+                        if (item?.startDate) byStart.set(item.startDate, item);
+                    });
+                    (Array.isArray(cloud) ? cloud : []).forEach(item => {
+                        if (item?.startDate) byStart.set(item.startDate, item);
+                    });
+                    return [...byStart.values()].sort((a, b) => a.startDate.localeCompare(b.startDate));
+                };
                 const merged = {
                     ...local,
                     transactions:      mergeArr(data.transactions,         local.transactions),
@@ -260,7 +270,7 @@
                         return merged;
                     })(),
                     habits:            mergeObj(data.habits,                local.habits),
-                    periodLog:         mergeArr(data.period_log,            local.periodLog),
+                    periodLog:         mergePeriodLog(data.period_log,      local.periodLog),
                     countdowns:        data.countdowns || local.countdowns || { name: '回国 🛫', date: '2026-08-31' },
                     nowPlaying:        data.now_playing         || local.nowPlaying   || {},
                     exchangeRate:      data.exchange_rate       || local.exchangeRate || 0.048,
@@ -271,9 +281,7 @@
                     allMeals:          (() => {
                         const c = (data.all_meals && typeof data.all_meals === 'object') ? data.all_meals : {};
                         const l = (local.allMeals && typeof local.allMeals === 'object') ? local.allMeals : {};
-                        const merged = { ...c };
-                        Object.keys(l).forEach(k => { merged[k] = l[k]; });
-                        return merged;
+                        return { ...l, ...c };
                     })(),
                     vault:             { items: mergeArr(data.vault?.items || [], local.vault?.items || []) },
                     lifeEvents:        mergeArr(data.life_events,            local.lifeEvents),
@@ -3709,6 +3717,23 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 monthly: { ...(getFinanceStorage().monthlyRates || {}) },
             }));
 
+            useEffect(() => {
+                const reloadFinanceSettings = () => {
+                    const stored = getFinanceStorage();
+                    setFixedData({ ...(stored.fixedItemsByMonth || {}) });
+                    setRatesData({
+                        default: stored.exchangeRate ?? 0.048,
+                        monthly: { ...(stored.monthlyRates || {}) },
+                    });
+                };
+                window.addEventListener('lifeos:synced', reloadFinanceSettings);
+                window.addEventListener('lifeos:reload', reloadFinanceSettings);
+                return () => {
+                    window.removeEventListener('lifeos:synced', reloadFinanceSettings);
+                    window.removeEventListener('lifeos:reload', reloadFinanceSettings);
+                };
+            }, []);
+
             // 弹窗状态
             const [editingFixed, setEditingFixed] = useState(null);
             const [showRateModal, setShowRateModal] = useState(false);
@@ -3729,6 +3754,38 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             // key 格式：fixedItemsByMonth 用 "2026-4"（月份-1），monthlyRates 用 "2026-05"
             const fixedKey = `${displayYear}-${displayMonth - 1}`;
             const rateKey  = `${displayYear}-${String(displayMonth).padStart(2, '0')}`;
+            const fixedMonthId = `${displayYear}-${String(displayMonth).padStart(2, '0')}`;
+
+            const normalizeFixedItem = (item) => ({
+                ...item,
+                recurrence: item.recurrence || 'ongoing',
+                endMonth: item.endMonth || '',
+            });
+            const getEffectiveFixedItems = (year, month) => {
+                const exactKey = `${year}-${month - 1}`;
+                if (Array.isArray(fixedData[exactKey]) && fixedData[exactKey].length > 0) {
+                    return (fixedData[exactKey] || []).map(normalizeFixedItem);
+                }
+
+                const targetSerial = year * 12 + month - 1;
+                const sourceKey = Object.keys(fixedData)
+                    .filter(key => Array.isArray(fixedData[key]) && fixedData[key].length > 0)
+                    .map(key => {
+                        const [y, monthIndex] = key.split('-').map(Number);
+                        return { key, serial: y * 12 + monthIndex };
+                    })
+                    .filter(entry => Number.isFinite(entry.serial) && entry.serial < targetSerial)
+                    .sort((a, b) => b.serial - a.serial)[0]?.key;
+
+                if (!sourceKey) return [];
+                return (fixedData[sourceKey] || [])
+                    .map(normalizeFixedItem)
+                    .filter(item => {
+                        if (item.recurrence === 'once') return false;
+                        if (item.recurrence === 'until' && item.endMonth) return item.endMonth >= `${year}-${String(month).padStart(2, '0')}`;
+                        return true;
+                    });
+            };
 
             // 当月汇率：优先月度覆盖，否则用默认
             const currentRate = Number(ratesData.monthly[rateKey]) || Number(ratesData.default) || 0.048;
@@ -3742,7 +3799,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const fmtAmt = (amt, cur) => isRMBCur ? fmtRMB(toRMB(amt, cur)) : fmtJPY(toJPY(amt, cur));
 
             // 计算当月固定支出合计（JPY）
-            const fixedItems = fixedData[fixedKey] || [];
+            const fixedItems = getEffectiveFixedItems(displayYear, displayMonth);
             const fixedTotal = fixedItems
                 .filter(item => item.type === 'expense')
                 .reduce((sum, item) => {
@@ -3799,7 +3856,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 const ms = `${displayYear}-${String(m).padStart(2, '0')}`;
                 const txs = MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(ms));
                 const txTotal = txs.reduce((s, t) => s + toJPY(parseFloat(t.amount) || 0, t.currency), 0);
-                const fItems = (fixedData[`${displayYear}-${i}`] || []).filter(f => f.type === 'expense');
+                const fItems = getEffectiveFixedItems(displayYear, m).filter(f => f.type === 'expense');
                 const fixedMonthTotal = fItems.reduce((s, f) => {
                     const amt = parseFloat(f.amount) || 0;
                     return s + (f.currency === 'RMB' || f.currency === 'CNY' ? amt / currentRate : amt);
@@ -3830,7 +3887,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const goldBg = { background: 'var(--finance-bg)', border: '1.5px solid var(--finance-border)' };
 
             // ── 固定项目弹窗 ──
-            const openFixedModal = () => setEditingFixed((fixedData[fixedKey] || []).map(i => ({ ...i })));
+            const openFixedModal = () => setEditingFixed(getEffectiveFixedItems(displayYear, displayMonth).map(i => ({ ...i })));
             const closeFixedModal = () => setEditingFixed(null);
             const saveFixedModal = () => {
                 const next = { ...fixedData, [fixedKey]: editingFixed };
@@ -3841,7 +3898,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const updateItem = (idx, field, value) =>
                 setEditingFixed(items => items.map((item, i) => i === idx ? { ...item, [field]: value } : item));
             const addItem = () =>
-                setEditingFixed(items => [...items, { name: '', amount: '', currency: 'JPY', type: 'expense' }]);
+                setEditingFixed(items => [...items, { name: '', amount: '', currency: 'JPY', type: 'expense', recurrence: 'ongoing', endMonth: '' }]);
             const removeItem = (idx) =>
                 setEditingFixed(items => items.filter((_, i) => i !== idx));
 
@@ -4327,6 +4384,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                             </span>
                                             <span className="ml-2 text-gray-300">（汇率 {currentRate}）</span>
                                         </p>
+                                        <p className="text-[10px] text-gray-400 mt-1">未单独设置的月份会继承最近的持续固定项目</p>
                                     </div>
                                     <button onClick={closeFixedModal} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-500 hover:bg-gray-200 flex-shrink-0 ml-4">×</button>
                                 </div>
@@ -4342,32 +4400,49 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                         <p className="text-sm text-gray-400 text-center py-8">还没有固定项目，点击下方「添加项目」</p>
                                     )}
                                     {editingFixed.map((item, idx) => (
-                                        <div key={idx} className="grid grid-cols-[1fr_90px_56px_56px_28px] gap-2 items-center py-2 px-2 rounded-xl hover:bg-gray-50 transition-colors">
-                                            <input
-                                                value={item.name}
-                                                onChange={e => updateItem(idx, 'name', e.target.value)}
-                                                placeholder="项目名称"
-                                                className="text-sm font-bold text-gray-700 bg-transparent border-b border-gray-200 focus:border-amber-400 outline-none pb-0.5 w-full transition-colors"
-                                            />
-                                            <input
-                                                value={item.amount}
-                                                onChange={e => updateItem(idx, 'amount', e.target.value)}
-                                                placeholder="0"
-                                                type="number"
-                                                className="text-sm font-black text-right bg-transparent border-b border-gray-200 focus:border-amber-400 outline-none pb-0.5 w-full transition-colors"
-                                                style={{ color: item.type === 'expense' ? '#c2410c' : '#15803d' }}
-                                            />
-                                            <select value={item.currency} onChange={e => updateItem(idx, 'currency', e.target.value)}
-                                                className="text-[11px] font-bold text-center bg-gray-100 rounded-lg border-none outline-none py-1 cursor-pointer">
-                                                <option value="JPY">JPY</option>
-                                                <option value="RMB">RMB</option>
-                                            </select>
-                                            <select value={item.type} onChange={e => updateItem(idx, 'type', e.target.value)}
-                                                className={`text-[11px] font-bold text-center rounded-lg border-none outline-none py-1 cursor-pointer ${item.type === 'expense' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
-                                                <option value="expense">支出</option>
-                                                <option value="income">收入</option>
-                                            </select>
-                                            <button onClick={() => removeItem(idx)} className="w-6 h-6 rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-500 text-gray-400 flex items-center justify-center font-bold text-xs transition-colors">×</button>
+                                        <div key={idx} className="py-2 px-2 rounded-xl hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
+                                            <div className="grid grid-cols-[1fr_90px_56px_56px_28px] gap-2 items-center">
+                                                <input
+                                                    value={item.name}
+                                                    onChange={e => updateItem(idx, 'name', e.target.value)}
+                                                    placeholder="项目名称"
+                                                    className="text-sm font-bold text-gray-700 bg-transparent border-b border-gray-200 focus:border-amber-400 outline-none pb-0.5 w-full transition-colors"
+                                                />
+                                                <input
+                                                    value={item.amount}
+                                                    onChange={e => updateItem(idx, 'amount', e.target.value)}
+                                                    placeholder="0"
+                                                    type="number"
+                                                    className="text-sm font-black text-right bg-transparent border-b border-gray-200 focus:border-amber-400 outline-none pb-0.5 w-full transition-colors"
+                                                    style={{ color: item.type === 'expense' ? '#c2410c' : '#15803d' }}
+                                                />
+                                                <select value={item.currency} onChange={e => updateItem(idx, 'currency', e.target.value)}
+                                                    className="text-[11px] font-bold text-center bg-gray-100 rounded-lg border-none outline-none py-1 cursor-pointer">
+                                                    <option value="JPY">JPY</option>
+                                                    <option value="RMB">RMB</option>
+                                                </select>
+                                                <select value={item.type} onChange={e => updateItem(idx, 'type', e.target.value)}
+                                                    className={`text-[11px] font-bold text-center rounded-lg border-none outline-none py-1 cursor-pointer ${item.type === 'expense' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                                                    <option value="expense">支出</option>
+                                                    <option value="income">收入</option>
+                                                </select>
+                                                <button onClick={() => removeItem(idx)} className="w-6 h-6 rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-500 text-gray-400 flex items-center justify-center font-bold text-xs transition-colors">×</button>
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-2">
+                                                <span className="text-[10px] font-bold text-gray-400 flex-shrink-0">重复</span>
+                                                <select value={item.recurrence || 'ongoing'}
+                                                    onChange={e => updateItem(idx, 'recurrence', e.target.value)}
+                                                    className="text-[11px] font-bold bg-white border border-gray-200 rounded-lg px-2 py-1 outline-none">
+                                                    <option value="once">仅本月</option>
+                                                    <option value="ongoing">持续固定</option>
+                                                    <option value="until">持续到某月</option>
+                                                </select>
+                                                {(item.recurrence || 'ongoing') === 'until' && (
+                                                    <input type="month" value={item.endMonth || ''} min={fixedMonthId}
+                                                        onChange={e => updateItem(idx, 'endMonth', e.target.value)}
+                                                        className="text-[11px] font-bold bg-white border border-gray-200 rounded-lg px-2 py-1 outline-none" />
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -6272,6 +6347,27 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                         setSyncStatus('idle');
                     }
                 });
+            }, [user]);
+
+            useEffect(() => {
+                if (!user) return;
+                let refreshing = false;
+                const refreshFromCloud = async () => {
+                    if (refreshing || document.visibilityState === 'hidden') return;
+                    refreshing = true;
+                    const data = await syncFromCloud();
+                    if (data) window.dispatchEvent(new CustomEvent('lifeos:synced'));
+                    refreshing = false;
+                };
+                const onVisibility = () => {
+                    if (document.visibilityState === 'visible') refreshFromCloud();
+                };
+                window.addEventListener('focus', refreshFromCloud);
+                document.addEventListener('visibilitychange', onVisibility);
+                return () => {
+                    window.removeEventListener('focus', refreshFromCloud);
+                    document.removeEventListener('visibilitychange', onVisibility);
+                };
             }, [user]);
 
             // 同步状态指示器文本/样式
