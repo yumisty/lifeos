@@ -1443,6 +1443,18 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             );
         };
 
+        const ANIME_ORDER_STATUSES = [
+            { value: 'planned', label: '即将购买' },
+            { value: 'preorder', label: '预售中' },
+            { value: 'purchased', label: '已购买' },
+        ];
+        const getAnimeOrderStatus = (order) =>
+            order.status || (order.type === '预售' ? 'preorder' : 'purchased');
+        const getAnimeOrderStatusLabel = (order) =>
+            ANIME_ORDER_STATUSES.find(s => s.value === getAnimeOrderStatus(order))?.label || '已购买';
+        const getAnimeOrderKind = (order) => order.itemKind || 'goods';
+        const getAnimeOrderKindLabel = (order) => getAnimeOrderKind(order) === 'display' ? '谷美' : '谷子';
+
         const AnimeWidget = ({ onOpen }) => {
             const [tab, setTab] = React.useState('orders');
             const [orders, setOrders] = React.useState(() => {
@@ -1457,32 +1469,47 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const saveOrders = (next) => { setOrders(next); try { const d=JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeOrders=next; localStorage.setItem('visualLifeOS_data',JSON.stringify(d)); } catch {} syncToCloud(); };
             const saveGoods = (next) => { setGoods(next); try { const d=JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeGoods=next; localStorage.setItem('visualLifeOS_data',JSON.stringify(d)); } catch {} syncToCloud(); };
             const saveDisplays = (next) => { setDisplays(next); try { const d=JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeDisplay=next; localStorage.setItem('visualLifeOS_data',JSON.stringify(d)); } catch {} syncToCloud(); };
+            React.useEffect(() => {
+                const reload = () => {
+                    const d = getFinanceStorage();
+                    setOrders(d.animeOrders || []);
+                    setGoods(d.animeGoods || []);
+                    setDisplays(d.animeDisplay || []);
+                };
+                window.addEventListener('lifeos:synced', reload);
+                return () => window.removeEventListener('lifeos:synced', reload);
+            }, []);
             const [oName, setOName] = React.useState('');
             const [oPrice, setOPrice] = React.useState('');
-            const [oType, setOType] = React.useState('现货');
+            const [oStatus, setOStatus] = React.useState('planned');
+            const [oItemKind, setOItemKind] = React.useState('goods');
             const [oPlatform, setOPlatform] = React.useState('');
             const [oPaid, setOPaid] = React.useState(false);
-            const [oShipDate, setOShipDate] = React.useState('');
-    const [oCurrencyW, setOCurrencyW] = React.useState('JPY');
+            const [oPurchaseDate, setOPurchaseDate] = React.useState(TODAY_STR);
+            const [oColor, setOColor] = React.useState('#f9a8d4');
+            const [oCurrencyW, setOCurrencyW] = React.useState('JPY');
             const [gName, setGName] = React.useState('');
             const [gWork, setGWork] = React.useState('');
             const [gType, setGType] = React.useState('徽章');
+            const [gColor, setGColor] = React.useState('#f9a8d4');
             const [dName, setDName] = React.useState('');
             const [dType, setDType] = React.useState('谷子袋');
+            const [dColor, setDColor] = React.useState('#c4b5fd');
             const thisYear = new Date().getFullYear().toString();
             const addOrder = () => {
                 if (!oName.trim()) return;
-                saveOrders([{ id: Date.now(), name: oName.trim(), price: oPrice, type: oType, platform: oPlatform, paid: oPaid, currency: oCurrencyW, year: thisYear, shipDate: oShipDate }, ...orders]);
-                setOName(''); setOPrice(''); setOPlatform(''); setOPaid(false); setOShipDate('');
+                const purchaseYear = (oPurchaseDate || TODAY_STR).slice(0, 4);
+                saveOrders([{ id: Date.now(), name: oName.trim(), price: oPrice, status: oStatus, itemKind: oItemKind, platform: oPlatform, paid: oPaid, currency: oCurrencyW, year: purchaseYear, purchaseDate: oPurchaseDate, color: oColor }, ...orders]);
+                setOName(''); setOPrice(''); setOPlatform(''); setOPaid(false); setOStatus('planned'); setOItemKind('goods');
             };
             const addGood = () => {
                 if (!gName.trim()) return;
-                saveGoods([{ id: Date.now(), name: gName.trim(), work: gWork, type: gType, quantity: 1, year: thisYear }, ...goods]);
+                saveGoods([{ id: Date.now(), name: gName.trim(), work: gWork, type: gType, quantity: 1, year: thisYear, color: gColor }, ...goods]);
                 setGName(''); setGWork('');
             };
             const addDisplay = () => {
                 if (!dName.trim()) return;
-                saveDisplays([{ id: Date.now(), name: dName.trim(), type: dType, goodsIds: [], year: thisYear }, ...displays]);
+                saveDisplays([{ id: Date.now(), name: dName.trim(), type: dType, goodsIds: [], year: thisYear, color: dColor }, ...displays]);
                 setDName('');
             };
             const yearSpent = orders.filter(o => o.paid && o.year === thisYear).reduce((s,o) => s + (parseFloat(o.price)||0) * (o.currency==='RMB'?15:1), 0);
@@ -1516,13 +1543,15 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                         {tab === 'orders' && orders.length === 0 && <p className="text-[10px] text-pink-300 text-center pt-3 font-bold">还没有记录，在下方添加</p>}
                         {tab === 'orders' && orders.slice(0,4).map(o => (
                             <div key={o.id} className="bg-white/70 rounded-xl px-2.5 py-1.5 flex items-center gap-2">
-                                <span className={`text-[8px] font-black px-1 py-0.5 rounded-full flex-shrink-0 ${o.type==='预售'?'bg-orange-100 text-orange-600':'bg-green-100 text-green-600'}`}>{o.type}</span>
+                                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white shadow-sm" style={{ background: o.color || '#e5e7eb' }} />
+                                <span className={`text-[8px] font-black px-1 py-0.5 rounded-full flex-shrink-0 ${getAnimeOrderStatus(o)==='preorder'?'bg-orange-100 text-orange-600':getAnimeOrderStatus(o)==='planned'?'bg-blue-100 text-blue-600':'bg-green-100 text-green-600'}`}>{getAnimeOrderStatusLabel(o)}</span>
+                                <span className="text-[8px] font-black text-purple-500 flex-shrink-0">{getAnimeOrderKindLabel(o)}</span>
                                 <span className="flex-1 text-[11px] font-bold text-gray-700 truncate">{o.name}</span>
                                 <button onClick={() => saveOrders(orders.map(x => x.id===o.id ? {...x,paid:!x.paid} : x))}
                                     className={`text-[8px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 ${o.paid?'bg-green-100 text-green-600':'bg-red-50 text-red-400'}`}>
                                     {o.paid?'✓':'✗'}
                                 </button>
-                                {o.shipDate && <span className="text-[8px] text-gray-400 flex-shrink-0">📦{o.shipDate.slice(5)}</span>}
+                                {o.purchaseDate && <span className="text-[8px] text-gray-400 flex-shrink-0">{o.purchaseDate.slice(5)}</span>}
                                 {o.price && <span className="text-[10px] text-gray-500 flex-shrink-0">{o.currency==='RMB'?'¥':'¥'}{o.price}<span className="text-[8px] opacity-60">{o.currency||'JPY'}</span></span>}
                             </div>
                         ))}
@@ -1558,16 +1587,21 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                     <button onClick={addOrder} className="w-8 h-8 rounded-xl text-white font-black flex items-center justify-center flex-shrink-0" style={{background:'#ec4899'}}>+</button>
                                 </div>
                                 <div className="flex gap-1.5 items-center">
-                                    <select value={oType} onChange={e=>setOType(e.target.value)} className="text-[10px] font-bold bg-white/70 rounded-lg px-2 py-1 outline-none flex-shrink-0">
-                                        <option>现货</option><option>预售</option>
+                                    <select value={oItemKind} onChange={e=>setOItemKind(e.target.value)} className="text-[10px] font-bold bg-white/70 rounded-lg px-2 py-1 outline-none flex-shrink-0">
+                                        <option value="goods">谷子</option><option value="display">谷美</option>
+                                    </select>
+                                    <select value={oStatus} onChange={e=>setOStatus(e.target.value)} className="text-[10px] font-bold bg-white/70 rounded-lg px-2 py-1 outline-none flex-shrink-0">
+                                        {ANIME_ORDER_STATUSES.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
                                     </select>
                                     <input value={oPlatform} onChange={e=>setOPlatform(e.target.value)} list="widget-platforms" placeholder="购买平台..."
                                         className="flex-1 text-[10px] bg-white/70 rounded-lg px-2 py-1 outline-none placeholder-pink-300 font-medium min-w-0" />
                                     <datalist id="widget-platforms">{PLATFORMS.map(p=><option key={p} value={p}/>)}</datalist>
-                                    <input value={oShipDate} onChange={e=>setOShipDate(e.target.value)}
+                                    <input value={oPurchaseDate} onChange={e=>setOPurchaseDate(e.target.value)}
                                         type="date"
                                         className="flex-1 text-[10px] bg-white/70 rounded-lg px-2 py-1 outline-none font-medium min-w-0"
                                         style={{minWidth:'100px'}} />
+                                    <input type="color" value={oColor} onChange={e=>setOColor(e.target.value)}
+                                        className="w-7 h-7 rounded-lg bg-white/70 p-0.5 flex-shrink-0" title="搭配颜色" />
                                     <button onClick={()=>setOPaid(p=>!p)}
                                         className={`text-[10px] font-black px-2 py-1 rounded-lg flex-shrink-0 transition-colors ${oPaid?'bg-green-100 text-green-700':'bg-red-50 text-red-400'}`}>
                                         {oPaid?'已付':'未付'}
@@ -1584,6 +1618,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                 <select value={gType} onChange={e=>setGType(e.target.value)} className="text-[10px] font-bold bg-white/70 rounded-xl px-1.5 outline-none flex-shrink-0">
                                     {GOODS_TYPES.map(t=><option key={t}>{t}</option>)}
                                 </select>
+                                <input type="color" value={gColor} onChange={e=>setGColor(e.target.value)}
+                                    className="w-8 h-8 rounded-xl bg-white/70 p-0.5 flex-shrink-0" title="谷子颜色" />
                                 <button onClick={addGood} className="w-8 h-8 rounded-xl text-white font-black flex items-center justify-center flex-shrink-0" style={{background:'#ec4899'}}>+</button>
                             </div>
                         )}
@@ -1594,6 +1630,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                 <select value={dType} onChange={e=>setDType(e.target.value)} className="text-[10px] font-bold bg-white/70 rounded-xl px-1.5 outline-none flex-shrink-0">
                                     {DISPLAY_TYPES.map(t=><option key={t}>{t}</option>)}
                                 </select>
+                                <input type="color" value={dColor} onChange={e=>setDColor(e.target.value)}
+                                    className="w-8 h-8 rounded-xl bg-white/70 p-0.5 flex-shrink-0" title="谷美颜色" />
                                 <button onClick={addDisplay} className="w-8 h-8 rounded-xl text-white font-black flex items-center justify-center flex-shrink-0" style={{background:'#ec4899'}}>+</button>
                             </div>
                         )}
@@ -1606,12 +1644,15 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const thisYear = new Date().getFullYear().toString();
             const [oName, setOName] = React.useState(editItem?.name||'');
             const [oWork, setOWork] = React.useState(editItem?.work||'');
-            const [oType, setOType] = React.useState(editItem?.type||'现货');
+            const [oStatus, setOStatus] = React.useState(editItem ? getAnimeOrderStatus(editItem) : 'planned');
+            const [oItemKind, setOItemKind] = React.useState(editItem ? getAnimeOrderKind(editItem) : 'goods');
             const [oPlatform, setOPlatform] = React.useState(editItem?.platform||'');
             const [oPrice, setOPrice] = React.useState(editItem?.price||'');
             const [oCurrency, setOCurrency] = React.useState(editItem?.currency||'JPY');
             const [oPaid, setOPaid] = React.useState(editItem?.paid||false);
             const [oYear, setOYear] = React.useState(editItem?.year||thisYear);
+            const [oPurchaseDate, setOPurchaseDate] = React.useState(editItem?.purchaseDate||'');
+            const [oColor, setOColor] = React.useState(editItem?.color||'#f9a8d4');
             const [oNote, setONote] = React.useState(editItem?.note||'');
             const [gName, setGName] = React.useState(editItem?.name||'');
             const [gWork, setGWork] = React.useState(editItem?.work||'');
@@ -1619,24 +1660,26 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const [gQty, setGQty] = React.useState(editItem?.quantity||1);
             const [gYear, setGYear] = React.useState(editItem?.year||thisYear);
             const [gCover, setGCover] = React.useState(editItem?.coverUrl||'');
+            const [gColor, setGColor] = React.useState(editItem?.color||'#f9a8d4');
             const [gNote, setGNote] = React.useState(editItem?.note||'');
             const [dName, setDName] = React.useState(editItem?.name||'');
             const [dType, setDType] = React.useState(editItem?.type||'谷子袋');
             const [dCapacity, setDCapacity] = React.useState(editItem?.capacity||'');
             const [dGoodsIds, setDGoodsIds] = React.useState(editItem?.goodsIds||[]);
             const [dYear, setDYear] = React.useState(editItem?.year||thisYear);
+            const [dColor, setDColor] = React.useState(editItem?.color||'#c4b5fd');
             const [dNote, setDNote] = React.useState(editItem?.note||'');
             const toggleGoodsLink = (id) => setDGoodsIds(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
             const handleSave = () => {
                 if (tab === 'orders') {
                     if (!oName.trim()) return;
-                    onSave({ id: editItem?.id||Date.now(), name:oName.trim(), work:oWork.trim(), type:oType, platform:oPlatform, price:oPrice, currency:oCurrency, paid:oPaid, year:oYear, note:oNote });
+                    onSave({ id: editItem?.id||Date.now(), name:oName.trim(), work:oWork.trim(), status:oStatus, itemKind:oItemKind, platform:oPlatform, price:oPrice, currency:oCurrency, paid:oPaid, year:oPurchaseDate?.slice(0,4)||oYear, purchaseDate:oPurchaseDate, color:oColor, note:oNote });
                 } else if (tab === 'goods') {
                     if (!gName.trim()) return;
-                    onSave({ id: editItem?.id||Date.now(), name:gName.trim(), work:gWork.trim(), type:gType, quantity:parseInt(gQty)||1, year:gYear, coverUrl:gCover, note:gNote });
+                    onSave({ id: editItem?.id||Date.now(), name:gName.trim(), work:gWork.trim(), type:gType, quantity:parseInt(gQty)||1, year:gYear, coverUrl:gCover, color:gColor, note:gNote });
                 } else {
                     if (!dName.trim()) return;
-                    onSave({ id: editItem?.id||Date.now(), name:dName.trim(), type:dType, capacity:dCapacity, goodsIds:dGoodsIds, year:dYear, note:dNote });
+                    onSave({ id: editItem?.id||Date.now(), name:dName.trim(), type:dType, capacity:dCapacity, goodsIds:dGoodsIds, year:dYear, color:dColor, note:dNote });
                 }
             };
             const inputCls = "w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border-2 border-transparent focus:border-pink-200 transition-colors";
@@ -1655,12 +1698,25 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                 <div><label className={labelCls}>商品名称 *</label><input value={oName} onChange={e=>setOName(e.target.value)} placeholder="商品名称" className={inputCls} autoFocus /></div>
                                 <div><label className={labelCls}>作品</label><input value={oWork} onChange={e=>setOWork(e.target.value)} placeholder="所属作品" className={inputCls} /></div>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <div><label className={labelCls}>类型</label>
-                                        <select value={oType} onChange={e=>setOType(e.target.value)} className={inputCls}>
-                                            <option>现货</option><option>预售</option>
+                                    <div><label className={labelCls}>购买类别</label>
+                                        <select value={oItemKind} onChange={e=>setOItemKind(e.target.value)} className={inputCls}>
+                                            <option value="goods">谷子</option><option value="display">谷美</option>
                                         </select>
                                     </div>
-                                    <div><label className={labelCls}>年份</label><input value={oYear} onChange={e=>setOYear(e.target.value)} placeholder={thisYear} className={inputCls} /></div>
+                                    <div><label className={labelCls}>状态</label>
+                                        <select value={oStatus} onChange={e=>setOStatus(e.target.value)} className={inputCls}>
+                                            {ANIME_ORDER_STATUSES.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div><label className={labelCls}>购买日期</label><input type="date" value={oPurchaseDate} onChange={e=>setOPurchaseDate(e.target.value)} className={inputCls} /></div>
+                                    <div><label className={labelCls}>搭配颜色</label>
+                                        <div className="flex items-center gap-2">
+                                            <input type="color" value={oColor} onChange={e=>setOColor(e.target.value)} className="w-11 h-10 rounded-xl bg-gray-50 p-1" />
+                                            <input value={oColor} onChange={e=>setOColor(e.target.value)} className={inputCls} />
+                                        </div>
+                                    </div>
                                 </div>
                                 <div><label className={labelCls}>购买平台</label>
                                     <input value={oPlatform} onChange={e=>setOPlatform(e.target.value)} list="anime-platforms-list" placeholder="选择或输入平台" className={inputCls} />
@@ -1693,8 +1749,9 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                     <div><label className={labelCls}>购买年份</label><input value={gYear} onChange={e=>setGYear(e.target.value)} placeholder={thisYear} className={inputCls} /></div>
-                                    <div><label className={labelCls}>封面图URL</label><input value={gCover} onChange={e=>setGCover(e.target.value)} placeholder="图片链接" className={inputCls} /></div>
+                                    <div><label className={labelCls}>颜色</label><input type="color" value={gColor} onChange={e=>setGColor(e.target.value)} className="w-full h-10 rounded-xl bg-gray-50 p-1" /></div>
                                 </div>
+                                <div><label className={labelCls}>封面图URL</label><input value={gCover} onChange={e=>setGCover(e.target.value)} placeholder="图片链接" className={inputCls} /></div>
                                 <div><label className={labelCls}>备注</label><input value={gNote} onChange={e=>setGNote(e.target.value)} placeholder="备注（可选）" className={inputCls} /></div>
                             </>)}
                             {tab === 'displays' && (<>
@@ -1707,7 +1764,10 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                     </div>
                                     <div><label className={labelCls}>容量</label><input value={dCapacity} onChange={e=>setDCapacity(e.target.value)} placeholder="如：56枚" className={inputCls} /></div>
                                 </div>
-                                <div><label className={labelCls}>购买年份</label><input value={dYear} onChange={e=>setDYear(e.target.value)} placeholder={thisYear} className={inputCls} /></div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div><label className={labelCls}>购买年份</label><input value={dYear} onChange={e=>setDYear(e.target.value)} placeholder={thisYear} className={inputCls} /></div>
+                                    <div><label className={labelCls}>颜色</label><input type="color" value={dColor} onChange={e=>setDColor(e.target.value)} className="w-full h-10 rounded-xl bg-gray-50 p-1" /></div>
+                                </div>
                                 <div>
                                     <label className={labelCls}>关联谷子（可多选）</label>
                                     <div className="max-h-32 overflow-y-auto bg-gray-50 rounded-xl p-2 space-y-1">
@@ -1718,6 +1778,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                                 <span className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center text-[8px] font-black ${dGoodsIds.includes(g.id)?'bg-pink-500 border-pink-500 text-white':'border-gray-300'}`}>
                                                     {dGoodsIds.includes(g.id)?'✓':''}
                                                 </span>
+                                                <span className="w-3 h-3 rounded-full border border-white shadow-sm flex-shrink-0" style={{ background: g.color || '#e5e7eb' }} />
                                                 <span className="text-xs font-bold truncate">{g.name}</span>
                                                 {g.work && <span className="text-[9px] text-gray-400 truncate">《{g.work}》</span>}
                                             </button>
@@ -1763,6 +1824,16 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeDisplay = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
                 syncToCloud();
             };
+            React.useEffect(() => {
+                const reload = () => {
+                    const d = getFinanceStorage();
+                    setOrders(d.animeOrders || []);
+                    setGoods(d.animeGoods || []);
+                    setDisplays(d.animeDisplay || []);
+                };
+                window.addEventListener('lifeos:synced', reload);
+                return () => window.removeEventListener('lifeos:synced', reload);
+            }, []);
             const thisYear = new Date().getFullYear().toString();
             const [filterYear, setFilterYear] = React.useState('全部');
             const [showAddModal, setShowAddModal] = React.useState(false);
@@ -1770,9 +1841,11 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const allYears = ['全部', ...Array.from(new Set([
                 ...orders.map(o => o.year),
                 ...goods.map(g => g.year),
+                ...displays.map(d => d.year),
             ].filter(Boolean))).sort((a,b) => b-a)];
             const filteredOrders = orders.filter(o => filterYear === '全部' || o.year === filterYear);
             const filteredGoods = goods.filter(g => filterYear === '全部' || g.year === filterYear);
+            const filteredDisplays = displays.filter(d => filterYear === '全部' || d.year === filterYear);
             const totalPaid = filteredOrders.filter(o => o.paid).reduce((s,o) => s + (parseFloat(o.price)||0) * (o.currency==='RMB'?15:1), 0);
             const totalUnpaid = filteredOrders.filter(o => !o.paid).reduce((s,o) => s + (parseFloat(o.price)||0) * (o.currency==='RMB'?15:1), 0);
             const GOODS_TYPES = ['徽章','立牌','亚克力','手办','抱枕','卡片','色纸','其他'];
@@ -1780,12 +1853,13 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const PLATFORMS = ['Animate','Melonbooks','Toranoana','Gamers','淘宝','微店','Yahoo拍卖','二手'];
             return (
                 <div className="animate-fade-in">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
                         {[
                             { label: '已付总额(JPY)', value: `¥${Math.round(totalPaid).toLocaleString()}`, color: '#ec4899', sub: filterYear === '全部' ? '全部时间' : filterYear+'年' },
                             { label: '待付款', value: `¥${Math.round(totalUnpaid).toLocaleString()}`, color: orders.filter(o=>!o.paid).length > 0 ? '#f97316' : '#94a3b8', sub: `${orders.filter(o=>!o.paid).length}笔订单` },
                             { label: '谷子总数', value: goods.reduce((s,g)=>s+(parseInt(g.quantity)||1),0), color: '#8b5cf6', sub: `${goods.length}种` },
-                            { label: '预售中', value: orders.filter(o=>o.type==='预售'&&!o.paid).length, color: '#3b82f6', sub: '等待发货' },
+                            { label: '预售中', value: orders.filter(o=>getAnimeOrderStatus(o)==='preorder').length, color: '#f97316', sub: '等待到货' },
+                            { label: '即将购买', value: orders.filter(o=>getAnimeOrderStatus(o)==='planned').length, color: '#3b82f6', sub: '购买计划' },
                         ].map(s => (
                             <div key={s.label} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50">
                                 <p className="text-2xl font-black" style={{ color: s.color }}>{s.value}</p>
@@ -1821,8 +1895,10 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                             )}
                             {[...filteredOrders].sort((a,b)=>b.id-a.id).map(o => (
                                 <div key={o.id} className="flex items-center gap-3 px-4 py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors group">
+                                    <span className="w-4 h-4 rounded-full border-2 border-white shadow flex-shrink-0" style={{ background: o.color || '#e5e7eb' }} title={o.color || '未设置颜色'} />
                                     <div className="flex flex-col gap-1 flex-shrink-0">
-                                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full text-center ${o.type==='预售'?'bg-orange-100 text-orange-600':'bg-green-100 text-green-600'}`}>{o.type}</span>
+                                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full text-center ${getAnimeOrderStatus(o)==='preorder'?'bg-orange-100 text-orange-600':getAnimeOrderStatus(o)==='planned'?'bg-blue-100 text-blue-600':'bg-green-100 text-green-600'}`}>{getAnimeOrderStatusLabel(o)}</span>
+                                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full text-center ${getAnimeOrderKind(o)==='display'?'bg-purple-100 text-purple-600':'bg-pink-100 text-pink-600'}`}>{getAnimeOrderKindLabel(o)}</span>
                                         <button onClick={() => saveOrders(orders.map(x => x.id===o.id ? {...x, paid:!x.paid} : x))}
                                             className={`text-[9px] font-black px-1.5 py-0.5 rounded-full text-center transition-colors ${o.paid?'bg-green-100 text-green-600':'bg-red-50 text-red-400 hover:bg-red-100'}`}>
                                             {o.paid?'✓已付':'✗未付'}
@@ -1830,7 +1906,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-black text-gray-800 truncate">{o.name}</p>
-                                        <p className="text-[10px] text-gray-400 font-medium">{o.work && `《${o.work}》`}{o.platform && ` · ${o.platform}`}{o.year && ` · ${o.year}年`}</p>
+                                        <p className="text-[10px] text-gray-400 font-medium">{o.work && `《${o.work}》`}{o.platform && ` · ${o.platform}`}{o.purchaseDate ? ` · ${o.purchaseDate}` : o.year ? ` · ${o.year}年` : ''}</p>
                                     </div>
                                     <div className="flex-shrink-0 text-right">
                                         <p className="text-sm font-black text-gray-700">¥{o.price}<span className="text-[9px] text-gray-400 ml-0.5">{o.currency}</span></p>
@@ -1860,7 +1936,10 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                     <p className="text-xs font-black text-gray-800 truncate">{g.name}</p>
                                     {g.work && <p className="text-[9px] text-gray-400 font-medium truncate">《{g.work}》</p>}
                                     <div className="flex items-center justify-between mt-1">
-                                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-pink-100 text-pink-600">{g.type||'其他'}</span>
+                                        <span className="flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 rounded-full bg-pink-100 text-pink-600">
+                                            <span className="w-2 h-2 rounded-full border border-white" style={{ background: g.color || '#e5e7eb' }} />
+                                            {g.type||'其他'}
+                                        </span>
                                         <span className="text-[9px] font-bold text-gray-500">×{g.quantity||1}</span>
                                     </div>
                                     <div className="flex gap-1 absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1875,19 +1954,20 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     )}
                     {tab === 'displays' && (
                         <div className="flex flex-col gap-3">
-                            {displays.length === 0 && (
+                            {filteredDisplays.length === 0 && (
                                 <div className="py-16 text-center bg-white rounded-2xl">
                                     <p className="text-3xl mb-2">🎒</p>
                                     <p className="text-sm font-bold text-gray-400">还没有谷美记录</p>
                                 </div>
                             )}
-                            {displays.map(disp => {
+                            {filteredDisplays.map(disp => {
                                 const linkedGoods = goods.filter(g => disp.goodsIds?.includes(g.id));
                                 return (
                                     <div key={disp.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 group hover:shadow-md transition-shadow">
                                         <div className="flex items-start justify-between gap-3 mb-3">
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-1">
+                                                    <span className="w-3 h-3 rounded-full border border-white shadow-sm" style={{ background: disp.color || '#e5e7eb' }} />
                                                     <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600">{disp.type||'其他'}</span>
                                                     {disp.capacity && <span className="text-[9px] text-gray-400">容量 {disp.capacity}</span>}
                                                     {disp.year && <span className="text-[9px] text-gray-400">{disp.year}年</span>}
@@ -1907,7 +1987,10 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                                 <p className="text-[9px] font-black text-gray-400 mb-1.5">📌 已装入谷子</p>
                                                 <div className="flex flex-wrap gap-1.5">
                                                     {linkedGoods.map(g => (
-                                                        <span key={g.id} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-pink-50 text-pink-600 border border-pink-100">{g.name}</span>
+                                                        <span key={g.id} className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-pink-50 text-pink-600 border border-pink-100">
+                                                            <span className="w-2 h-2 rounded-full" style={{ background: g.color || '#e5e7eb' }} />
+                                                            {g.name}
+                                                        </span>
                                                     ))}
                                                 </div>
                                             </div>
