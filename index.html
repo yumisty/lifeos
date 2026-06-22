@@ -1854,6 +1854,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             }, []);
             const thisYear = new Date().getFullYear().toString();
             const [filterYear, setFilterYear] = React.useState('全部');
+            const [orderFilter, setOrderFilter] = React.useState('all');
             const [goodsSearch, setGoodsSearch] = React.useState('');
             const [showAddModal, setShowAddModal] = React.useState(false);
             const [editItem, setEditItem] = React.useState(null);
@@ -1862,11 +1863,18 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 ...goods.map(g => g.year),
                 ...displays.map(d => d.year),
             ].filter(Boolean))).sort((a,b) => b-a)];
-            const filteredOrders = orders.filter(o => filterYear === '全部' || o.year === filterYear);
+            const yearOrders = orders.filter(o => filterYear === '全部' || o.year === filterYear);
+            const filteredOrders = yearOrders.filter(o => {
+                if (orderFilter === 'all') return true;
+                if (orderFilter === 'paid') return o.paid;
+                if (orderFilter === 'unpaid') return !o.paid;
+                return getAnimeOrderStatus(o) === orderFilter;
+            });
             const goodsQuery = goodsSearch.trim().toLowerCase();
             const matchesGoodsSearch = (item) => !goodsQuery || [item.name, item.work, item.type, item.platform, item.note]
                 .some(value => String(value || '').toLowerCase().includes(goodsQuery));
-            const filteredGoods = goods.filter(g => (filterYear === '全部' || g.year === filterYear) && matchesGoodsSearch(g));
+            const yearGoods = goods.filter(g => filterYear === '全部' || g.year === filterYear);
+            const filteredGoods = yearGoods.filter(matchesGoodsSearch);
             const filteredDisplays = displays.filter(d => filterYear === '全部' || d.year === filterYear);
             const relatedGoodsOrders = orders.filter(o =>
                 o.itemKind === 'goods' &&
@@ -1892,8 +1900,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     return a.work.localeCompare(b.work, 'zh-CN');
                 });
             })();
-            const totalPaid = filteredOrders.filter(o => o.paid).reduce((s,o) => s + (parseFloat(o.price)||0) * (o.currency==='RMB'?15:1), 0);
-            const totalUnpaid = filteredOrders.filter(o => !o.paid).reduce((s,o) => s + (parseFloat(o.price)||0) * (o.currency==='RMB'?15:1), 0);
+            const totalPaid = yearOrders.filter(o => o.paid).reduce((s,o) => s + (parseFloat(o.price)||0) * (o.currency==='RMB'?15:1), 0);
+            const totalUnpaid = yearOrders.filter(o => !o.paid).reduce((s,o) => s + (parseFloat(o.price)||0) * (o.currency==='RMB'?15:1), 0);
             const GOODS_TYPES = ['徽章','立牌','亚克力','手办','抱枕','卡片','色纸','其他'];
             const DISPLAY_TYPES = ['谷子袋','展示架','收纳盒','相册','展示盒','其他'];
             const PLATFORMS = ['Animate','Melonbooks','Toranoana','Gamers','淘宝','微店','Yahoo拍卖','二手'];
@@ -1901,17 +1909,19 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 <div className="animate-fade-in">
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
                         {[
-                            { label: '已付总额(JPY)', value: `¥${Math.round(totalPaid).toLocaleString()}`, color: '#ec4899', sub: filterYear === '全部' ? '全部时间' : filterYear+'年' },
-                            { label: '待付款', value: `¥${Math.round(totalUnpaid).toLocaleString()}`, color: orders.filter(o=>!o.paid).length > 0 ? '#f97316' : '#94a3b8', sub: `${orders.filter(o=>!o.paid).length}笔订单` },
-                            { label: '谷子总数', value: goods.reduce((s,g)=>s+(parseInt(g.quantity)||1),0), color: '#8b5cf6', sub: `${goods.length}种` },
-                            { label: '预售中', value: orders.filter(o=>getAnimeOrderStatus(o)==='preorder').length, color: '#f97316', sub: '等待到货' },
-                            { label: '即将购买', value: orders.filter(o=>getAnimeOrderStatus(o)==='planned').length, color: '#3b82f6', sub: '购买计划' },
+                            { id: 'paid', label: '已付总额(JPY)', value: `¥${Math.round(totalPaid).toLocaleString()}`, color: '#ec4899', sub: filterYear === '全部' ? '全部时间' : filterYear+'年', action: () => { setTab('orders'); setOrderFilter('paid'); } },
+                            { id: 'unpaid', label: '待付款', value: `¥${Math.round(totalUnpaid).toLocaleString()}`, color: yearOrders.some(o=>!o.paid) ? '#f97316' : '#94a3b8', sub: `${yearOrders.filter(o=>!o.paid).length}笔订单`, action: () => { setTab('orders'); setOrderFilter('unpaid'); } },
+                            { id: 'goods', label: '谷子总数', value: yearGoods.reduce((s,g)=>s+(parseInt(g.quantity)||1),0), color: '#8b5cf6', sub: `${yearGoods.length}种`, action: () => setTab('goods') },
+                            { id: 'preorder', label: '预售中', value: yearOrders.filter(o=>getAnimeOrderStatus(o)==='preorder').length, color: '#f97316', sub: '等待到货', action: () => { setTab('orders'); setOrderFilter('preorder'); } },
+                            { id: 'planned', label: '即将购买', value: yearOrders.filter(o=>getAnimeOrderStatus(o)==='planned').length, color: '#3b82f6', sub: '购买计划', action: () => { setTab('orders'); setOrderFilter('planned'); } },
                         ].map(s => (
-                            <div key={s.label} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50">
+                            <button key={s.id} onClick={s.action}
+                                className="bg-white rounded-2xl p-4 shadow-sm border text-left hover:-translate-y-0.5 hover:shadow-md transition-all"
+                                style={{ borderColor: (tab === 'orders' && orderFilter === s.id) || (tab === 'goods' && s.id === 'goods') ? s.color : '#f3f4f6' }}>
                                 <p className="text-2xl font-black" style={{ color: s.color }}>{s.value}</p>
                                 <p className="text-xs font-black text-gray-500 mt-0.5">{s.label}</p>
-                                <p className="text-[10px] text-gray-400">{s.sub}</p>
-                            </div>
+                                <p className="text-[10px] text-gray-400">{s.sub} · 点击查看</p>
+                            </button>
                         ))}
                     </div>
                     <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -1931,6 +1941,29 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                             className="w-9 h-9 rounded-xl text-white text-xl font-black flex items-center justify-center flex-shrink-0 hover:opacity-90"
                             style={{ background: '#ec4899' }}>+</button>
                     </div>
+                    {tab === 'orders' && (
+                        <div className="flex gap-2 mb-4 overflow-x-auto hide-scrollbar pb-1">
+                            {[
+                                ['all','全部'],
+                                ['planned','即将购买'],
+                                ['preorder','预售中'],
+                                ['purchased','已购买'],
+                                ['unpaid','待付款'],
+                                ['paid','已付款'],
+                            ].map(([key, label]) => {
+                                const count = key === 'all' ? yearOrders.length
+                                    : key === 'paid' ? yearOrders.filter(o=>o.paid).length
+                                    : key === 'unpaid' ? yearOrders.filter(o=>!o.paid).length
+                                    : yearOrders.filter(o=>getAnimeOrderStatus(o)===key).length;
+                                return (
+                                    <button key={key} onClick={()=>setOrderFilter(key)}
+                                        className={`px-3 py-2 rounded-xl text-xs font-black whitespace-nowrap border transition-colors ${orderFilter===key?'bg-pink-500 text-white border-pink-500 shadow-sm':'bg-white text-gray-500 border-gray-100 hover:border-pink-200'}`}>
+                                        {label} <span className={orderFilter===key?'text-pink-100':'text-gray-300'}>{count}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
                     {tab === 'goods' && (
                         <div className="relative mb-4">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300">⌕</span>
@@ -1948,7 +1981,9 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                             {filteredOrders.length === 0 && (
                                 <div className="py-16 text-center">
                                     <p className="text-3xl mb-2">📦</p>
-                                    <p className="text-sm font-bold text-gray-400">还没有订单记录</p>
+                                    <p className="text-sm font-bold text-gray-400">
+                                        {orderFilter === 'all' ? '还没有订单记录' : `没有「${orderFilter === 'paid' ? '已付款' : orderFilter === 'unpaid' ? '待付款' : ANIME_ORDER_STATUSES.find(s=>s.value===orderFilter)?.label}」订单`}
+                                    </p>
                                 </div>
                             )}
                             {[...filteredOrders].sort((a,b)=>b.id-a.id).map(o => (
