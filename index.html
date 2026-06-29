@@ -345,13 +345,149 @@
             return getWeek(new Date((weekDates[1] || weekDates[0]) + 'T12:00:00'));
         };
 
-        const getTodoDate = (todo) => todo?.dueDate || todo?.date || '';
+        const getTodoDate = (todo) => todo?.due_date || todo?.dueDate || todo?.date || '';
+        const getTodoTitle = (todo) => todo?.title || todo?.text || '';
+        const isTodoDone = (todo) => !!(todo?.is_done ?? todo?.done ?? todo?.completed);
         const flattenTodos = (allTodos = {}) => Object.values(allTodos).flat();
         const getTodosInRange = (allTodos = {}, start, end) =>
             flattenTodos(allTodos).filter(t => {
                 const d = getTodoDate(t);
                 return d >= start && d <= end;
             });
+
+        const formatShortDate = (dateStr) => (dateStr || '').slice(5).replace('-', '/');
+        const normalizeTask = (task) => ({
+            ...task,
+            title: getTodoTitle(task),
+            due_date: getTodoDate(task),
+            is_done: isTodoDone(task),
+        });
+
+        const taskSort = (a, b) => {
+            if (a.is_done !== b.is_done) return a.is_done ? 1 : -1;
+            const dateCmp = (a.due_date || '').localeCompare(b.due_date || '');
+            if (dateCmp) return dateCmp;
+            return (a.created_at || '').localeCompare(b.created_at || '');
+        };
+
+        const taskService = {
+            async listByDateRange(userId, start, end) {
+                if (!userId) return { data: [], error: null };
+                const { data, error } = await _supabase
+                    .from('tasks')
+                    .select('id,user_id,title,due_date,is_done,category,priority,created_at,updated_at')
+                    .eq('user_id', userId)
+                    .gte('due_date', start)
+                    .lte('due_date', end)
+                    .order('due_date', { ascending: true })
+                    .order('is_done', { ascending: true })
+                    .order('created_at', { ascending: true });
+                return { data: (data || []).map(normalizeTask), error };
+            },
+            async addTask(userId, payload) {
+                if (!userId) return { data: null, error: new Error('Not signed in') };
+                const row = {
+                    user_id: userId,
+                    title: (payload.title || '').trim(),
+                    due_date: payload.due_date || TODAY_STR,
+                    is_done: false,
+                    category: payload.category || null,
+                    priority: payload.priority || null,
+                };
+                const { data, error } = await _supabase.from('tasks').insert(row).select().single();
+                return { data: data ? normalizeTask(data) : null, error };
+            },
+            async updateTask(id, patch) {
+                const dbPatch = { ...patch, updated_at: new Date().toISOString() };
+                const { data, error } = await _supabase.from('tasks').update(dbPatch).eq('id', id).select().single();
+                return { data: data ? normalizeTask(data) : null, error };
+            },
+            async toggleTask(task) {
+                return taskService.updateTask(task.id, { is_done: !isTodoDone(task) });
+            },
+            async deleteTask(id) {
+                return _supabase.from('tasks').delete().eq('id', id);
+            },
+        };
+
+        const useWeeklyTasks = (user, weekStart, weekEnd) => {
+            const [tasks, setTasks] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+
+            const refetch = React.useCallback(async () => {
+                if (!user?.id || !weekStart || !weekEnd) {
+                    setTasks([]);
+                    return;
+                }
+                setLoading(true);
+                const { data, error } = await taskService.listByDateRange(user.id, weekStart, weekEnd);
+                setError(error || null);
+                if (!error) setTasks(data.sort(taskSort));
+                setLoading(false);
+            }, [user?.id, weekStart, weekEnd]);
+
+            useEffect(() => { refetch(); }, [refetch]);
+
+            useEffect(() => {
+                if (!user?.id) return;
+                const channel = _supabase
+                    .channel(`tasks:${user.id}:${weekStart}:${weekEnd}`)
+                    .on('postgres_changes', {
+                        event: '*',
+                        schema: 'public',
+                        table: 'tasks',
+                        filter: `user_id=eq.${user.id}`,
+                    }, refetch)
+                    .subscribe();
+                const onLocalTaskChange = () => refetch();
+                window.addEventListener('lifeos:tasks-updated', onLocalTaskChange);
+                window.addEventListener('focus', onLocalTaskChange);
+                return () => {
+                    window.removeEventListener('lifeos:tasks-updated', onLocalTaskChange);
+                    window.removeEventListener('focus', onLocalTaskChange);
+                    _supabase.removeChannel(channel);
+                };
+            }, [user?.id, weekStart, weekEnd, refetch]);
+
+            const notify = () => {
+                window.dispatchEvent(new CustomEvent('lifeos:tasks-updated'));
+                window.dispatchEvent(new CustomEvent('lifeos:todos-updated'));
+            };
+
+            const addTask = async (payload) => {
+                const { error } = await taskService.addTask(user?.id, payload);
+                if (error) { setError(error); return false; }
+                notify();
+                await refetch();
+                return true;
+            };
+            const updateTask = async (id, patch) => {
+                const { error } = await taskService.updateTask(id, patch);
+                if (error) { setError(error); return false; }
+                notify();
+                await refetch();
+                return true;
+            };
+            const toggleTask = async (task) => {
+                const { error } = await taskService.toggleTask(task);
+                if (error) { setError(error); return false; }
+                notify();
+                await refetch();
+                return true;
+            };
+            const deleteTask = async (id) => {
+                const { error } = await taskService.deleteTask(id);
+                if (error) { setError(error); return false; }
+                notify();
+                await refetch();
+                return true;
+            };
+
+            return { tasks, loading, error, refetch, addTask, updateTask, toggleTask, deleteTask };
+        };
+
+        const useTodayTasks = (user, date) => useWeeklyTasks(user, date, date);
 
         const CATEGORIES = [
             { id: 'sport', icon: '🩰', label: '运动', color: 'bg-pink-400' },
@@ -949,7 +1085,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
         );
 
         // 核心组件：周历 (交互式)
-        const WeeklyWidget = ({ events, onOpenReport }) => {
+        const WeeklyWidget = ({ events, onOpenReport, user }) => {
             const days = ['日', '一', '二', '三', '四', '五', '六'];
             const [weekOffset, setWeekOffset] = useState(0);
             const [selectedDayIdx, setSelectedDayIdx] = useState(() => {
@@ -973,85 +1109,33 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const weekLabel = weekOffset === 0 ? '本周 Todo'
                 : `${OFFSET_WEEK_DATES[0].slice(5).replace('-', '/')}—${OFFSET_WEEK_DATES[6].slice(5).replace('-', '/')}`;
 
-            const [weekTodos, setWeekTodos] = useState(() => {
-                try {
-                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    return stored.allTodos?.[getTodoWeekKey(TODAY_STR)] || [];
-                } catch { return []; }
-            });
+            const { tasks: weekTodos, loading: tasksLoading, error: tasksError, addTask, updateTask, toggleTask, deleteTask } =
+                useWeeklyTasks(user, OFFSET_WEEK_DATES[0], OFFSET_WEEK_DATES[6]);
 
-            // 切换周时重新加载对应周的 todos
-            useEffect(() => {
-                try {
-                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    setWeekTodos(stored.allTodos?.[weekKey] || []);
-                } catch {}
-            }, [weekKey]);
-
-            // 云同步完成后重新从 localStorage 读取最新 todos
-            useEffect(() => {
-                const handler = () => {
-                    try {
-                        const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                        setWeekTodos(stored.allTodos?.[weekKey] || []);
-                    } catch {}
-                };
-                window.addEventListener('lifeos:synced', handler);
-                return () => window.removeEventListener('lifeos:synced', handler);
-            }, [weekKey]);
-
-            const historicalTodos = (getFinanceStorage().urgentTodos || []).map(t => ({ ...t, historical: true }));
-
-            const saveTodos = (todos) => {
-                setWeekTodos(todos);
-                haptic(40);
-                try {
-                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    if (!stored.allTodos) stored.allTodos = {};
-                    stored.allTodos[weekKey] = todos;
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
-                    window.dispatchEvent(new CustomEvent('lifeos:todos-updated'));
-                } catch {}
-                syncToCloud();
-            };
+            const historicalTodos = [];
 
             const selectedDate = OFFSET_WEEK_DATES[selectedDayIdx];
             const dayEvents = events.filter(e => e.date === selectedDate);
-            const dayNewTodos = weekTodos.filter(t => (t.dueDate || t.date) === selectedDate);
+            const dayNewTodos = weekTodos.filter(t => getTodoDate(t) === selectedDate);
             const dayHistTodos = historicalTodos.filter(t => (t.dueDate || t.date) === selectedDate);
             const allDayTodos = [...dayHistTodos, ...dayNewTodos];
 
-            const addTodo = () => {
+            const addTodo = async () => {
                 if (!newTodoText.trim()) return;
-                saveTodos([...weekTodos, { id: Date.now(), title: newTodoText.trim(), date: selectedDate, dueDate: selectedDate, done: false }]);
-                setNewTodoText('');
+                const ok = await addTask({ title: newTodoText.trim(), due_date: selectedDate });
+                if (ok) {
+                    haptic(40);
+                    setNewTodoText('');
+                }
             };
-            const toggleTodo = (id) => saveTodos(weekTodos.map(t => t.id === id ? { ...t, done: !t.done } : t));
-            const deleteTodo = (id) => saveTodos(weekTodos.filter(t => t.id !== id));
-            const postponeTodo = (todo, currentDate) => {
-                const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                if (!stored.allTodos) stored.allTodos = {};
-
-                // 从当前周数组删除
-                stored.allTodos[weekKey] = (stored.allTodos[weekKey] || []).filter(t => t.id !== todo.id);
-
-                // 计算第二天日期
+            const toggleTodo = async (todo) => { await toggleTask(todo); haptic(30); };
+            const removeTodo = async (id) => { await deleteTask(id); haptic(30); };
+            const postponeTodo = async (todo, currentDate) => {
                 const nextDate = new Date(currentDate + 'T00:00:00');
                 nextDate.setDate(nextDate.getDate() + 1);
                 const nextDateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth()+1).padStart(2,'0')}-${String(nextDate.getDate()).padStart(2,'0')}`;
-                const nextWeekKey = getTodoWeekKey(nextDateStr);
-
-                // 加入目标周数组（跨周也正确）
-                stored.allTodos[nextWeekKey] = [...(stored.allTodos[nextWeekKey] || []), { ...todo, date: nextDateStr, dueDate: nextDateStr }];
-
-                localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
-                window.dispatchEvent(new CustomEvent('lifeos:todos-updated'));
-                syncToCloud();
-
-                // 刷新当前周的显示
-                setWeekTodos(stored.allTodos[weekKey] || []);
-
-                // 自动跳转到下一天
+                await updateTask(todo.id, { due_date: nextDateStr });
+                haptic(30);
                 const nextIdx = OFFSET_WEEK_DATES.indexOf(nextDateStr);
                 if (nextIdx >= 0) {
                     setSelectedDayIdx(nextIdx);
@@ -1063,30 +1147,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             };
             const changeDueDate = (id, newDate) => {
                 if (newDate) {
-                    try {
-                        const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                        if (!stored.allTodos) stored.allTodos = {};
-                        const targetWeekKey = getTodoWeekKey(newDate);
-                        let movedTodo = null;
-
-                        Object.keys(stored.allTodos).forEach(key => {
-                            stored.allTodos[key] = (stored.allTodos[key] || []).filter(t => {
-                                if (t.id === id) {
-                                    movedTodo = { ...t, date: newDate, dueDate: newDate };
-                                    return false;
-                                }
-                                return true;
-                            });
-                        });
-
-                        if (movedTodo) {
-                            stored.allTodos[targetWeekKey] = [...(stored.allTodos[targetWeekKey] || []), movedTodo];
-                            localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
-                            setWeekTodos(stored.allTodos[weekKey] || []);
-                            window.dispatchEvent(new CustomEvent('lifeos:todos-updated'));
-                            syncToCloud();
-                        }
-                    } catch {}
+                    updateTask(id, { due_date: newDate });
                 }
                 setEditingDue(null);
             };
@@ -1095,7 +1156,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 const key = localStorage.getItem('lifeos_gemini_key');
                 if (!key) { setAiError('请先在设置里填入 Gemini API Key'); setAiResult(null); setShowAiModal(true); return; }
                 setAiError(null); setAiResult(null); setAiLoading(true); setShowAiModal(true);
-                const todos = weekTodos.map(t => ({ title: t.title, done: t.done, date: t.dueDate || t.date }));
+                const todos = weekTodos.map(t => ({ title: t.title, done: t.is_done, date: t.due_date }));
                 fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${key}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ contents: [{ parts: [{ text: `根据我本周的待办和完成情况，帮我建议3个下周应该做的事情，简洁一点。以JSON数组格式返回，每项只有"title"字段，例如[{"title":"..."},{"title":"..."},{"title":"..."}]。\n本周待办：${JSON.stringify(todos)}` }] }] })
@@ -1111,19 +1172,11 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 const target = new Date((OFFSET_WEEK_DATES[1] || TODAY_STR) + 'T12:00:00');
                 target.setDate(target.getDate() + 7);
                 const targetDate = `${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,'0')}-${String(target.getDate()).padStart(2,'0')}`;
-                const targetWeekKey = getTodoWeekKey(targetDate);
-                const newTodo = { id: Date.now() + index, title: item.title, date: targetDate, dueDate: targetDate, done: false };
-                try {
-                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    if (!stored.allTodos) stored.allTodos = {};
-                    stored.allTodos[targetWeekKey] = [...(stored.allTodos[targetWeekKey] || []), newTodo];
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
-                    if (targetWeekKey === weekKey) setWeekTodos(stored.allTodos[weekKey] || []);
+                addTask({ title: item.title, due_date: targetDate }).then(ok => {
+                    if (!ok) return;
                     setAiResult(list => (list || []).filter((_, i) => i !== index));
-                    window.dispatchEvent(new CustomEvent('lifeos:todos-updated'));
                     haptic(30);
-                    syncToCloud();
-                } catch {}
+                });
             };
 
             return (
@@ -1170,7 +1223,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                         {OFFSET_WEEK_DATES.map((dStr, idx) => {
                             const isSelected = selectedDayIdx === idx;
                             const hasE = events.some(e => e.date === dStr);
-                            const hasT = weekTodos.some(t => (t.dueDate || t.date) === dStr && !t.done) || historicalTodos.some(t => (t.dueDate || t.date) === dStr && !t.done);
+                            const hasT = weekTodos.some(t => getTodoDate(t) === dStr && !isTodoDone(t)) || historicalTodos.some(t => (t.dueDate || t.date) === dStr && !t.done);
                             const dayLabel = ['日','一','二','三','四','五','六'][new Date(dStr + 'T12:00:00').getDay()];
                             return (
                                 <div key={dStr} onClick={() => setSelectedDayIdx(idx)} className="flex flex-col items-center gap-1 cursor-pointer">
@@ -1189,6 +1242,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
                     {/* Todo 列表 */}
                     <div className="flex-1 overflow-y-auto hide-scrollbar space-y-1.5">
+                        {tasksLoading && <p className="text-xs text-gray-300 italic py-1">同步任务中…</p>}
+                        {tasksError && <p className="text-[10px] text-red-400 py-1">tasks 表未就绪或无权限，请执行 migration。</p>}
                         {allDayTodos.length === 0 && dayEvents.length === 0 && (
                             <p className="text-xs text-gray-400 italic py-2">这一天还没有记录...</p>
                         )}
@@ -1199,17 +1254,18 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                             </div>
                         ))}
                         {allDayTodos.map(t => {
-                            const due = t.dueDate || t.date;
-                            const isOverdue = !t.done && due < TODAY_STR;
+                            const due = getTodoDate(t);
+                            const done = isTodoDone(t);
+                            const isOverdue = !done && due < TODAY_STR;
                             return (
                                 <div key={t.id} className="flex items-center gap-1.5 text-xs py-1 group/item">
-                                    <button onClick={() => !t.historical && toggleTodo(t.id)}
+                                    <button onClick={() => !t.historical && toggleTodo(t)}
                                         className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-[9px] transition-colors
-                                            ${t.done ? 'bg-green-400 border-green-400 text-white' : 'border-gray-300 hover:border-green-300'}`}>
-                                        {t.done && '✓'}
+                                            ${done ? 'bg-green-400 border-green-400 text-white' : 'border-gray-300 hover:border-green-300'}`}>
+                                        {done && '✓'}
                                     </button>
-                                    <span className={`flex-1 min-w-0 truncate ${t.done ? 'line-through text-gray-400' : 'text-gray-700 font-bold'}`}>{t.title}</span>
-                                    {!t.historical && !t.done && (
+                                    <span className={`flex-1 min-w-0 truncate ${done ? 'line-through text-gray-400' : 'text-gray-700 font-bold'}`}>{getTodoTitle(t)}</span>
+                                    {!t.historical && !done && (
                                         <>
                                             {editingDue === t.id ? (
                                                 <input type="date" autoFocus defaultValue={due}
@@ -1230,7 +1286,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                         </>
                                     )}
                                     {!t.historical && (
-                                        <button onClick={() => deleteTodo(t.id)}
+                                        <button onClick={() => removeTodo(t.id)}
                                             className="text-gray-300 hover:text-red-400 transition-all text-sm leading-none flex-shrink-0 opacity-0 group-hover/item:opacity-100">×</button>
                                     )}
                                 </div>
@@ -1252,6 +1308,153 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                             +
                         </button>
                     </div>
+                </div>
+            );
+        };
+
+        const DesktopWeeklyTodoWidget = ({ user }) => {
+            const weekDates = useMemo(() => getWeekDates(new Date()), []);
+            const weekStart = weekDates[0];
+            const weekEnd = weekDates[6];
+            const today = TODAY_STR;
+            const todayLabel = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'Asia/Tokyo',
+                weekday: 'short',
+                month: '2-digit',
+                day: '2-digit',
+            }).format(new Date());
+            const [todayText, setTodayText] = useState('');
+            const [weekText, setWeekText] = useState('');
+            const { tasks, loading, error, addTask, toggleTask, deleteTask } = useWeeklyTasks(user, weekStart, weekEnd);
+
+            const todayTasks = tasks.filter(t => getTodoDate(t) === today).sort(taskSort);
+            const doneCount = tasks.filter(isTodoDone).length;
+            const openTasks = tasks.filter(t => !isTodoDone(t));
+            const focusText = openTasks
+                .slice(0, 3)
+                .map(t => t.category || getTodoTitle(t))
+                .filter(Boolean)
+                .join(' → ') || '今日の小さな前進';
+            const todayFocus = todayTasks.find(t => !isTodoDone(t))?.category || getTodoTitle(todayTasks.find(t => !isTodoDone(t)) || todayTasks[0]) || '余白を残す';
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+            const addToday = async () => {
+                if (!todayText.trim()) return;
+                const ok = await addTask({ title: todayText.trim(), due_date: today });
+                if (ok) setTodayText('');
+            };
+            const addThisWeek = async () => {
+                if (!weekText.trim()) return;
+                const ok = await addTask({ title: weekText.trim(), due_date: today });
+                if (ok) setWeekText('');
+            };
+            const TaskRow = ({ task, compact }) => {
+                const done = isTodoDone(task);
+                return (
+                    <div className={`group flex items-center gap-2 rounded-2xl ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2'} hover:bg-white/55 transition-colors`}>
+                        <button
+                            onClick={() => toggleTask(task)}
+                            className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] flex-shrink-0 ${done ? 'bg-[#8fb99b] border-[#8fb99b] text-white' : 'border-[#c9c6bb] bg-white/40'}`}>
+                            {done ? '✓' : ''}
+                        </button>
+                        <span className={`min-w-0 flex-1 truncate ${done ? 'line-through text-[#a4a097]' : 'text-[#595f62]'} ${compact ? 'text-[12px]' : 'text-sm'} font-semibold`}>
+                            {getTodoTitle(task)}
+                        </span>
+                        <button
+                            onClick={() => deleteTask(task.id)}
+                            className="opacity-0 group-hover:opacity-100 w-6 h-6 rounded-full text-[#b8a9a1] hover:text-[#c46b63] hover:bg-white/70 text-sm transition-all flex-shrink-0">
+                            ×
+                        </button>
+                    </div>
+                );
+            };
+
+            if (!user) {
+                return (
+                    <div className="min-h-screen flex items-start justify-center p-8" style={{ background: 'transparent' }}>
+                        <div style={{ width: 'var(--widget-width, 680px)', height: 'var(--widget-height, 680px)' }}
+                            className="rounded-[32px] bg-white/55 backdrop-blur-2xl border border-white/75 shadow-2xl p-10 flex flex-col items-center justify-center text-center">
+                            <p className="text-xs font-black tracking-[0.28em] text-[#9a9388] uppercase mb-4">Weekly Widget</p>
+                            <h1 className="text-2xl font-black text-[#5f655f] mb-3">登录后显示你的本周任务</h1>
+                            <p className="text-sm text-[#9a9388] leading-relaxed max-w-xs">公开页面不会显示真实任务数据。请先在主 App 登录，再把这个页面放到 Plash。</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen flex items-start justify-center p-6" style={{ background: 'transparent' }}>
+                    <section
+                        style={{ width: 'var(--widget-width, 680px)', height: 'var(--widget-height, 680px)' }}
+                        className="rounded-[32px] bg-[#fffdf6]/70 backdrop-blur-2xl border border-white/80 shadow-[0_24px_80px_rgba(90,82,68,0.18)] p-8 overflow-hidden flex flex-col text-[#596162]">
+                        <header className="flex-shrink-0 pb-5 border-b border-[#e9e1d3]/80">
+                            <div className="flex items-center justify-between gap-6">
+                                <div>
+                                    <p className="text-[13px] font-black tracking-[0.22em] text-[#9a9388]">{formatShortDate(weekStart)}—{formatShortDate(weekEnd)}</p>
+                                    <h1 className="text-[22px] font-black mt-2 text-[#50585a]">今週の重点：{focusText}</h1>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                    <p className="text-[11px] font-black tracking-[0.18em] text-[#aaa39a]">進捗</p>
+                                    <p className="text-2xl font-black text-[#6b756d]">{doneCount} / {tasks.length}</p>
+                                </div>
+                            </div>
+                        </header>
+
+                        <div className="grid grid-cols-2 gap-0 flex-1 min-h-0">
+                            <div className="pr-6 pt-6 border-r border-[#e9e1d3]/80 flex flex-col min-w-0">
+                                <div className="mb-4">
+                                    <p className="text-[11px] font-black tracking-[0.22em] uppercase text-[#aaa39a]">Today</p>
+                                    <div className="flex items-end justify-between gap-3 mt-1">
+                                        <h2 className="text-xl font-black text-[#52595b]">{todayLabel}</h2>
+                                        <span className="text-xs font-bold text-[#8f988f] truncate">今日：{todayFocus}</span>
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto hide-scrollbar space-y-1">
+                                    {loading && <p className="text-xs text-[#aaa39a] py-2">同步中…</p>}
+                                    {error && <p className="text-xs text-[#c46b63] py-2">tasks 表未就绪或 RLS 未授权。</p>}
+                                    {!loading && todayTasks.length === 0 && <p className="text-sm text-[#aaa39a] py-6">今天还很安静。</p>}
+                                    {todayTasks.map(task => <TaskRow key={task.id} task={task} />)}
+                                </div>
+                                <div className="pt-4 flex gap-2">
+                                    <input value={todayText} onChange={e => setTodayText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addToday()}
+                                        placeholder="+ 今日任务"
+                                        className="min-w-0 flex-1 rounded-2xl bg-white/55 border border-white/70 px-4 py-3 text-sm font-semibold outline-none placeholder-[#b7b0a6] focus:border-[#d8ceb9]" />
+                                    <button onClick={addToday} className="w-11 h-11 rounded-2xl bg-[#6f7b72] text-white text-xl font-black flex items-center justify-center">+</button>
+                                </div>
+                            </div>
+
+                            <div className="pl-6 pt-6 flex flex-col min-w-0">
+                                <div className="mb-4">
+                                    <p className="text-[11px] font-black tracking-[0.22em] uppercase text-[#aaa39a]">This Week</p>
+                                    <div className="flex items-end justify-between gap-3 mt-1">
+                                        <h2 className="text-xl font-black text-[#52595b]">{formatShortDate(weekStart)}—{formatShortDate(weekEnd)}</h2>
+                                        <span className="text-xs font-black text-[#8f988f]">{doneCount}/{tasks.length}</span>
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto hide-scrollbar space-y-3">
+                                    {weekDates.map(d => {
+                                        const dayTasks = tasks.filter(t => getTodoDate(t) === d).sort(taskSort);
+                                        return (
+                                            <div key={d} className="grid grid-cols-[42px_1fr] gap-2 min-w-0">
+                                                <div className="pt-1 text-[11px] font-black text-[#9a9388]">{dayNames[new Date(d + 'T12:00:00').getDay()]}</div>
+                                                <div className="min-w-0 space-y-0.5">
+                                                    {dayTasks.length === 0 ? (
+                                                        <div className="h-7 rounded-2xl bg-white/25" />
+                                                    ) : dayTasks.map(task => <TaskRow key={task.id} task={task} compact />)}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <div className="pt-4 flex gap-2">
+                                    <input value={weekText} onChange={e => setWeekText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addThisWeek()}
+                                        placeholder="+ 本周任务"
+                                        className="min-w-0 flex-1 rounded-2xl bg-white/55 border border-white/70 px-4 py-3 text-sm font-semibold outline-none placeholder-[#b7b0a6] focus:border-[#d8ceb9]" />
+                                    <button onClick={addThisWeek} className="w-11 h-11 rounded-2xl bg-[#6f7b72] text-white text-xl font-black flex items-center justify-center">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             );
         };
@@ -6604,6 +6807,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 : syncStatus === 'error'
                 ? { text: '✗ 同步失败', color: '#ef4444' }
                 : null;
+            const isStandaloneWidgetRoute = ['/widget', '/weekly-widget'].includes(window.location.pathname)
+                || ['#/widget', '#/weekly-widget'].includes(window.location.hash);
 
 
             // 拖拽逻辑
@@ -6751,6 +6956,7 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                     <div className="text-3xl animate-spin" style={{ color: 'var(--accent)' }}>⟳</div>
                 </div>
             );
+            if (isStandaloneWidgetRoute) return <DesktopWeeklyTodoWidget user={user} />;
             if (!user) return <LoginForm />;
 
             return (
@@ -6924,7 +7130,7 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[180px] pb-32 md:pb-8" style={{ gridAutoFlow: 'dense' }}>
                                     {widgets.map((widget, index) => (
                                         <WidgetWrapper key={widget.id} widgetId={widget.id} size={widget.size} isEditMode={isEditMode} onEnterEdit={() => setIsEditMode(true)} index={index} onMove={moveWidget} onCycleSize={() => cycleWidgetSize(index)}>
-                                            {widget.id === 'weekly' && <WeeklyWidget events={events} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026年5月第2周'})} />}
+                                            {widget.id === 'weekly' && <WeeklyWidget events={events} user={user} onOpenReport={(type)=>setReportConfig({isOpen:true, type, period:'2026年5月第2周'})} />}
                                             {widget.id === 'clock' && <ClockWidget />}
                                             {widget.id === 'countdown' && <CountdownWidget />}
                                             {widget.id === 'weather' && <WeatherWidget />}
