@@ -365,6 +365,29 @@
                 return fallback;
             }
         };
+        const parseTaskInput = (text, fallbackDate) => {
+            const fallbackYear = Number((fallbackDate || TODAY_STR).slice(0, 4)) || new Date().getFullYear();
+            return String(text || '')
+                .replace(/\s+(?=\d{1,2}\s*(?:[./月-])\s*\d{1,2})/g, '\n')
+                .split(/\n|；|;/)
+                .map(line => line.trim())
+                .filter(Boolean)
+                .map(line => {
+                    const match = line.match(/^(\d{1,2})\s*(?:[./月-])\s*(\d{1,2})(?:日)?\s*(.*)$/);
+                    if (!match) return { title: line, due_date: fallbackDate || TODAY_STR };
+                    const month = Number(match[1]);
+                    const day = Number(match[2]);
+                    const title = (match[3] || '').trim();
+                    const due = new Date(fallbackYear, month - 1, day, 12);
+                    if (!title || Number.isNaN(due.getTime()) || due.getMonth() !== month - 1 || due.getDate() !== day) {
+                        return { title: line, due_date: fallbackDate || TODAY_STR };
+                    }
+                    const yyyy = due.getFullYear();
+                    const mm = String(due.getMonth() + 1).padStart(2, '0');
+                    const dd = String(due.getDate()).padStart(2, '0');
+                    return { title, due_date: `${yyyy}-${mm}-${dd}` };
+                });
+        };
         const normalizeTask = (task) => ({
             ...task,
             title: getTodoTitle(task),
@@ -1131,7 +1154,11 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
             const addTodo = async () => {
                 if (!newTodoText.trim()) return;
-                const ok = await addTask({ title: newTodoText.trim(), due_date: selectedDate });
+                const items = parseTaskInput(newTodoText, selectedDate);
+                let ok = true;
+                for (const item of items) {
+                    ok = (await addTask(item)) && ok;
+                }
                 if (ok) {
                     haptic(40);
                     setNewTodoText('');
@@ -1309,7 +1336,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                             value={newTodoText}
                             onChange={e => setNewTodoText(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && addTodo()}
-                            placeholder="添加待办…"
+                            placeholder="添加待办… 例：7.1 sony"
                             className="flex-1 text-xs bg-gray-50 rounded-xl px-3 py-2 outline-none border border-transparent focus:border-gray-200 transition-colors placeholder-gray-300 font-medium"
                         />
                         <button onClick={addTodo}
@@ -1362,12 +1389,20 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
             const addToday = async () => {
                 if (!todayText.trim()) return;
-                const ok = await addTask({ title: todayText.trim(), due_date: today });
+                const items = parseTaskInput(todayText, today);
+                let ok = true;
+                for (const item of items) {
+                    ok = (await addTask(item)) && ok;
+                }
                 if (ok) setTodayText('');
             };
             const addThisWeek = async () => {
                 if (!weekText.trim()) return;
-                const ok = await addTask({ title: weekText.trim(), due_date: today });
+                const items = parseTaskInput(weekText, today);
+                let ok = true;
+                for (const item of items) {
+                    ok = (await addTask(item)) && ok;
+                }
                 if (ok) setWeekText('');
             };
             const TaskRow = ({ task, compact }) => {
@@ -1438,7 +1473,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
                             <div className="pt-3 flex gap-2">
                                 <input value={todayText} onChange={e => setTodayText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addToday()}
-                                    placeholder="+ 今日任务"
+                                    placeholder="+ 今日任务 / 7.1 任务"
                                     className="min-w-0 flex-1 rounded-2xl bg-white/55 border border-white/70 px-3 py-2 text-xs font-semibold outline-none placeholder-[#b7b0a6] focus:border-[#d8ceb9]" />
                                 <button onClick={addToday} className="w-9 h-9 rounded-2xl bg-[#6f7b72] text-white text-lg font-black flex items-center justify-center">+</button>
                             </div>
@@ -1513,7 +1548,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                 </div>
                                 <div className="pt-4 flex gap-2">
                                     <input value={weekText} onChange={e => setWeekText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addThisWeek()}
-                                        placeholder="+ 本周任务"
+                                        placeholder="+ 本周任务 / 7.1 任务"
                                         className="min-w-0 flex-1 rounded-2xl bg-white/55 border border-white/70 px-4 py-3 text-sm font-semibold outline-none placeholder-[#b7b0a6] focus:border-[#d8ceb9]" />
                                     <button onClick={addThisWeek} className="w-11 h-11 rounded-2xl bg-[#6f7b72] text-white text-xl font-black flex items-center justify-center">+</button>
                                 </div>

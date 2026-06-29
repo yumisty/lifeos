@@ -1,4 +1,4 @@
-const CACHE_NAME = 'visual-life-os-v5';
+const CACHE_NAME = 'visual-life-os-v6';
 const ASSETS = [
   '/',
   '/index.html',
