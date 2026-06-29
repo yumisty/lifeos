@@ -356,6 +356,15 @@
             });
 
         const formatShortDate = (dateStr) => (dateStr || '').slice(5).replace('-', '/');
+        const getWidgetParam = (name, fallback) => {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const value = Number(params.get(name));
+                return Number.isFinite(value) ? value : fallback;
+            } catch {
+                return fallback;
+            }
+        };
         const normalizeTask = (task) => ({
             ...task,
             title: getTodoTitle(task),
@@ -1316,6 +1325,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const weekDates = useMemo(() => getWeekDates(new Date()), []);
             const weekStart = weekDates[0];
             const weekEnd = weekDates[6];
+            const compactX = getWidgetParam('x', 16);
+            const compactY = getWidgetParam('y', 16);
             const today = TODAY_STR;
             const todayLabel = new Intl.DateTimeFormat('en-US', {
                 timeZone: 'Asia/Tokyo',
@@ -1382,7 +1393,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
             if (!user) {
                 return (
-                    <div className={`min-h-screen flex items-start ${compact ? 'justify-start p-4' : 'justify-center p-8'}`} style={{ background: 'transparent' }}>
+                    <div className={`${compact ? 'fixed' : 'min-h-screen flex items-start justify-center p-8'}`}
+                        style={compact ? { left: compactX, top: compactY, background: 'transparent' } : { background: 'transparent' }}>
                         <div style={{
                                 width: compact ? '360px' : 'var(--widget-width, 680px)',
                                 height: compact ? '360px' : 'var(--widget-height, 680px)'
@@ -1398,7 +1410,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
             if (compact) {
                 return (
-                    <div className="min-h-screen flex items-start justify-start p-4" style={{ background: 'transparent' }}>
+                    <div className="fixed" style={{ left: compactX, top: compactY, background: 'transparent' }}>
                         <section
                             style={{ width: '360px', height: '360px' }}
                             className="rounded-[28px] bg-[#fffdf6]/68 backdrop-blur-2xl border border-white/80 shadow-[0_18px_48px_rgba(90,82,68,0.16)] p-5 overflow-hidden flex flex-col text-[#596162]">
