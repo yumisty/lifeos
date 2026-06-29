@@ -1,7 +1,8 @@
-const CACHE_NAME = 'visual-life-os-v2';
+const CACHE_NAME = 'visual-life-os-v3';
 const ASSETS = [
   '/',
   '/index.html',
+  '/widget/index.html',
   'https://unpkg.com/react@18/umd/react.production.min.js',
   'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
   'https://unpkg.com/@babel/standalone/babel.min.js',
