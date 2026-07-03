@@ -292,6 +292,7 @@
                     animeDisplay:      mergeArr(data.anime_display,         local.animeDisplay),
                 };
                 localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
+                refreshTransactionsFromStorage();
                 return merged;
             } catch(e) {
                 console.log('sync from cloud failed:', e);
@@ -354,6 +355,118 @@
                 const d = getTodoDate(t);
                 return d >= start && d <= end;
             });
+        const getLocalTodoData = () => {
+            try {
+                const data = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                if (!data.allTodos || typeof data.allTodos !== 'object') data.allTodos = {};
+                return data;
+            } catch {
+                return { allTodos: {} };
+            }
+        };
+        const saveLocalTodoData = (data) => {
+            localStorage.setItem('visualLifeOS_data', JSON.stringify(data));
+            window.dispatchEvent(new CustomEvent('lifeos:todos-updated'));
+        };
+        const normalizeLocalTask = (todo) => normalizeTask({
+            id: String(todo.id || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`),
+            title: getTodoTitle(todo),
+            due_date: getTodoDate(todo) || TODAY_STR,
+            is_done: isTodoDone(todo),
+            category: todo.category || null,
+            priority: todo.priority || null,
+            created_at: todo.created_at || todo.createdAt || new Date().toISOString(),
+            updated_at: todo.updated_at || todo.updatedAt || new Date().toISOString(),
+            _local: true,
+        });
+        const toStoredLocalTask = (task) => ({
+            id: String(task.id),
+            title: getTodoTitle(task),
+            date: getTodoDate(task) || TODAY_STR,
+            done: isTodoDone(task),
+            category: task.category || null,
+            priority: task.priority || null,
+            createdAt: task.created_at || task.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        });
+        const readLocalTasksInRange = (start, end) =>
+            getTodosInRange(getLocalTodoData().allTodos || {}, start, end).map(normalizeLocalTask);
+        const localTaskExists = (id) => flattenTodos(getLocalTodoData().allTodos || {}).some(t => String(t.id) === String(id));
+        const upsertLocalTask = (task) => {
+            const data = getLocalTodoData();
+            const stored = toStoredLocalTask(task);
+            Object.keys(data.allTodos).forEach(k => {
+                data.allTodos[k] = (data.allTodos[k] || []).filter(t => String(t.id) !== String(stored.id));
+            });
+            const weekKey = getTodoWeekKey(stored.date);
+            data.allTodos[weekKey] = [...(data.allTodos[weekKey] || []), stored];
+            saveLocalTodoData(data);
+            syncToCloud();
+            return normalizeLocalTask(stored);
+        };
+        const addLocalTask = (payload) => upsertLocalTask({
+            id: `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            title: (payload.title || '').trim(),
+            due_date: payload.due_date || TODAY_STR,
+            is_done: false,
+            category: payload.category || null,
+            priority: payload.priority || null,
+            created_at: new Date().toISOString(),
+        });
+        const updateLocalTask = (id, patch) => {
+            const data = getLocalTodoData();
+            let found = null;
+            Object.keys(data.allTodos).forEach(k => {
+                data.allTodos[k] = (data.allTodos[k] || []).filter(t => {
+                    if (String(t.id) !== String(id)) return true;
+                    found = { ...t };
+                    return false;
+                });
+            });
+            if (!found) return null;
+            const next = {
+                ...found,
+                title: patch.title ?? found.title ?? found.text,
+                date: patch.due_date ?? patch.date ?? found.date ?? found.dueDate,
+                done: patch.is_done ?? patch.done ?? isTodoDone(found),
+                category: patch.category ?? found.category ?? null,
+                priority: patch.priority ?? found.priority ?? null,
+                updatedAt: new Date().toISOString(),
+            };
+            const weekKey = getTodoWeekKey(next.date);
+            data.allTodos[weekKey] = [...(data.allTodos[weekKey] || []), next];
+            saveLocalTodoData(data);
+            syncToCloud();
+            return normalizeLocalTask(next);
+        };
+        const deleteLocalTask = (id) => {
+            const data = getLocalTodoData();
+            let changed = false;
+            Object.keys(data.allTodos).forEach(k => {
+                const before = data.allTodos[k] || [];
+                data.allTodos[k] = before.filter(t => String(t.id) !== String(id));
+                changed = changed || data.allTodos[k].length !== before.length;
+            });
+            if (changed) {
+                saveLocalTodoData(data);
+                syncToCloud();
+            }
+            return changed;
+        };
+        const mergeTaskLists = (cloudTasks = [], localTasks = []) => {
+            const seen = new Set();
+            const addKey = (task) => {
+                const key = `${getTodoDate(task)}|${getTodoTitle(task).trim().toLowerCase()}`;
+                seen.add(String(task.id));
+                seen.add(key);
+            };
+            cloudTasks.forEach(addKey);
+            const localOnly = localTasks.filter(task => {
+                const key = `${getTodoDate(task)}|${getTodoTitle(task).trim().toLowerCase()}`;
+                return !seen.has(String(task.id)) && !seen.has(key);
+            });
+            return [...cloudTasks, ...localOnly].sort(taskSort);
+        };
 
         const formatShortDate = (dateStr) => (dateStr || '').slice(5).replace('-', '/');
         const getWidgetParam = (name, fallback) => {
@@ -448,14 +561,27 @@
             const [error, setError] = useState(null);
 
             const refetch = React.useCallback(async () => {
-                if (!user?.id || !weekStart || !weekEnd) {
+                if (!weekStart || !weekEnd) {
                     setTasks([]);
                     return;
                 }
+                const localTasks = readLocalTasksInRange(weekStart, weekEnd);
                 setLoading(true);
+                if (!user?.id) {
+                    setTasks(localTasks.sort(taskSort));
+                    setError(null);
+                    setLoading(false);
+                    return;
+                }
                 const { data, error } = await taskService.listByDateRange(user.id, weekStart, weekEnd);
-                setError(error || null);
-                if (!error) setTasks(data.sort(taskSort));
+                if (error) {
+                    console.warn('[tasks] cloud unavailable, using local todos:', error);
+                    setError(null);
+                    setTasks(localTasks.sort(taskSort));
+                } else {
+                    setError(null);
+                    setTasks(mergeTaskLists(data, localTasks));
+                }
                 setLoading(false);
             }, [user?.id, weekStart, weekEnd]);
 
@@ -488,13 +614,32 @@
             };
 
             const addTask = async (payload) => {
+                if (!user?.id) {
+                    addLocalTask(payload);
+                    notify();
+                    await refetch();
+                    return true;
+                }
                 const { error } = await taskService.addTask(user?.id, payload);
-                if (error) { setError(error); return false; }
+                if (error) {
+                    console.warn('[tasks] add failed, saved locally:', error);
+                    addLocalTask(payload);
+                    setError(null);
+                    notify();
+                    await refetch();
+                    return true;
+                }
                 notify();
                 await refetch();
                 return true;
             };
             const updateTask = async (id, patch) => {
+                if (localTaskExists(id)) {
+                    updateLocalTask(id, patch);
+                    notify();
+                    await refetch();
+                    return true;
+                }
                 const { error } = await taskService.updateTask(id, patch);
                 if (error) { setError(error); return false; }
                 notify();
@@ -502,6 +647,12 @@
                 return true;
             };
             const toggleTask = async (task) => {
+                if (task?._local || localTaskExists(task?.id)) {
+                    updateLocalTask(task.id, { is_done: !isTodoDone(task) });
+                    notify();
+                    await refetch();
+                    return true;
+                }
                 const { error } = await taskService.toggleTask(task);
                 if (error) { setError(error); return false; }
                 notify();
@@ -509,6 +660,12 @@
                 return true;
             };
             const deleteTask = async (id) => {
+                if (localTaskExists(id)) {
+                    deleteLocalTask(id);
+                    notify();
+                    await refetch();
+                    return true;
+                }
                 const { error } = await taskService.deleteTask(id);
                 if (error) { setError(error); return false; }
                 notify();
@@ -550,6 +707,12 @@
 
         // transactions 格式：{ id, date, name, amount, currency, category }
         const MOCK_TRANSACTIONS = getFinanceStorage().transactions || [];
+        const refreshTransactionsFromStorage = () => {
+            try {
+                const latest = getFinanceStorage().transactions || [];
+                MOCK_TRANSACTIONS.splice(0, MOCK_TRANSACTIONS.length, ...latest);
+            } catch {}
+        };
 
         // 分类颜色映射（关键词匹配，越长越具体的放前面）
         const FINANCE_CAT_COLOR_MAP = [
@@ -3227,10 +3390,14 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const saveLog = (next) => {
                 setLog(next);
                 try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); d.smokingLog = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                syncToCloud();
+                window.dispatchEvent(new CustomEvent('lifeos:reload'));
             };
             const saveGoal = (g) => {
                 setGoal(g);
                 try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); d.smokingGoal = g; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                syncToCloud();
+                window.dispatchEvent(new CustomEvent('lifeos:reload'));
             };
 
             const todayCount = log[todayStr] || 0;
@@ -3990,6 +4157,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 } catch {}
                 syncToCloud();
                 MOCK_TRANSACTIONS.push(tx);
+                window.dispatchEvent(new CustomEvent('lifeos:reload'));
                 setAddForm({ amount: '', currency: 'JPY', category: '', name: '', date: TODAY_STR });
                 setShowAdd(false);
                 setTxKey(k => k + 1);
@@ -4004,6 +4172,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(s));
                 } catch {}
                 syncToCloud();
+                window.dispatchEvent(new CustomEvent('lifeos:reload'));
                 setTxKey(k => k + 1);
             };
 
@@ -4217,6 +4386,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(s));
                 } catch {}
                 syncToCloud();
+                window.dispatchEvent(new CustomEvent('lifeos:reload'));
                 setDeleteConfirmId(null);
                 setTxKey(k => k + 1);
             };
@@ -4237,6 +4407,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(s));
                 } catch {}
                 syncToCloud();
+                window.dispatchEvent(new CustomEvent('lifeos:reload'));
                 setEditingTx(null);
                 setTxKey(k => k + 1);
             };
@@ -4280,6 +4451,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
                 } catch {}
                 syncToCloud();
+                window.dispatchEvent(new CustomEvent('lifeos:reload'));
             };
 
             // key 格式：fixedItemsByMonth 用 "2026-4"（月份-1），monthlyRates 用 "2026-05"
@@ -6788,6 +6960,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 } catch {}
                 syncToCloud();
                 MOCK_TRANSACTIONS.push(tx);
+                window.dispatchEvent(new CustomEvent('lifeos:reload'));
                 setQuickTxForm({ amount: '', currency: 'JPY', category: '', name: '', date: TODAY_STR });
                 setShowQuickTx(false);
             };
@@ -6958,6 +7131,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                             migratedAt: new Date().toISOString(),
                         };
                         localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
+                        refreshTransactionsFromStorage();
+                        window.dispatchEvent(new CustomEvent('lifeos:reload'));
 
                         // 确保拿到登录用户再上传
                         const { data: { session } } = await _supabase.auth.getSession();
