@@ -848,7 +848,7 @@
         };
 
         // ── 设置弹窗（API Key 管理 + 通知设置）──
-        const SettingsModal = ({ isOpen, onClose, syncStatus, setSyncStatus, syncToCloud, exportData, importFileRef, themeId, setThemeId, charTheme, saveCharTheme }) => {
+        const SettingsModal = ({ isOpen, onClose, syncStatus, setSyncStatus, syncNow, exportData, importFileRef, themeId, setThemeId, charTheme, saveCharTheme }) => {
             const [apiKey, setApiKey] = useState(() => localStorage.getItem('lifeos_gemini_key') || '');
             const [saveStatus, setSaveStatus] = useState(null); // null | 'ok' | 'fail'
             const [notify, setNotify] = useState(() => getFinanceStorage().notifySettings || { smokingEnabled: false, smokingTime: '21:00', dailyEnabled: false, dailyTime: '21:00' });
@@ -1025,7 +1025,7 @@
                                 <div className="flex gap-2">
                                     <button onClick={async () => {
                                         setSyncStatus('syncing');
-                                        const ok = await syncToCloud();
+                                        const ok = await syncNow();
                                         setSyncStatus(ok ? 'done' : 'error');
                                         setTimeout(() => setSyncStatus('idle'), 3000);
                                     }} className="flex-1 py-2.5 rounded-xl font-bold text-xs flex flex-col items-center gap-1 border border-gray-100 hover:bg-gray-50 transition-colors"
@@ -6907,6 +6907,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}').theme || 'cream'; }
                 catch { return 'cream'; }
             });
+            const themeInitializedRef = useRef(false);
             const [showThemePicker, setShowThemePicker] = useState(false);
             const [showWidgetLib, setShowWidgetLib] = useState(false);
 
@@ -6931,6 +6932,14 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const [showGlobalSearch, setShowGlobalSearch] = useState(false);
             const [toast, setToast] = useState(null);
             const importFileRef = useRef(null);
+
+            const syncNow = async () => {
+                const pulled = await syncFromCloud();
+                if (pulled) window.dispatchEvent(new CustomEvent('lifeos:synced'));
+                const ok = await syncToCloud();
+                if (ok) window.dispatchEvent(new CustomEvent('lifeos:reload'));
+                return !!pulled || ok;
+            };
 
             const navItems = [
                 { id: 'home',     icon: '🏠', label: 'Dashboard' },
@@ -6999,7 +7008,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     d.theme = themeId;
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
-                    syncToCloud();
+                    if (themeInitializedRef.current) syncToCloud();
+                    themeInitializedRef.current = true;
                 } catch {}
             }, [themeId]);
 
@@ -7041,12 +7051,10 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             useEffect(() => {
                 if (!user) return;
                 setSyncStatus('syncing');
-                syncFromCloud().then(data => {
-                    if (data) {
+                syncNow().then(ok => {
+                    if (ok) {
                         setSyncStatus('done');
                         setTimeout(() => setSyncStatus('idle'), 3000);
-                        // 通知所有 Widget 重新从 localStorage 读取最新数据
-                        window.dispatchEvent(new CustomEvent('lifeos:synced'));
                     } else {
                         setSyncStatus('idle');
                     }
@@ -7603,7 +7611,7 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                     }} />
                     <AIReportModal {...reportConfig} onClose={() => setReportConfig({...reportConfig, isOpen: false})} />
                     <AIGeneratePanel isOpen={aiPanel.isOpen} title={aiPanel.title} type={aiPanel.type} data={aiPanel.data} onClose={() => setAIPanel(p => ({ ...p, isOpen: false }))} />
-                    <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} syncStatus={syncStatus} setSyncStatus={setSyncStatus} syncToCloud={syncToCloud} exportData={exportData} importFileRef={importFileRef} themeId={themeId} setThemeId={setThemeId} charTheme={charTheme} saveCharTheme={saveCharTheme} />
+                    <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} syncStatus={syncStatus} setSyncStatus={setSyncStatus} syncNow={syncNow} exportData={exportData} importFileRef={importFileRef} themeId={themeId} setThemeId={setThemeId} charTheme={charTheme} saveCharTheme={saveCharTheme} />
                     {showGlobalSearch && (
                         <GlobalSearchModal
                             onClose={() => setShowGlobalSearch(false)}
@@ -7731,7 +7739,7 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                                     <div className="flex gap-2">
                                         <button onClick={async () => {
                                             setSyncStatus('syncing');
-                                            const ok = await syncToCloud();
+                                            const ok = await syncNow();
                                             setSyncStatus(ok ? 'done' : 'error');
                                             setTimeout(() => setSyncStatus('idle'), 3000);
                                         }} className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-gray-100 text-gray-600 flex flex-col items-center gap-0.5 hover:bg-gray-200">
