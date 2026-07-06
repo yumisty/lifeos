@@ -480,26 +480,43 @@
         };
         const parseTaskInput = (text, fallbackDate) => {
             const fallbackYear = Number((fallbackDate || TODAY_STR).slice(0, 4)) || new Date().getFullYear();
-            return String(text || '')
+            const formatDue = (month, day) => {
+                const due = new Date(fallbackYear, month - 1, day, 12);
+                if (Number.isNaN(due.getTime()) || due.getMonth() !== month - 1 || due.getDate() !== day) return null;
+                const yyyy = due.getFullYear();
+                const mm = String(due.getMonth() + 1).padStart(2, '0');
+                const dd = String(due.getDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}`;
+            };
+            const parseDatePrefix = (line) => {
+                const match = line.match(/^(\d{1,2})\s*(?:[./月-])\s*(\d{1,2})(?:日)?\s*(.*)$/);
+                if (!match) return null;
+                const due = formatDue(Number(match[1]), Number(match[2]));
+                if (!due) return null;
+                return { due, title: (match[3] || '').trim() };
+            };
+            const isDateLabelOnly = (title) => /^(?:周|星期)[一二三四五六日天]$/.test(title.trim());
+            const lines = String(text || '')
+                .replace(/\r/g, '\n')
                 .replace(/\s+(?=\d{1,2}\s*(?:[./月-])\s*\d{1,2})/g, '\n')
+                .replace(/\s+(?=[□☐☑✓✔]\s*)/g, '\n')
                 .split(/\n|；|;/)
                 .map(line => line.trim())
-                .filter(Boolean)
-                .map(line => {
-                    const match = line.match(/^(\d{1,2})\s*(?:[./月-])\s*(\d{1,2})(?:日)?\s*(.*)$/);
-                    if (!match) return { title: line, due_date: fallbackDate || TODAY_STR };
-                    const month = Number(match[1]);
-                    const day = Number(match[2]);
-                    const title = (match[3] || '').trim();
-                    const due = new Date(fallbackYear, month - 1, day, 12);
-                    if (!title || Number.isNaN(due.getTime()) || due.getMonth() !== month - 1 || due.getDate() !== day) {
-                        return { title: line, due_date: fallbackDate || TODAY_STR };
-                    }
-                    const yyyy = due.getFullYear();
-                    const mm = String(due.getMonth() + 1).padStart(2, '0');
-                    const dd = String(due.getDate()).padStart(2, '0');
-                    return { title, due_date: `${yyyy}-${mm}-${dd}` };
-                });
+                .filter(Boolean);
+            const items = [];
+            let activeDate = fallbackDate || TODAY_STR;
+            lines.forEach(rawLine => {
+                let line = rawLine.replace(/^[□☐☑✓✔]\s*/, '').trim();
+                if (!line) return;
+                const dated = parseDatePrefix(line);
+                if (dated) {
+                    activeDate = dated.due;
+                    if (!dated.title || isDateLabelOnly(dated.title)) return;
+                    line = dated.title;
+                }
+                items.push({ title: line, due_date: activeDate });
+            });
+            return items;
         };
         const normalizeTask = (task) => ({
             ...task,
