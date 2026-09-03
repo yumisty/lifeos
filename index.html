@@ -180,52 +180,249 @@
         // ── 默认记账分类 ──
         const _DEFAULT_FINANCE_CATS = ['一日三餐','吃饭','购物/超市','购物/日用品','购物/化妆护肤品','购物/周边','购物/吃的','购物/衣服','购物/玩的','氪金','机票','交通','礼物','医疗','会员','课程'];
 
+        // ── 2026-07-29 拼多多截图批量补录（仅会导入一次）──
+        // 使用稳定 id + 完整签名双重去重，多设备同步时也不会反复添加。
+        const PDD_SCREENSHOT_BATCH_20260729 = [
+            [20260729001, '绿巨能 Action 6 街拍套装',                    81.60, '购物/大型设备'],
+            [20260729002, '加点滋味红酸汤调料 4 袋',                    16.41, '购物/吃的'],
+            [20260729003, 'yboda&zy 引磁片两套',                         8.74, '购物/大型设备'],
+            [20260729004, '贵州麻辣土豆片 10 袋',                          9.48, '购物/吃的'],
+            [20260729005, '怀涛铁棍山药小麻花 30 包',                     28.69, '购物/吃的'],
+            [20260729006, '鹃城豆瓣酱 500g',                              8.08, '购物/吃的'],
+            [20260729007, '三只松鼠梅有芒果 3 袋',                         24.49, '购物/吃的'],
+            [20260729008, '老川东灯影牛肉丝',                              9.78, '购物/吃的'],
+            [20260729009, 'Anker 七合一 Type-C 扩展坞',                   97.52, '购物/大型设备'],
+            [20260729010, '海蓝色蛋面珍珠手链',                              6.34, '购物/衣服'],
+            [20260729011, '珠江桥牌胡椒猪肚鸡汤底',                           6.19, '购物/吃的'],
+            [20260729012, '翠宏干辣椒 5 袋',                              13.86, '购物/吃的'],
+            [20260729013, '好欢螺螺蛳粉礼盒',                             65.88, '购物/吃的'],
+            [20260729014, '番茄味苏打饼干 10 袋',                          9.40, '购物/吃的'],
+            [20260729015, '冰极柠檬茶 2 瓶',                               6.88, '购物/吃的'],
+            [20260729016, '婚纱白贝壳胶/美甲胶',                          12.39, '购物/化妆护肤品'],
+            [20260729017, '伊丽莎白雅顿橘灿精华 50mL',                    159.00, '购物/化妆护肤品'],
+            [20260729018, '好丽友混合零食',                                6.79, '购物/吃的'],
+            [20260729019, '越南 Nestea 柠檬茶',                            14.20, '购物/吃的'],
+            [20260729020, 'TELESIN Action 6 AR 钢化膜',                  41.60, '购物/大型设备'],
+            [20260729021, '943 沁爽防晒霜 30mL',                          41.30, '购物/化妆护肤品'],
+            [20260729022, '9点9馄饨海鲜全家福 7 盒',                       83.92, '购物/吃的'],
+            [20260729023, '飞耳狗抱熊挂件',                               18.36, '购物/玩的'],
+            [20260729024, 'Switch 2 保护壳按键帽',                       10.90, '购物/大型设备'],
+        ].map(([id, name, amount, category]) => ({
+            id, date: '2026-07-29', name, amount, currency: 'RMB', category,
+            source: 'PDD截图批量导入', batchId: 'pdd-20260729-v1',
+        }));
+
+        const importPddScreenshotBatch20260729 = () => {
+            const stored = getFinanceStorage();
+            const current = Array.isArray(stored.transactions) ? stored.transactions : [];
+            const ids = new Set(current.map(tx => String(tx.id)));
+            const signature = tx => [tx.date, tx.name, Number(tx.amount).toFixed(2), tx.currency].join('|');
+            const signatures = new Set(current.map(signature));
+            const missing = PDD_SCREENSHOT_BATCH_20260729.filter(tx =>
+                !ids.has(String(tx.id)) && !signatures.has(signature(tx))
+            );
+            if (missing.length === 0) return 0;
+            stored.transactions = [...current, ...missing];
+            localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+            refreshTransactionsFromStorage();
+            return missing.length;
+        };
+
         // ── 云同步函数（全局，供所有 Widget 直接调用）──
-        const syncToCloud = async () => {
+        // 手机浏览器切后台时会中止尚未完成的请求；同时并发 upsert 还可能出现
+        // “旧请求后返回、覆盖新数据”。用单队列串行上传，并记录待同步状态以便重试。
+        const SYNC_PENDING_KEY = 'visualLifeOS_sync_pending';
+        let syncQueue = Promise.resolve(true);
+        let syncRevision = 0;
+        let syncRetryTimer = null;
+        let syncRetryAttempt = 0;
+
+        const scheduleCloudSyncRetry = () => {
+            if (syncRetryTimer || !localStorage.getItem(SYNC_PENDING_KEY)) return;
+            const delays = [1500, 4000, 10000, 30000];
+            const delay = delays[Math.min(syncRetryAttempt, delays.length - 1)];
+            syncRetryAttempt += 1;
+            syncRetryTimer = setTimeout(() => {
+                syncRetryTimer = null;
+                if (navigator.onLine !== false && localStorage.getItem(SYNC_PENDING_KEY)) syncToCloud();
+            }, delay);
+        };
+
+        const performCloudUpload = async (revision) => {
             if (!CURRENT_USER_ID) {
                 try {
                     const { data: { session } } = await _supabase.auth.getSession();
                     CURRENT_USER_ID = session?.user?.id ?? null;
                 } catch {}
             }
-            if (!CURRENT_USER_ID) return false;
+            if (!CURRENT_USER_ID) return { ok: false, retryable: false };
             try {
                 const local = getFinanceStorage();
-                console.log('[sync] uploading for user:', CURRENT_USER_ID);
-                const { error } = await _supabase.from('lifeos_data').upsert({
-                    id:                   CURRENT_USER_ID,
-                    transactions:         local.transactions        || [],
-                    categories:           local.categories          || [],
-                    fixed_items_by_month: local.fixedItemsByMonth   || {},
-                    wishlist:             local.wishlist            || [],
-                    todos:                local.allTodos            || {},
-                    habits:               local.habits              || {},
-                    period_log:           local.periodLog           || [],
-                    countdowns:           local.countdowns          || { name: '回国 🛫', date: '2026-08-31' },
-                    now_playing:          local.nowPlaying          || {},
-                    exchange_rate:        local.exchangeRate        || 0.048,
-                    monthly_rates:        local.monthlyRates        || {},
-                    theme:                local.theme               || 'cream',
-                    smoking_log:          local.smokingLog          || {},
-                    smoking_goal:         local.smokingGoal         || 20,
-                    all_meals:            local.allMeals            || {},
-                    vault:                local.vault               || { items: [] },
-                    life_events:          local.lifeEvents           || [],
-                    diary:                local.diary               || {},
-                    projects:             local.projects             || [],
-                    anime_orders:         local.animeOrders          || [],
-                    anime_goods:          local.animeGoods           || [],
-                    anime_display:        local.animeDisplay         || [],
-                    updated_at:           new Date().toISOString(),
-                });
-                if (error) console.error('[sync] error:', JSON.stringify(error));
-                else console.log('[sync] success');
-                return !error;
-            } catch(e) { console.error('[sync] exception:', e.message); return false; }
+                console.log('[sync] uploading revision', revision, 'for user:', CURRENT_USER_ID);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
+                let error;
+                try {
+                    // 上传整份记录前先合并云端餐食，避免另一台设备新增的餐食被旧快照覆盖。
+                    const { data: remoteMeals, error: mealReadError } = await _supabase
+                        .from('lifeos_data')
+                        .select('all_meals')
+                        .eq('id', CURRENT_USER_ID)
+                        .maybeSingle()
+                        .abortSignal(controller.signal);
+                    if (mealReadError) {
+                        console.error('[sync] meal preflight error:', JSON.stringify(mealReadError));
+                        return { ok: false, retryable: true };
+                    }
+                    const mergedMeals = mergeMealsByCell(remoteMeals?.all_meals, local.allMeals);
+                    if (JSON.stringify(mergedMeals) !== JSON.stringify(local.allMeals || {})) {
+                        local.allMeals = mergedMeals;
+                        localStorage.setItem('visualLifeOS_data', JSON.stringify(local));
+                        window.dispatchEvent(new CustomEvent('lifeos:reload'));
+                    }
+                    ({ error } = await _supabase.from('lifeos_data').upsert({
+                        id:                   CURRENT_USER_ID,
+                        transactions:         local.transactions        || [],
+                        categories:           local.categories          || [],
+                        fixed_items_by_month: local.fixedItemsByMonth   || {},
+                        wishlist:             local.wishlist            || [],
+                        todos:                local.allTodos            || {},
+                        habits:               local.habits              || {},
+                        period_log:           local.periodLog           || [],
+                        countdowns:           local.countdowns          || { name: '回国 🛫', date: '2026-08-31' },
+                        now_playing:          local.nowPlaying          || {},
+                        exchange_rate:        local.exchangeRate        || 0.048,
+                        monthly_rates:        local.monthlyRates        || {},
+                        theme:                local.theme               || 'cream',
+                        smoking_log:          local.smokingLog          || {},
+                        smoking_goal:         local.smokingGoal         || 20,
+                        all_meals:            mergedMeals               || {},
+                        vault:                local.vault               || { items: [] },
+                        life_events:          local.lifeEvents           || [],
+                        diary:                local.diary               || {},
+                        projects:             local.projects             || [],
+                        anime_orders:         local.animeOrders          || [],
+                        anime_goods:          local.animeGoods           || [],
+                        anime_display:        local.animeDisplay         || [],
+                        updated_at:           new Date().toISOString(),
+                    }).abortSignal(controller.signal));
+                } finally {
+                    clearTimeout(timeoutId);
+                }
+                if (error) {
+                    console.error('[sync] error:', JSON.stringify(error));
+                    return { ok: false, retryable: true };
+                }
+                console.log('[sync] success, revision:', revision);
+                if (revision === syncRevision) {
+                    localStorage.removeItem(SYNC_PENDING_KEY);
+                    syncRetryAttempt = 0;
+                }
+                return { ok: true, retryable: false };
+            } catch(e) {
+                console.error('[sync] exception:', e.message);
+                return { ok: false, retryable: true };
+            }
         };
+
+        const syncToCloud = () => {
+            const revision = ++syncRevision;
+            localStorage.setItem(SYNC_PENDING_KEY, String(Date.now()));
+            const queued = syncQueue
+                .catch(() => false)
+                .then(() => performCloudUpload(revision))
+                .then(result => {
+                    if (!result.ok && result.retryable) scheduleCloudSyncRetry();
+                    return result.ok;
+                });
+            // 后续上传必须等本次结束，但队列本身永远保持可继续状态。
+            syncQueue = queued.catch(() => false);
+            return queued;
+        };
+
+        // 餐食会在手机和电脑上同时编辑。把每个格子的修改时间一起存在 all_meals JSON 中，
+        // 拉取时按格合并，避免整周覆盖导致另一台设备刚写的内容消失。
+        const MEALS_SYNC_META_KEY = '__cellUpdatedAt';
+        const mergeMealsByCell = (cloudMeals, localMeals) => {
+            const cloud = (cloudMeals && typeof cloudMeals === 'object' && !Array.isArray(cloudMeals)) ? cloudMeals : {};
+            const local = (localMeals && typeof localMeals === 'object' && !Array.isArray(localMeals)) ? localMeals : {};
+            const cloudMeta = cloud[MEALS_SYNC_META_KEY] || {};
+            const localMeta = local[MEALS_SYNC_META_KEY] || {};
+            const merged = {};
+            const mergedMeta = {};
+            const weekKeys = new Set([
+                ...Object.keys(cloud).filter(key => key !== MEALS_SYNC_META_KEY),
+                ...Object.keys(local).filter(key => key !== MEALS_SYNC_META_KEY),
+                ...Object.keys(cloudMeta),
+                ...Object.keys(localMeta),
+            ]);
+
+            weekKeys.forEach(weekKey => {
+                const cloudWeek = cloud[weekKey] || {};
+                const localWeek = local[weekKey] || {};
+                const cloudWeekMeta = cloudMeta[weekKey] || {};
+                const localWeekMeta = localMeta[weekKey] || {};
+                const mergedWeek = {};
+                const mergedWeekMeta = {};
+                const dayKeys = new Set([
+                    ...Object.keys(cloudWeek), ...Object.keys(localWeek),
+                    ...Object.keys(cloudWeekMeta), ...Object.keys(localWeekMeta),
+                ]);
+
+                dayKeys.forEach(dayKey => {
+                    const cloudDay = cloudWeek[dayKey] || {};
+                    const localDay = localWeek[dayKey] || {};
+                    const cloudDayMeta = cloudWeekMeta[dayKey] || {};
+                    const localDayMeta = localWeekMeta[dayKey] || {};
+                    const mergedDay = {};
+                    const mergedDayMeta = {};
+                    const slotKeys = new Set([
+                        ...Object.keys(cloudDay), ...Object.keys(localDay),
+                        ...Object.keys(cloudDayMeta), ...Object.keys(localDayMeta),
+                    ]);
+
+                    slotKeys.forEach(slotKey => {
+                        const cloudTime = Number(cloudDayMeta[slotKey]) || 0;
+                        const localTime = Number(localDayMeta[slotKey]) || 0;
+                        const useLocal = localTime > cloudTime || (
+                            localTime === cloudTime &&
+                            !Object.prototype.hasOwnProperty.call(cloudDay, slotKey) &&
+                            Object.prototype.hasOwnProperty.call(localDay, slotKey)
+                        );
+                        const source = useLocal ? localDay : cloudDay;
+                        if (Object.prototype.hasOwnProperty.call(source, slotKey)) mergedDay[slotKey] = source[slotKey];
+                        const latestTime = Math.max(cloudTime, localTime);
+                        if (latestTime) mergedDayMeta[slotKey] = latestTime;
+                    });
+
+                    if (Object.keys(mergedDay).length) mergedWeek[dayKey] = mergedDay;
+                    if (Object.keys(mergedDayMeta).length) mergedWeekMeta[dayKey] = mergedDayMeta;
+                });
+
+                if (Object.keys(mergedWeek).length) merged[weekKey] = mergedWeek;
+                if (Object.keys(mergedWeekMeta).length) mergedMeta[weekKey] = mergedWeekMeta;
+            });
+
+            if (Object.keys(mergedMeta).length) merged[MEALS_SYNC_META_KEY] = mergedMeta;
+            return merged;
+        };
+
+        const retryPendingCloudSync = () => {
+            if (navigator.onLine !== false && localStorage.getItem(SYNC_PENDING_KEY)) syncToCloud();
+        };
+        window.addEventListener('online', retryPendingCloudSync);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') retryPendingCloudSync();
+        });
+        setTimeout(retryPendingCloudSync, 1200);
 
         const syncFromCloud = async () => {
             if (!CURRENT_USER_ID) return null;
+            // 本机还有刚改完、尚未上传的内容时，先让上传完成；否则旧云数据会回头覆盖本机。
+            if (localStorage.getItem(SYNC_PENDING_KEY)) {
+                try { await syncQueue; } catch {}
+                if (localStorage.getItem(SYNC_PENDING_KEY)) return null;
+            }
             try {
                 const { data, error } = await _supabase
                     .from('lifeos_data').select('*').eq('id', CURRENT_USER_ID).single();
@@ -278,11 +475,7 @@
                     theme:             local.theme              || data.theme         || 'cream',
                     smokingLog:        mergeObj(data.smoking_log,           local.smokingLog),
                     smokingGoal:       data.smoking_goal        || local.smokingGoal  || 20,
-                    allMeals:          (() => {
-                        const c = (data.all_meals && typeof data.all_meals === 'object') ? data.all_meals : {};
-                        const l = (local.allMeals && typeof local.allMeals === 'object') ? local.allMeals : {};
-                        return { ...l, ...c };
-                    })(),
+                    allMeals:          mergeMealsByCell(data.all_meals, local.allMeals),
                     vault:             { items: mergeArr(data.vault?.items || [], local.vault?.items || []) },
                     lifeEvents:        mergeArr(data.life_events,            local.lifeEvents),
                     diary:             mergeObj(data.diary,                 local.diary),
@@ -328,8 +521,33 @@
             });
         };
 
-        const TODAY_STR = getTodayStr();
-        const CURRENT_WEEK_DATES = getWeekDates(new Date());
+        // 页面可能在桌面端连续开很多天：日期不能只在首次加载时计算。
+        let TODAY_STR = getTodayStr();
+        let CURRENT_WEEK_DATES = getWeekDates(new Date());
+        const todaySubscribers = new Set();
+        const refreshLiveToday = () => {
+            const nextToday = getTodayStr();
+            if (nextToday === TODAY_STR) return;
+            TODAY_STR = nextToday;
+            CURRENT_WEEK_DATES = getWeekDates(new Date());
+            todaySubscribers.forEach(notify => notify(nextToday));
+            window.dispatchEvent(new CustomEvent('lifeos:date-changed', { detail: nextToday }));
+            window.dispatchEvent(new CustomEvent('lifeos:reload'));
+        };
+        const useLiveTodayStr = () => {
+            const [today, setToday] = useState(TODAY_STR);
+            useEffect(() => {
+                todaySubscribers.add(setToday);
+                refreshLiveToday();
+                return () => todaySubscribers.delete(setToday);
+            }, []);
+            return today;
+        };
+        setInterval(refreshLiveToday, 30000);
+        window.addEventListener('focus', refreshLiveToday);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') refreshLiveToday();
+        });
 
         const getWeek = (date) => {
             const d = new Date(date);
@@ -1929,16 +2147,71 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
         };
 
         const ANIME_ORDER_STATUSES = [
-            { value: 'planned', label: '即将购买' },
-            { value: 'preorder', label: '预售中' },
+            { value: 'planned', label: '待决定' },
+            { value: 'grouping', label: '拼团中' },
+            { value: 'closed', label: '已截团' },
+            { value: 'preorder', label: '等出货' },
+            { value: 'shipped', label: '已出货' },
             { value: 'purchased', label: '已购买' },
+            { value: 'arrived', label: '已到货' },
         ];
         const getAnimeOrderStatus = (order) =>
             order.status || (order.type === '预售' ? 'preorder' : 'purchased');
         const getAnimeOrderStatusLabel = (order) =>
             ANIME_ORDER_STATUSES.find(s => s.value === getAnimeOrderStatus(order))?.label || '已购买';
+        const getAnimeOrderStatusClass = (order) => ({
+            planned: 'bg-blue-100 text-blue-600',
+            grouping: 'bg-pink-100 text-pink-700',
+            closed: 'bg-amber-100 text-amber-700',
+            preorder: 'bg-orange-100 text-orange-600',
+            shipped: 'bg-purple-100 text-purple-600',
+            purchased: 'bg-green-100 text-green-600',
+            arrived: 'bg-emerald-100 text-emerald-700',
+        }[getAnimeOrderStatus(order)] || 'bg-gray-100 text-gray-600');
+        const formatAnimeShipDate = (value) => {
+            const match = String(value || '').match(/^(\d{4})-(\d{2})/);
+            return match ? `${match[1]}年${Number(match[2])}月` : (value || '待定');
+        };
         const getAnimeOrderKind = (order) => order.itemKind || 'goods';
         const getAnimeOrderKindLabel = (order) => getAnimeOrderKind(order) === 'display' ? '谷美' : '谷子';
+        const isAnimeFinanceCategory = (category) => String(category || '').includes('周边');
+        const syncTransactionToAnimeOrder = (stored, tx, itemKind) => {
+            const orders = stored.animeOrders || [];
+            const linkedIndex = orders.findIndex(order => order.linkedTransactionId === tx.id);
+            if (!isAnimeFinanceCategory(tx.category)) {
+                if (linkedIndex !== -1) stored.animeOrders = orders.filter((_, index) => index !== linkedIndex);
+                return;
+            }
+            const previous = linkedIndex === -1 ? null : orders[linkedIndex];
+            const resolvedKind = itemKind || previous?.itemKind || 'goods';
+            const linkedOrder = {
+                ...(previous || {}),
+                id: previous?.id || tx.id + 1,
+                linkedTransactionId: tx.id,
+                name: tx.name || tx.category || '周边',
+                price: tx.amount,
+                currency: tx.currency,
+                status: 'purchased',
+                itemKind: resolvedKind === 'display' ? 'display' : 'goods',
+                platform: previous?.platform || '',
+                paid: true,
+                year: String(tx.date || TODAY_STR).slice(0, 4),
+                purchaseDate: tx.date || TODAY_STR,
+                color: previous?.color || (resolvedKind === 'display' ? '#c4b5fd' : '#f9a8d4'),
+                source: 'finance',
+            };
+            stored.animeOrders = linkedIndex === -1
+                ? [linkedOrder, ...orders]
+                : orders.map((order, index) => index === linkedIndex ? linkedOrder : order);
+        };
+        const addTransactionToStorage = (stored, tx, itemKind = 'goods') => {
+            stored.transactions = [...(stored.transactions || []), tx];
+            syncTransactionToAnimeOrder(stored, tx, itemKind);
+        };
+        const removeTransactionFromStorage = (stored, transactionId) => {
+            stored.transactions = (stored.transactions || []).filter(tx => tx.id !== transactionId);
+            stored.animeOrders = (stored.animeOrders || []).filter(order => order.linkedTransactionId !== transactionId);
+        };
 
         const AnimeWidget = ({ onOpen }) => {
             const [tab, setTab] = React.useState('orders');
@@ -1962,17 +2235,12 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     setDisplays(d.animeDisplay || []);
                 };
                 window.addEventListener('lifeos:synced', reload);
-                return () => window.removeEventListener('lifeos:synced', reload);
+                window.addEventListener('lifeos:reload', reload);
+                return () => {
+                    window.removeEventListener('lifeos:synced', reload);
+                    window.removeEventListener('lifeos:reload', reload);
+                };
             }, []);
-            const [oName, setOName] = React.useState('');
-            const [oPrice, setOPrice] = React.useState('');
-            const [oStatus, setOStatus] = React.useState('planned');
-            const [oItemKind, setOItemKind] = React.useState('goods');
-            const [oPlatform, setOPlatform] = React.useState('');
-            const [oPaid, setOPaid] = React.useState(false);
-            const [oPurchaseDate, setOPurchaseDate] = React.useState(TODAY_STR);
-            const [oColor, setOColor] = React.useState('#f9a8d4');
-            const [oCurrencyW, setOCurrencyW] = React.useState('RMB');
             const [gName, setGName] = React.useState('');
             const [gWork, setGWork] = React.useState('');
             const [gType, setGType] = React.useState('徽章');
@@ -1981,12 +2249,6 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const [dType, setDType] = React.useState('谷子袋');
             const [dColor, setDColor] = React.useState('#c4b5fd');
             const thisYear = new Date().getFullYear().toString();
-            const addOrder = () => {
-                if (!oName.trim()) return;
-                const purchaseYear = (oPurchaseDate || TODAY_STR).slice(0, 4);
-                saveOrders([{ id: Date.now(), name: oName.trim(), price: oPrice, status: oStatus, itemKind: oItemKind, platform: oPlatform, paid: oPaid, currency: oCurrencyW, year: purchaseYear, purchaseDate: oPurchaseDate, color: oColor }, ...orders]);
-                setOName(''); setOPrice(''); setOPlatform(''); setOPaid(false); setOStatus('planned'); setOItemKind('goods');
-            };
             const addGood = () => {
                 if (!gName.trim()) return;
                 saveGoods([{ id: Date.now(), name: gName.trim(), work: gWork, type: gType, quantity: 1, year: thisYear, color: gColor }, ...goods]);
@@ -1999,9 +2261,9 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             };
             const yearSpent = orders.filter(o => o.paid && o.year === thisYear).reduce((s,o) => s + (parseFloat(o.price)||0) * (o.currency==='RMB'?15:1), 0);
             const unpaid = orders.filter(o => !o.paid).length;
+            const activeGroups = orders.filter(o => getAnimeOrderStatus(o) === 'grouping').length;
             const goodsOrderRefs = orders.filter(o => o.itemKind === 'goods');
             const displayOrderRefs = orders.filter(o => o.itemKind === 'display');
-            const PLATFORMS = ['Animate','Melonbooks','Toranoana','Gamers','淘宝','微店','Yahoo拍卖','二手'];
             const GOODS_TYPES = ['徽章','立牌','亚克力','手办','抱枕','卡片','色纸','其他'];
             const DISPLAY_TYPES = ['谷子袋','展示架','收纳盒','相册','展示盒','其他'];
             return (
@@ -2012,7 +2274,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                         <div>
                             <p className="text-[9px] font-black text-pink-400 uppercase tracking-widest">ANIME</p>
                             <p className="text-xl font-black text-pink-700">¥{Math.round(yearSpent).toLocaleString()}</p>
-                            <p className="text-[9px] text-pink-400">{thisYear}年 · {unpaid > 0 ? <span className="text-orange-500">{unpaid}笔未付</span> : '全部已付'}</p>
+                            <p className="text-[9px] text-pink-400">{activeGroups > 0 ? <span className="text-pink-600">{activeGroups}团正在拼</span> : '暂无正在拼的团'}{unpaid > 0 && <span className="text-orange-500"> · {unpaid}笔未付</span>}</p>
                         </div>
                         <button onClick={onOpen} className="text-[10px] font-black px-2.5 py-1.5 rounded-xl text-white" style={{background:'#ec4899'}}>详情→</button>
                     </div>
@@ -2027,18 +2289,18 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     </div>
                     {/* 列表 */}
                     <div className="flex-1 overflow-y-auto hide-scrollbar px-3 space-y-1 min-h-0">
-                        {tab === 'orders' && orders.length === 0 && <p className="text-[10px] text-pink-300 text-center pt-3 font-bold">还没有记录，在下方添加</p>}
+                        {tab === 'orders' && orders.length === 0 && <p className="text-[10px] text-pink-300 text-center pt-3 font-bold">还没有拼团记录</p>}
                         {tab === 'orders' && orders.slice(0,4).map(o => (
                             <div key={o.id} className="bg-white/70 rounded-xl px-2.5 py-1.5 flex items-center gap-2">
                                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white shadow-sm" style={{ background: o.color || '#e5e7eb' }} />
-                                <span className={`text-[8px] font-black px-1 py-0.5 rounded-full flex-shrink-0 ${getAnimeOrderStatus(o)==='preorder'?'bg-orange-100 text-orange-600':getAnimeOrderStatus(o)==='planned'?'bg-blue-100 text-blue-600':'bg-green-100 text-green-600'}`}>{getAnimeOrderStatusLabel(o)}</span>
+                                <span className={`text-[8px] font-black px-1 py-0.5 rounded-full flex-shrink-0 ${getAnimeOrderStatusClass(o)}`}>{getAnimeOrderStatusLabel(o)}</span>
                                 <span className="text-[8px] font-black text-purple-500 flex-shrink-0">{getAnimeOrderKindLabel(o)}</span>
                                 <span className="flex-1 text-[11px] font-bold text-gray-700 truncate">{o.name}</span>
                                 <button onClick={() => saveOrders(orders.map(x => x.id===o.id ? {...x,paid:!x.paid} : x))}
                                     className={`text-[8px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 ${o.paid?'bg-green-100 text-green-600':'bg-red-50 text-red-400'}`}>
                                     {o.paid?'✓':'✗'}
                                 </button>
-                                {o.purchaseDate && <span className="text-[8px] text-gray-400 flex-shrink-0">{o.purchaseDate.slice(5)}</span>}
+                                {o.expectedShipDate && <span className="text-[8px] text-orange-500 flex-shrink-0">{formatAnimeShipDate(o.expectedShipDate)}</span>}
                                 {o.price && <span className="text-[10px] text-gray-500 flex-shrink-0">{o.currency==='RMB'?'¥':'¥'}{o.price}<span className="text-[8px] opacity-60">{o.currency||'JPY'}</span></span>}
                             </div>
                         ))}
@@ -2079,38 +2341,10 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     {/* 底部输入条 */}
                     <div className="px-3 pb-3 pt-2 flex-shrink-0 border-t border-pink-100/50">
                         {tab === 'orders' && (
-                            <>
-                                <div className="flex gap-1.5 mb-1.5">
-                                    <input value={oName} onChange={e=>setOName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addOrder()}
-                                        placeholder="添加二次元..." className="flex-1 text-xs bg-white/70 rounded-xl px-3 py-2 outline-none placeholder-pink-300 font-medium min-w-0" />
-                                    <input value={oPrice} onChange={e=>setOPrice(e.target.value)} placeholder="价格" type="text" inputMode="decimal"
-                                        className="text-xs bg-white/70 rounded-xl px-2 py-2 outline-none placeholder-pink-300 text-center font-medium flex-shrink-0" style={{width:'60px'}} />
-                                    <button onClick={()=>setOCurrencyW(c=>c==='JPY'?'RMB':'JPY')}
-                                        className="text-[9px] font-black px-1.5 py-1 rounded-lg bg-white/70 flex-shrink-0 text-pink-500">{oCurrencyW}</button>
-                                    <button onClick={addOrder} className="w-8 h-8 rounded-xl text-white font-black flex items-center justify-center flex-shrink-0" style={{background:'#ec4899'}}>+</button>
-                                </div>
-                                <div className="flex gap-1.5 items-center">
-                                    <select value={oItemKind} onChange={e=>setOItemKind(e.target.value)} className="text-[10px] font-bold bg-white/70 rounded-lg px-2 py-1 outline-none flex-shrink-0">
-                                        <option value="goods">谷子</option><option value="display">谷美</option>
-                                    </select>
-                                    <select value={oStatus} onChange={e=>setOStatus(e.target.value)} className="text-[10px] font-bold bg-white/70 rounded-lg px-2 py-1 outline-none flex-shrink-0">
-                                        {ANIME_ORDER_STATUSES.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
-                                    </select>
-                                    <input value={oPlatform} onChange={e=>setOPlatform(e.target.value)} list="widget-platforms" placeholder="购买平台..."
-                                        className="flex-1 text-[10px] bg-white/70 rounded-lg px-2 py-1 outline-none placeholder-pink-300 font-medium min-w-0" />
-                                    <datalist id="widget-platforms">{PLATFORMS.map(p=><option key={p} value={p}/>)}</datalist>
-                                    <input value={oPurchaseDate} onChange={e=>setOPurchaseDate(e.target.value)}
-                                        type="date"
-                                        className="flex-1 text-[10px] bg-white/70 rounded-lg px-2 py-1 outline-none font-medium min-w-0"
-                                        style={{minWidth:'100px'}} />
-                                    <input type="color" value={oColor} onChange={e=>setOColor(e.target.value)}
-                                        className="w-7 h-7 rounded-lg bg-white/70 p-0.5 flex-shrink-0" title="搭配颜色" />
-                                    <button onClick={()=>setOPaid(p=>!p)}
-                                        className={`text-[10px] font-black px-2 py-1 rounded-lg flex-shrink-0 transition-colors ${oPaid?'bg-green-100 text-green-700':'bg-red-50 text-red-400'}`}>
-                                        {oPaid?'已付':'未付'}
-                                    </button>
-                                </div>
-                            </>
+                            <button onClick={onOpen}
+                                className="w-full py-2 rounded-xl bg-white/70 text-pink-600 text-[10px] font-black border border-pink-100">
+                                打开拼团台账 · 可整块粘贴 Excel
+                            </button>
                         )}
                         {tab === 'goods' && (
                             <div className="flex gap-1.5">
@@ -2147,7 +2381,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const thisYear = new Date().getFullYear().toString();
             const [oName, setOName] = React.useState(editItem?.name||'');
             const [oWork, setOWork] = React.useState(editItem?.work||'');
-            const [oStatus, setOStatus] = React.useState(editItem ? getAnimeOrderStatus(editItem) : 'planned');
+            const [oStatus, setOStatus] = React.useState(editItem ? getAnimeOrderStatus(editItem) : 'grouping');
             const [oItemKind, setOItemKind] = React.useState(editItem ? getAnimeOrderKind(editItem) : 'goods');
             const [oPlatform, setOPlatform] = React.useState(editItem?.platform||'');
             const [oPrice, setOPrice] = React.useState(editItem?.price||'');
@@ -2155,6 +2389,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const [oPaid, setOPaid] = React.useState(editItem?.paid||false);
             const [oYear, setOYear] = React.useState(editItem?.year||thisYear);
             const [oPurchaseDate, setOPurchaseDate] = React.useState(editItem?.purchaseDate||'');
+            const [oExpectedShipDate, setOExpectedShipDate] = React.useState(editItem?.expectedShipDate||'');
             const [oColor, setOColor] = React.useState(editItem?.color||'#f9a8d4');
             const [oNote, setONote] = React.useState(editItem?.note||'');
             const [gName, setGName] = React.useState(editItem?.name||'');
@@ -2176,13 +2411,13 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const handleSave = () => {
                 if (tab === 'orders') {
                     if (!oName.trim()) return;
-                    onSave({ id: editItem?.id||Date.now(), name:oName.trim(), work:oWork.trim(), status:oStatus, itemKind:oItemKind, platform:oPlatform, price:oPrice, currency:oCurrency, paid:oPaid, year:oPurchaseDate?.slice(0,4)||oYear, purchaseDate:oPurchaseDate, color:oColor, note:oNote });
+                    onSave({ ...(editItem||{}), id: editItem?.id||Date.now(), name:oName.trim(), work:oWork.trim(), status:oStatus, itemKind:oItemKind, platform:oPlatform.trim(), price:oPrice, currency:oCurrency, paid:oPaid, year:oPurchaseDate?.slice(0,4)||oYear, purchaseDate:oPurchaseDate, expectedShipDate:oExpectedShipDate, color:oColor, note:oNote });
                 } else if (tab === 'goods') {
                     if (!gName.trim()) return;
-                    onSave({ id: editItem?.id||Date.now(), name:gName.trim(), work:gWork.trim(), type:gType, quantity:parseInt(gQty)||1, year:gYear, coverUrl:gCover, color:gColor, note:gNote });
+                    onSave({ ...(editItem||{}), id: editItem?.id||Date.now(), name:gName.trim(), work:gWork.trim(), type:gType, quantity:parseInt(gQty)||1, year:gYear, coverUrl:gCover, color:gColor, note:gNote });
                 } else {
                     if (!dName.trim()) return;
-                    onSave({ id: editItem?.id||Date.now(), name:dName.trim(), type:dType, capacity:dCapacity, goodsIds:dGoodsIds, year:dYear, color:dColor, note:dNote });
+                    onSave({ ...(editItem||{}), id: editItem?.id||Date.now(), name:dName.trim(), type:dType, capacity:dCapacity, goodsIds:dGoodsIds, year:dYear, color:dColor, note:dNote });
                 }
             };
             const inputCls = "w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border-2 border-transparent focus:border-pink-200 transition-colors";
@@ -2198,8 +2433,18 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                         </div>
                         <div className="space-y-3">
                             {tab === 'orders' && (<>
-                                <div><label className={labelCls}>商品名称 *</label><input value={oName} onChange={e=>setOName(e.target.value)} placeholder="商品名称" className={inputCls} autoFocus /></div>
-                                <div><label className={labelCls}>作品</label><input value={oWork} onChange={e=>setOWork(e.target.value)} placeholder="所属作品" className={inputCls} /></div>
+                                <div>
+                                    <label className={labelCls}>拼了什么 *</label>
+                                    <textarea value={oName} onChange={e=>setOName(e.target.value)} placeholder="多件可以一起写，例如：A立牌×2、B徽章×3" className={`${inputCls} min-h-[72px] resize-none`} autoFocus />
+                                    <p className="text-[9px] text-gray-400 mt-1">同一个团的东西写在这一格，不用拆成多条。</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div><label className={labelCls}>团名 / 平台</label>
+                                        <input value={oPlatform} onChange={e=>setOPlatform(e.target.value)} list="anime-platforms-list" placeholder="团长、店铺或平台" className={inputCls} />
+                                        <datalist id="anime-platforms-list">{platforms.map(p=><option key={p} value={p}/>)}</datalist>
+                                    </div>
+                                    <div><label className={labelCls}>作品</label><input value={oWork} onChange={e=>setOWork(e.target.value)} placeholder="所属作品" className={inputCls} /></div>
+                                </div>
                                 <div className="grid grid-cols-2 gap-2">
                                     <div><label className={labelCls}>购买类别</label>
                                         <select value={oItemKind} onChange={e=>setOItemKind(e.target.value)} className={inputCls}>
@@ -2214,16 +2459,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                     <div><label className={labelCls}>购买日期</label><input type="date" value={oPurchaseDate} onChange={e=>setOPurchaseDate(e.target.value)} className={inputCls} /></div>
-                                    <div><label className={labelCls}>搭配颜色</label>
-                                        <div className="flex items-center gap-2">
-                                            <input type="color" value={oColor} onChange={e=>setOColor(e.target.value)} className="w-11 h-10 rounded-xl bg-gray-50 p-1" />
-                                            <input value={oColor} onChange={e=>setOColor(e.target.value)} className={inputCls} />
-                                        </div>
-                                    </div>
-                                </div>
-                                <div><label className={labelCls}>购买平台</label>
-                                    <input value={oPlatform} onChange={e=>setOPlatform(e.target.value)} list="anime-platforms-list" placeholder="选择或输入平台" className={inputCls} />
-                                    <datalist id="anime-platforms-list">{platforms.map(p=><option key={p} value={p}/>)}</datalist>
+                                    <div><label className={labelCls}>预计出货</label><input type="month" value={oExpectedShipDate} onChange={e=>setOExpectedShipDate(e.target.value)} className={inputCls} /></div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                     <div><label className={labelCls}>价格</label><input value={oPrice} onChange={e=>setOPrice(e.target.value)} type="text" inputMode="decimal" placeholder="0" className={inputCls} /></div>
@@ -2335,7 +2571,11 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     setDisplays(d.animeDisplay || []);
                 };
                 window.addEventListener('lifeos:synced', reload);
-                return () => window.removeEventListener('lifeos:synced', reload);
+                window.addEventListener('lifeos:reload', reload);
+                return () => {
+                    window.removeEventListener('lifeos:synced', reload);
+                    window.removeEventListener('lifeos:reload', reload);
+                };
             }, []);
             const thisYear = new Date().getFullYear().toString();
             const [filterYear, setFilterYear] = React.useState('全部');
@@ -2343,6 +2583,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const [goodsSearch, setGoodsSearch] = React.useState('');
             const [showAddModal, setShowAddModal] = React.useState(false);
             const [editItem, setEditItem] = React.useState(null);
+            const [showBatchAdd, setShowBatchAdd] = React.useState(false);
+            const [batchText, setBatchText] = React.useState('');
             const allYears = ['全部', ...Array.from(new Set([
                 ...orders.map(o => o.year),
                 ...goods.map(g => g.year),
@@ -2389,16 +2631,74 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const totalUnpaid = yearOrders.filter(o => !o.paid).reduce((s,o) => s + (parseFloat(o.price)||0) * (o.currency==='RMB'?15:1), 0);
             const GOODS_TYPES = ['徽章','立牌','亚克力','手办','抱枕','卡片','色纸','其他'];
             const DISPLAY_TYPES = ['谷子袋','展示架','收纳盒','相册','展示盒','其他'];
-            const PLATFORMS = ['Animate','Melonbooks','Toranoana','Gamers','淘宝','微店','Yahoo拍卖','二手'];
+            const PLATFORMS = ['拼团','Animate','Melonbooks','Toranoana','Gamers','淘宝','微店','闲鱼','Yahoo拍卖','二手'];
+            const normalizeBatchStatus = (raw) => {
+                const value = String(raw || '').trim();
+                const exact = ANIME_ORDER_STATUSES.find(status => status.label === value || status.value === value);
+                if (exact) return exact.value;
+                if (/到货|收货/.test(value)) return 'arrived';
+                if (/已?出货|发货/.test(value)) return 'shipped';
+                if (/等出货|预售/.test(value)) return 'preorder';
+                if (/截团|成团/.test(value)) return 'closed';
+                if (/待决定|想拼|考虑/.test(value)) return 'planned';
+                return 'grouping';
+            };
+            const normalizeBatchMonth = (raw) => {
+                const value = String(raw || '').trim();
+                if (!value) return '';
+                const full = value.match(/(20\d{2})\D{0,3}(\d{1,2})/);
+                if (full) return `${full[1]}-${String(Math.min(12, Number(full[2]))).padStart(2,'0')}`;
+                const monthOnly = value.match(/(\d{1,2})\s*月/);
+                return monthOnly ? `${thisYear}-${String(Math.min(12, Number(monthOnly[1]))).padStart(2,'0')}` : '';
+            };
+            const importBatchOrders = () => {
+                const lines = batchText.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+                const imported = lines.map((line, index) => {
+                    const columns = (line.includes('\t') ? line.split('\t') : line.split(/[|｜]/)).map(value => value.trim());
+                    const [platform, name, expectedShipDate, price, currency, paid, status, work, note] = columns;
+                    if (index === 0 && /团名|平台/.test(platform || '') && /拼了|商品/.test(name || '')) return null;
+                    if (!name) return null;
+                    return {
+                        id: Date.now() + index,
+                        name,
+                        platform: platform || '',
+                        expectedShipDate: normalizeBatchMonth(expectedShipDate),
+                        price: String(price || '').replace(/[^\d.]/g, ''),
+                        currency: String(currency || '').toUpperCase() === 'JPY' ? 'JPY' : 'RMB',
+                        paid: /已付|是|yes|paid|✓/i.test(String(paid || '')),
+                        status: normalizeBatchStatus(status),
+                        work: work || '',
+                        note: note || '',
+                        itemKind: 'goods',
+                        purchaseDate: TODAY_STR,
+                        year: TODAY_STR.slice(0,4),
+                        color: '#f9a8d4',
+                    };
+                }).filter(Boolean);
+                if (!imported.length) return;
+                saveOrders([...imported, ...orders]);
+                setBatchText('');
+                setShowBatchAdd(false);
+                setOrderFilter('all');
+            };
+            const orderStatusRank = { grouping: 0, closed: 1, preorder: 2, shipped: 3, planned: 4, purchased: 5, arrived: 6 };
+            const sortedFilteredOrders = [...filteredOrders].sort((a, b) => {
+                const statusDiff = (orderStatusRank[getAnimeOrderStatus(a)] ?? 9) - (orderStatusRank[getAnimeOrderStatus(b)] ?? 9);
+                if (statusDiff) return statusDiff;
+                const aDate = a.expectedShipDate || '9999-99';
+                const bDate = b.expectedShipDate || '9999-99';
+                return aDate.localeCompare(bDate) || Number(b.id || 0) - Number(a.id || 0);
+            });
             return (
-                <div className="animate-fade-in">
+                <div className="animate-fade-in w-full max-w-full min-w-0 overflow-x-hidden"
+                    style={{ width: window.innerWidth < 768 ? 'calc(100vw - 2rem)' : '100%', maxWidth: '100%', minWidth: 0 }}>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
                         {[
                             { id: 'paid', label: '已付总额(JPY)', value: `¥${Math.round(totalPaid).toLocaleString()}`, color: '#ec4899', sub: filterYear === '全部' ? '全部时间' : filterYear+'年', action: () => { setTab('orders'); setOrderFilter('paid'); } },
                             { id: 'unpaid', label: '待付款', value: `¥${Math.round(totalUnpaid).toLocaleString()}`, color: yearOrders.some(o=>!o.paid) ? '#f97316' : '#94a3b8', sub: `${yearOrders.filter(o=>!o.paid).length}笔订单`, action: () => { setTab('orders'); setOrderFilter('unpaid'); } },
-                            { id: 'goods', label: '谷子总数', value: yearGoods.reduce((s,g)=>s+(parseInt(g.quantity)||1),0), color: '#8b5cf6', sub: `${yearGoods.length}种`, action: () => setTab('goods') },
-                            { id: 'preorder', label: '预售中', value: yearOrders.filter(o=>getAnimeOrderStatus(o)==='preorder').length, color: '#f97316', sub: '等待到货', action: () => { setTab('orders'); setOrderFilter('preorder'); } },
-                            { id: 'planned', label: '即将购买', value: yearOrders.filter(o=>getAnimeOrderStatus(o)==='planned').length, color: '#3b82f6', sub: '购买计划', action: () => { setTab('orders'); setOrderFilter('planned'); } },
+                            { id: 'grouping', label: '正在拼团', value: yearOrders.filter(o=>getAnimeOrderStatus(o)==='grouping').length, color: '#ec4899', sub: '仍可参团', action: () => { setTab('orders'); setOrderFilter('grouping'); } },
+                            { id: 'preorder', label: '等待出货', value: yearOrders.filter(o=>getAnimeOrderStatus(o)==='preorder').length, color: '#f97316', sub: '已拼，等预计日期', action: () => { setTab('orders'); setOrderFilter('preorder'); } },
+                            { id: 'shipped', label: '已经出货', value: yearOrders.filter(o=>getAnimeOrderStatus(o)==='shipped').length, color: '#8b5cf6', sub: '运输途中', action: () => { setTab('orders'); setOrderFilter('shipped'); } },
                         ].map(s => (
                             <button key={s.id} onClick={s.action}
                                 className="bg-white rounded-2xl p-4 shadow-sm border text-left hover:-translate-y-0.5 hover:shadow-md transition-all"
@@ -2411,7 +2711,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     </div>
                     <div className="flex items-center gap-3 mb-4 flex-wrap">
                         <div className="flex gap-1 bg-white rounded-2xl p-1 shadow-sm border border-gray-100">
-                            {[['orders','📦 订单'],['goods','🌸 谷子'],['displays','🎒 谷美']].map(([key,label]) => (
+                            {[['orders','📋 拼团台账'],['goods','🌸 谷子'],['displays','🎒 谷美']].map(([key,label]) => (
                                 <button key={key} onClick={() => setTab(key)}
                                     className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${tab===key ? 'bg-pink-500 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
                                     {label}
@@ -2422,17 +2722,47 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                             className="ml-auto text-xs font-bold bg-white border border-gray-100 rounded-xl px-3 py-2 outline-none shadow-sm">
                             {allYears.map(y => <option key={y}>{y}</option>)}
                         </select>
+                        {tab === 'orders' && (
+                            <button onClick={() => setShowBatchAdd(value => !value)}
+                                className={`px-3 h-9 rounded-xl text-xs font-black border transition-colors ${showBatchAdd?'bg-pink-100 text-pink-700 border-pink-200':'bg-white text-gray-500 border-gray-100'}`}>
+                                {showBatchAdd ? '收起批量录入' : '从 Excel / 表格粘贴'}
+                            </button>
+                        )}
                         <button onClick={() => { setEditItem(null); setShowAddModal(true); }}
-                            className="w-9 h-9 rounded-xl text-white text-xl font-black flex items-center justify-center flex-shrink-0 hover:opacity-90"
-                            style={{ background: '#ec4899' }}>+</button>
+                            className="px-3 h-9 rounded-xl text-white text-xs font-black flex items-center justify-center flex-shrink-0 hover:opacity-90"
+                            style={{ background: '#ec4899' }}>{tab==='orders'?'＋ 新增一团':'＋ 新增'}</button>
                     </div>
+                    {tab === 'orders' && showBatchAdd && (
+                        <div className="bg-white rounded-2xl border border-pink-100 shadow-sm p-4 mb-4">
+                            <div className="flex items-start justify-between gap-3 mb-3">
+                                <div>
+                                    <p className="text-sm font-black text-gray-800">一次粘贴很多团</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">可直接复制 Excel 的多行，也可以用 | 分隔。每行顺序：</p>
+                                    <p className="text-[10px] font-bold text-pink-600 mt-1">团名/平台｜拼了什么｜预计出货｜金额｜币种｜付款｜状态｜作品｜备注</p>
+                                </div>
+                                <button onClick={()=>{setShowBatchAdd(false);setBatchText('');}} className="text-gray-400 font-black">×</button>
+                            </div>
+                            <textarea value={batchText} onChange={e=>setBatchText(e.target.value)}
+                                placeholder={'小王团｜A立牌×2、B徽章×3｜2026-11｜128｜RMB｜已付｜拼团中｜作品名｜\n淘宝店铺｜角色手办｜2027-02｜9800｜JPY｜未付｜等出货｜作品名｜'}
+                                className="w-full min-h-[120px] bg-gray-50 rounded-xl px-3 py-2.5 text-xs leading-6 outline-none border-2 border-transparent focus:border-pink-200 resize-y" />
+                            <div className="flex items-center justify-between gap-3 mt-3">
+                                <span className="text-[10px] text-gray-400">状态可写：待决定、拼团中、已截团、等出货、已出货、已到货</span>
+                                <button onClick={importBatchOrders} disabled={!batchText.trim()}
+                                    className="px-4 py-2 rounded-xl bg-pink-500 text-white text-xs font-black disabled:opacity-40">批量加入台账</button>
+                            </div>
+                        </div>
+                    )}
                     {tab === 'orders' && (
                         <div className="flex gap-2 mb-4 overflow-x-auto hide-scrollbar pb-1">
                             {[
                                 ['all','全部'],
-                                ['planned','即将购买'],
-                                ['preorder','预售中'],
+                                ['planned','待决定'],
+                                ['grouping','拼团中'],
+                                ['closed','已截团'],
+                                ['preorder','等出货'],
+                                ['shipped','已出货'],
                                 ['purchased','已购买'],
+                                ['arrived','已到货'],
                                 ['unpaid','待付款'],
                                 ['paid','已付款'],
                             ].map(([key, label]) => {
@@ -2462,41 +2792,76 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                         </div>
                     )}
                     {tab === 'orders' && (
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-50 overflow-hidden">
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-50 overflow-x-auto hide-scrollbar w-full max-w-full min-w-0">
                             {filteredOrders.length === 0 && (
                                 <div className="py-16 text-center">
                                     <p className="text-3xl mb-2">📦</p>
                                     <p className="text-sm font-bold text-gray-400">
-                                        {orderFilter === 'all' ? '还没有订单记录' : `没有「${orderFilter === 'paid' ? '已付款' : orderFilter === 'unpaid' ? '待付款' : ANIME_ORDER_STATUSES.find(s=>s.value===orderFilter)?.label}」订单`}
+                                        {orderFilter === 'all' ? '还没有拼团记录' : `没有「${orderFilter === 'paid' ? '已付款' : orderFilter === 'unpaid' ? '待付款' : ANIME_ORDER_STATUSES.find(s=>s.value===orderFilter)?.label}」记录`}
                                     </p>
                                 </div>
                             )}
-                            {[...filteredOrders].sort((a,b)=>b.id-a.id).map(o => (
-                                <div key={o.id} className="flex items-center gap-3 px-4 py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors group">
-                                    <span className="w-4 h-4 rounded-full border-2 border-white shadow flex-shrink-0" style={{ background: o.color || '#e5e7eb' }} title={o.color || '未设置颜色'} />
-                                    <div className="flex flex-col gap-1 flex-shrink-0">
-                                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full text-center ${getAnimeOrderStatus(o)==='preorder'?'bg-orange-100 text-orange-600':getAnimeOrderStatus(o)==='planned'?'bg-blue-100 text-blue-600':'bg-green-100 text-green-600'}`}>{getAnimeOrderStatusLabel(o)}</span>
-                                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full text-center ${getAnimeOrderKind(o)==='display'?'bg-purple-100 text-purple-600':'bg-pink-100 text-pink-600'}`}>{getAnimeOrderKindLabel(o)}</span>
-                                        <button onClick={() => saveOrders(orders.map(x => x.id===o.id ? {...x, paid:!x.paid} : x))}
-                                            className={`text-[9px] font-black px-1.5 py-0.5 rounded-full text-center transition-colors ${o.paid?'bg-green-100 text-green-600':'bg-red-50 text-red-400 hover:bg-red-100'}`}>
-                                            {o.paid?'✓已付':'✗未付'}
-                                        </button>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-black text-gray-800 truncate">{o.name}</p>
-                                        <p className="text-[10px] text-gray-400 font-medium">{o.work && `《${o.work}》`}{o.platform && ` · ${o.platform}`}{o.purchaseDate ? ` · ${o.purchaseDate}` : o.year ? ` · ${o.year}年` : ''}</p>
-                                    </div>
-                                    <div className="flex-shrink-0 text-right">
-                                        <p className="text-sm font-black text-gray-700">¥{o.price}<span className="text-[9px] text-gray-400 ml-0.5">{o.currency}</span></p>
-                                    </div>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                                        <button onClick={() => { setEditItem(o); setShowAddModal(true); }}
-                                            className="text-[10px] font-black px-2 py-1 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200">编辑</button>
-                                        <button onClick={() => { if(window.confirm(`删除「${o.name}」？`)) saveOrders(orders.filter(x=>x.id!==o.id)); }}
-                                            className="text-[10px] font-black px-2 py-1 rounded-lg bg-red-50 text-red-400 hover:bg-red-100">删除</button>
-                                    </div>
-                                </div>
-                            ))}
+                            {filteredOrders.length > 0 && (
+                                <table className="w-full min-w-[880px] border-collapse text-left">
+                                    <thead>
+                                        <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-wider">
+                                            <th className="px-3 py-2.5 w-[118px]">状态</th>
+                                            <th className="px-3 py-2.5 w-[150px]">团名 / 平台</th>
+                                            <th className="px-3 py-2.5 min-w-[220px]">拼了什么</th>
+                                            <th className="px-3 py-2.5 w-[150px]">预计出货</th>
+                                            <th className="px-3 py-2.5 w-[105px] text-right">金额</th>
+                                            <th className="px-3 py-2.5 w-[72px] text-center">付款</th>
+                                            <th className="px-3 py-2.5 w-[105px] text-right">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {sortedFilteredOrders.map(o => (
+                                            <tr key={o.id} className="border-t border-gray-50 hover:bg-pink-50/30 align-middle">
+                                                <td className="px-3 py-2.5">
+                                                    <select value={getAnimeOrderStatus(o)}
+                                                        onChange={e=>saveOrders(orders.map(item=>item.id===o.id?{...item,status:e.target.value}:item))}
+                                                        className={`w-full rounded-lg px-2 py-1.5 text-[10px] font-black outline-none border-0 ${getAnimeOrderStatusClass(o)}`}>
+                                                        {ANIME_ORDER_STATUSES.map(status=><option key={status.value} value={status.value}>{status.label}</option>)}
+                                                    </select>
+                                                </td>
+                                                <td className="px-3 py-2.5">
+                                                    <p className="text-xs font-bold text-gray-700 break-words">{o.platform || '—'}</p>
+                                                    {o.work && <p className="text-[9px] text-gray-400 mt-0.5">《{o.work}》</p>}
+                                                </td>
+                                                <td className="px-3 py-2.5">
+                                                    <p className="text-xs font-black text-gray-800 whitespace-pre-line break-words leading-5">{o.name}</p>
+                                                    {o.note && <p className="text-[9px] text-gray-400 mt-0.5 break-words">{o.note}</p>}
+                                                </td>
+                                                <td className="px-3 py-2.5">
+                                                    <input type="month" value={o.expectedShipDate || ''}
+                                                        onChange={e=>saveOrders(orders.map(item=>item.id===o.id?{...item,expectedShipDate:e.target.value}:item))}
+                                                        title={formatAnimeShipDate(o.expectedShipDate)}
+                                                        className="w-full rounded-lg bg-gray-50 px-2 py-1.5 text-[10px] font-bold text-gray-600 outline-none border border-transparent focus:border-pink-200" />
+                                                    {!o.expectedShipDate && <p className="text-[9px] text-orange-400 mt-0.5">待补预计日期</p>}
+                                                </td>
+                                                <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                                                    <span className="text-xs font-black text-gray-700">{o.price ? Number(o.price).toLocaleString() : '—'}</span>
+                                                    {o.price && <span className="text-[9px] text-gray-400 ml-1">{o.currency || 'JPY'}</span>}
+                                                </td>
+                                                <td className="px-3 py-2.5 text-center">
+                                                    <button onClick={() => saveOrders(orders.map(item => item.id===o.id ? {...item, paid:!item.paid} : item))}
+                                                        className={`text-[10px] font-black px-2 py-1.5 rounded-lg ${o.paid?'bg-green-100 text-green-700':'bg-red-50 text-red-400'}`}>
+                                                        {o.paid?'已付':'未付'}
+                                                    </button>
+                                                </td>
+                                                <td className="px-3 py-2.5">
+                                                    <div className="flex justify-end gap-1">
+                                                        <button onClick={() => { setEditItem(o); setShowAddModal(true); }}
+                                                            className="text-[10px] font-black px-2 py-1.5 rounded-lg bg-gray-100 text-gray-500">编辑</button>
+                                                        <button onClick={() => { if(window.confirm(`删除「${o.name}」？`)) saveOrders(orders.filter(item=>item.id!==o.id)); }}
+                                                            className="text-[10px] font-black px-2 py-1.5 rounded-lg bg-red-50 text-red-400">×</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
                         </div>
                     )}
                     {tab === 'goods' && (
@@ -3230,7 +3595,11 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     } catch {}
                 };
                 window.addEventListener('lifeos:synced', handler);
-                return () => window.removeEventListener('lifeos:synced', handler);
+                window.addEventListener('lifeos:reload', handler);
+                return () => {
+                    window.removeEventListener('lifeos:synced', handler);
+                    window.removeEventListener('lifeos:reload', handler);
+                };
             }, []);
 
             const [editing, setEditing] = useState(null);
@@ -3254,24 +3623,37 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const weekLabel = weekOffset === 0 ? '本周'
                 : `${monday.getMonth()+1}月${monday.getDate()}日-${sunday.getMonth()+1}月${sunday.getDate()}日`;
 
-            const saveMeals = (next) => {
-                const nextAll = { ...allMeals, [weekKey]: next };
-                setAllMeals(nextAll);
-                try {
-                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    d.allMeals = nextAll;
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
-                } catch {}
-                syncToCloud();
-            };
             // 用 code 作为 key，避免跨周 date 串混淆
             const startEdit = (code, slot) => { setEditing({ code, slot }); setDraft(meals[code]?.[slot] || ''); };
             const commitEdit = () => {
                 if (!editing) return;
                 const { code, slot } = editing;
-                const dayData = { ...(meals[code] || {}) };
-                if (draft.trim()) dayData[slot] = draft.trim(); else delete dayData[slot];
-                saveMeals({ ...meals, [code]: dayData });
+                try {
+                    // 始终基于 localStorage 最新值写入，避免同步事件和正在编辑的 React state 互相覆盖。
+                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                    const latestAll = stored.allMeals || {};
+                    const latestWeek = latestAll[weekKey] || {};
+                    const dayData = { ...(latestWeek[code] || {}) };
+                    if (draft.trim()) dayData[slot] = draft.trim(); else delete dayData[slot];
+                    const currentMeta = latestAll[MEALS_SYNC_META_KEY] || {};
+                    const weekMeta = currentMeta[weekKey] || {};
+                    const nextMeta = {
+                        ...currentMeta,
+                        [weekKey]: {
+                            ...weekMeta,
+                            [code]: { ...(weekMeta[code] || {}), [slot]: Date.now() },
+                        },
+                    };
+                    const nextAll = {
+                        ...latestAll,
+                        [weekKey]: { ...latestWeek, [code]: dayData },
+                        [MEALS_SYNC_META_KEY]: nextMeta,
+                    };
+                    stored.allMeals = nextAll;
+                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                    setAllMeals(nextAll);
+                    syncToCloud();
+                } catch {}
                 setEditing(null);
             };
 
@@ -4115,9 +4497,17 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
         };
 
         const FinanceWidget = ({ onOpen }) => {
+            const liveToday = useLiveTodayStr();
             const [showAdd, setShowAdd] = useState(false);
-            const [addForm, setAddForm] = useState({ amount: '', currency: 'JPY', category: '', name: '', date: TODAY_STR });
+            const [addForm, setAddForm] = useState({ amount: '', currency: 'JPY', category: '', name: '', date: liveToday, animeKind: 'goods' });
             const [txKey, setTxKey] = useState(0); // triggers re-read of MOCK_TRANSACTIONS
+            const previousTodayRef = useRef(liveToday);
+            useEffect(() => {
+                const previousToday = previousTodayRef.current;
+                setAddForm(form => form.date === previousToday ? { ...form, date: liveToday } : form);
+                previousTodayRef.current = liveToday;
+                setTxKey(k => k + 1);
+            }, [liveToday]);
             useEffect(() => {
                 const handler = () => setTxKey(k => k + 1);
                 window.addEventListener('lifeos:reload', handler);
@@ -4135,22 +4525,10 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             })();
             const exchRate = getFinanceStorage().exchangeRate || 0.048;
             const toJPYw = (amt, cur) => (cur === 'RMB' || cur === 'CNY') ? amt / exchRate : amt;
-            const nowMonth = TODAY_STR.slice(0, 7);
-            const _getWeekRange = () => {
-                const now = new Date();
-                const day = now.getDay();
-                const diffToMonday = day === 0 ? -6 : 1 - day;
-                const monday = new Date(now);
-                monday.setDate(now.getDate() + diffToMonday);
-                monday.setHours(0, 0, 0, 0);
-                const sunday = new Date(monday);
-                sunday.setDate(monday.getDate() + 6);
-                sunday.setHours(23, 59, 59, 999);
-                return { start: monday, end: sunday };
-            };
-            const { start: _wStart, end: _wEnd } = _getWeekRange();
-            const weekTxW = MOCK_TRANSACTIONS.filter(t => { const d = new Date(t.date); return d >= _wStart && d <= _wEnd; });
-            const todayTxW = MOCK_TRANSACTIONS.filter(t => t.date === TODAY_STR);
+            const nowMonth = liveToday.slice(0, 7);
+            const liveWeekDates = getWeekDates(new Date(liveToday + 'T12:00:00'));
+            const weekTxW = MOCK_TRANSACTIONS.filter(t => t.date >= liveWeekDates[0] && t.date <= liveWeekDates[6]);
+            const todayTxW = MOCK_TRANSACTIONS.filter(t => t.date === liveToday);
             const wWeekTotal = Math.round(weekTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
             const wTodayTotal = Math.round(todayTxW.reduce((s, t) => s + toJPYw(parseFloat(t.amount) || 0, t.currency), 0));
             const monthTxW = MOCK_TRANSACTIONS.filter(t => t.date && t.date.startsWith(nowMonth));
@@ -4161,7 +4539,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 haptic(60);
                 const tx = {
                     id: Date.now(),
-                    date: addForm.date || TODAY_STR,
+                    date: addForm.date || liveToday,
                     name: addForm.name.trim() || addForm.category || '记账',
                     amount: parseFloat(addForm.amount),
                     currency: addForm.currency,
@@ -4169,13 +4547,13 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 };
                 try {
                     const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    stored.transactions = [...(stored.transactions || []), tx];
+                    addTransactionToStorage(stored, tx, addForm.animeKind);
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
                 } catch {}
                 syncToCloud();
                 MOCK_TRANSACTIONS.push(tx);
                 window.dispatchEvent(new CustomEvent('lifeos:reload'));
-                setAddForm({ amount: '', currency: 'JPY', category: '', name: '', date: TODAY_STR });
+                setAddForm({ amount: '', currency: 'JPY', category: '', name: '', date: liveToday, animeKind: 'goods' });
                 setShowAdd(false);
                 setTxKey(k => k + 1);
             };
@@ -4185,7 +4563,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 if (idx !== -1) MOCK_TRANSACTIONS.splice(idx, 1);
                 try {
                     const s = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    s.transactions = (s.transactions || []).filter(t => t.id !== id);
+                    removeTransactionFromStorage(s, id);
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(s));
                 } catch {}
                 syncToCloud();
@@ -4234,7 +4612,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                 </div>
                             </div>
                             <div className="flex flex-row items-center gap-1 flex-shrink-0">
-                                <button onClick={() => { const now = new Date(); const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`; setAddForm(f => ({...f, date: today})); setShowAdd(true); }}
+                                <button onClick={() => { setAddForm(f => ({...f, date: liveToday})); setShowAdd(true); }}
                                     className="font-bold rounded-full hover:opacity-80"
                                     style={{ color: '#fff', background: 'var(--accent)', fontSize: '9px', padding: '3px 7px', whiteSpace: 'nowrap' }}>
                                     +记一笔
@@ -4305,7 +4683,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                 onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-between mb-2">
                                     <h2 className="font-black text-base text-gray-800">记一笔</h2>
-                                    <input type="date" value={addForm.date} max={TODAY_STR}
+                                    <input type="date" value={addForm.date}
                                         onChange={e => setAddForm(f => ({ ...f, date: e.target.value }))}
                                         className="text-[11px] font-bold text-gray-500 bg-gray-50 rounded-xl px-2 py-1 border border-gray-200 outline-none" />
                                 </div>
@@ -4341,6 +4719,21 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                     ))}
                                 </select>
 
+                                {isAnimeFinanceCategory(addForm.category) && (
+                                    <div className="mb-2 rounded-2xl bg-pink-50 border border-pink-100 p-2">
+                                        <p className="text-[10px] font-black text-pink-500 mb-1.5 px-1">自动同步到谷子库 · 这笔是？</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {[['goods','🌸 谷子'],['display','🎒 谷美']].map(([value, label]) => (
+                                                <button key={value} type="button"
+                                                    onClick={() => setAddForm(f => ({ ...f, animeKind: value }))}
+                                                    className={`py-2 rounded-xl text-xs font-black border transition-all ${addForm.animeKind === value ? 'bg-pink-500 text-white border-pink-500 shadow-sm' : 'bg-white text-gray-500 border-pink-100'}`}>
+                                                    {label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* 备注 */}
                                 <input
                                     type="text" placeholder="备注（可选）"
@@ -4372,10 +4765,21 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
         // Finance 完整视图
         const FinanceView = () => {
+            const liveToday = useLiveTodayStr();
             const [tab, setTab] = useState('month');
-            const [displayMonth, setDisplayMonth] = useState(new Date().getMonth() + 1);
-            const [displayYear, setDisplayYear] = useState(new Date().getFullYear());
-            const [selectedDay, setSelectedDay] = useState(() => TODAY_STR); // 日历选中日，默认今天
+            const [displayMonth, setDisplayMonth] = useState(() => Number(liveToday.slice(5, 7)));
+            const [displayYear, setDisplayYear] = useState(() => Number(liveToday.slice(0, 4)));
+            const [selectedDay, setSelectedDay] = useState(() => liveToday); // 日历选中日，默认今天
+            const previousTodayRef = useRef(liveToday);
+            useEffect(() => {
+                const previousToday = previousTodayRef.current;
+                if (selectedDay === previousToday) {
+                    setSelectedDay(liveToday);
+                    setDisplayYear(Number(liveToday.slice(0, 4)));
+                    setDisplayMonth(Number(liveToday.slice(5, 7)));
+                }
+                previousTodayRef.current = liveToday;
+            }, [liveToday]);
             const [displayCurrency, setDisplayCurrency] = useState('JPY'); // 列表货币切换
             const [detailCurrency, setDetailCurrency] = useState('JPY'); // 当日明细货币切换
             const [searchTx, setSearchTx] = useState('');
@@ -4399,7 +4803,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 if (idx !== -1) MOCK_TRANSACTIONS.splice(idx, 1);
                 try {
                     const s = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    s.transactions = (s.transactions || []).filter(t => t.id !== id);
+                    removeTransactionFromStorage(s, id);
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(s));
                 } catch {}
                 syncToCloud();
@@ -4421,6 +4825,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 try {
                     const s = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     s.transactions = (s.transactions || []).map(t => t.id === editingTx.id ? updated : t);
+                    syncTransactionToAnimeOrder(s, updated);
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(s));
                 } catch {}
                 syncToCloud();
@@ -4819,7 +5224,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
                                                     const ds = `${displayYear}-${String(displayMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                                                     const hasTx = datesWithTx.has(ds);
-                                                    const isToday = ds === TODAY_STR;
+                                                    const isToday = ds === liveToday;
                                                     const isSelected = ds === selectedDay;
                                                     const dayTxs = MOCK_TRANSACTIONS.filter(t => t.date === ds);
                                                     const dotColor = dayTxs.length > 0 ? getCatColor(dayTxs[0].category) : null;
@@ -4867,7 +5272,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                                                 ? `¥${(selectedDayTotal * currentRate).toFixed(2)} RMB`
                                                                 : `¥${Math.round(selectedDayTotal).toLocaleString()}`}
                                                         </span>
-                                                        <button onClick={() => setSelectedDay(TODAY_STR)} className="text-amber-400 hover:text-amber-600 font-black text-[10px] leading-none px-1.5 py-0.5 rounded-full border border-amber-200">今天</button>
+                                                        <button onClick={() => setSelectedDay(liveToday)} className="text-amber-400 hover:text-amber-600 font-black text-[10px] leading-none px-1.5 py-0.5 rounded-full border border-amber-200">今天</button>
                                                     </div>
                                                 </div>
                                                 {/* 最高160px，超出滚动 */}
@@ -5417,12 +5822,29 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const [isDragging, setIsDragging] = React.useState(false);
             const [isDragOver, setIsDragOver] = React.useState(false);
             const wrapperRef = React.useRef(null);
+            const pressStartRef = React.useRef(null);
 
-            const handlePointerDown = () => {
-                if (isEditMode) return;
-                longPressRef.current = setTimeout(() => { onEnterEdit && onEnterEdit(); }, 600);
+            const cancelLongPress = () => {
+                clearTimeout(longPressRef.current);
+                longPressRef.current = null;
+                pressStartRef.current = null;
             };
-            const cancelLongPress = () => { clearTimeout(longPressRef.current); };
+            const handlePointerDown = (e) => {
+                if (isEditMode || e.pointerType === 'mouse' || !e.isPrimary) return;
+                if (e.target.closest('button, input, textarea, select, a, [contenteditable="true"]')) return;
+                pressStartRef.current = { x: e.clientX, y: e.clientY };
+                longPressRef.current = setTimeout(() => {
+                    const selectedText = window.getSelection?.().toString().trim();
+                    if (!selectedText) onEnterEdit && onEnterEdit();
+                    cancelLongPress();
+                }, 850);
+            };
+            const handlePointerMove = (e) => {
+                const start = pressStartRef.current;
+                if (!start) return;
+                if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 8) cancelLongPress();
+            };
+            React.useEffect(() => () => cancelLongPress(), []);
 
             // ── 桌面 HTML5 拖拽 ──
             const handleDragStart = (e) => {
@@ -5472,7 +5894,9 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     data-widget-idx={String(index)}
                     draggable={isEditMode}
                     onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
                     onPointerUp={cancelLongPress}
+                    onPointerCancel={cancelLongPress}
                     onPointerLeave={cancelLongPress}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
@@ -6838,6 +7262,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
         };
 
         const App = () => {
+            const liveToday = useLiveTodayStr();
             const [currentView, setCurrentView] = useState('home');
             const [activeFilter, setActiveFilter] = useState('all');
             const [isEditMode, setIsEditMode] = useState(false);
@@ -6938,7 +7363,13 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const [showAddCenter, setShowAddCenter] = useState(false);
             const [showQuickMenu, setShowQuickMenu] = useState(false);
             const [showQuickTx, setShowQuickTx] = useState(false);
-            const [quickTxForm, setQuickTxForm] = useState({ amount: '', currency: 'JPY', category: '', name: '', date: TODAY_STR });
+            const [quickTxForm, setQuickTxForm] = useState({ amount: '', currency: 'JPY', category: '', name: '', date: liveToday, animeKind: 'goods' });
+            const previousTodayRef = useRef(liveToday);
+            useEffect(() => {
+                const previousToday = previousTodayRef.current;
+                setQuickTxForm(form => form.date === previousToday ? { ...form, date: liveToday } : form);
+                previousTodayRef.current = liveToday;
+            }, [liveToday]);
             const [reportConfig, setReportConfig] = useState({ isOpen: false, type: '', period: '' });
             const [aiPanel, setAIPanel] = useState({ isOpen: false, title: '', type: '', data: null });
             const [showSettings, setShowSettings] = useState(false);
@@ -6953,9 +7384,15 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const syncNow = async () => {
                 const pulled = await syncFromCloud();
                 if (pulled) window.dispatchEvent(new CustomEvent('lifeos:synced'));
+                const importedPddCount = importPddScreenshotBatch20260729();
+                if (importedPddCount > 0) {
+                    window.dispatchEvent(new CustomEvent('lifeos:reload'));
+                    setToast({ ok: true, msg: `✅ 已批量导入拼多多 ${importedPddCount} 笔，合计 ¥781.80` });
+                }
                 const ok = await syncToCloud();
                 if (ok) window.dispatchEvent(new CustomEvent('lifeos:reload'));
-                return !!pulled || ok;
+                // 拉取成功不代表本机改动已经传上去；只有上传成功才显示“已同步”。
+                return ok;
             };
 
             const navItems = [
@@ -6973,7 +7410,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 haptic(60);
                 const tx = {
                     id: Date.now(),
-                    date: quickTxForm.date || TODAY_STR,
+                    date: quickTxForm.date || liveToday,
                     name: quickTxForm.name.trim() || quickTxForm.category || '记账',
                     amount: parseFloat(quickTxForm.amount),
                     currency: quickTxForm.currency,
@@ -6981,13 +7418,13 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 };
                 try {
                     const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    stored.transactions = [...(stored.transactions || []), tx];
+                    addTransactionToStorage(stored, tx, quickTxForm.animeKind);
                     localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
                 } catch {}
                 syncToCloud();
                 MOCK_TRANSACTIONS.push(tx);
                 window.dispatchEvent(new CustomEvent('lifeos:reload'));
-                setQuickTxForm({ amount: '', currency: 'JPY', category: '', name: '', date: TODAY_STR });
+                setQuickTxForm({ amount: '', currency: 'JPY', category: '', name: '', date: liveToday, animeKind: 'goods' });
                 setShowQuickTx(false);
             };
 
@@ -7367,7 +7804,7 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                     )}
 
                     {/* 主内容区 */}
-                    <main className="flex-1 overflow-y-auto p-4 md:p-8 relative w-full hide-scrollbar">
+                    <main className="flex-1 min-w-0 overflow-y-auto p-4 md:p-8 relative w-full hide-scrollbar">
                         
                         {/* 顶部过滤区 & 动作栏 */}
                         <header className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -7430,7 +7867,7 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                         </header>
 
                         {/* 视图路由 */}
-                        <div key={currentView} className="animate-view-in">
+                        <div key={currentView} className="animate-view-in w-full min-w-0">
                             {currentView === 'home' && (
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[180px] pb-32 md:pb-8" style={{ gridAutoFlow: 'dense' }}>
                                     {widgets.map((widget, index) => (
@@ -7790,7 +8227,7 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                                 onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-between mb-3">
                                     <h2 className="font-black text-base text-gray-800">✏️ 记一笔</h2>
-                                    <input type="date" value={quickTxForm.date} max={TODAY_STR}
+                                    <input type="date" value={quickTxForm.date}
                                         onChange={e => setQuickTxForm(f => ({ ...f, date: e.target.value }))}
                                         className="text-[11px] font-bold text-gray-500 bg-gray-50 rounded-xl px-2 py-1 border border-gray-200 outline-none" />
                                 </div>
@@ -7814,6 +8251,20 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                                     <option value="">选择分类…</option>
                                     {quickCats.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
+                                {isAnimeFinanceCategory(quickTxForm.category) && (
+                                    <div className="mb-2 rounded-2xl bg-pink-50 border border-pink-100 p-2">
+                                        <p className="text-[10px] font-black text-pink-500 mb-1.5 px-1">自动同步到谷子库 · 这笔是？</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {[['goods','🌸 谷子'],['display','🎒 谷美']].map(([value, label]) => (
+                                                <button key={value} type="button"
+                                                    onClick={() => setQuickTxForm(f => ({ ...f, animeKind: value }))}
+                                                    className={`py-2 rounded-xl text-xs font-black border transition-all ${quickTxForm.animeKind === value ? 'bg-pink-500 text-white border-pink-500 shadow-sm' : 'bg-white text-gray-500 border-pink-100'}`}>
+                                                    {label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 <input type="text" placeholder="备注（可选）"
                                     value={quickTxForm.name}
                                     onChange={e => setQuickTxForm(f => ({ ...f, name: e.target.value }))}
