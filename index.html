@@ -552,7 +552,38 @@
         const haptic = (ms = 50) => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch {} };
 
         // ── 默认记账分类 ──
-        const _DEFAULT_FINANCE_CATS = ['一日三餐','吃饭','购物/超市','购物/日用品','购物/化妆护肤品','购物/周边','购物/吃的','购物/衣服','购物/玩的','氪金','机票','交通','礼物','医疗','会员','课程'];
+        const BJD_FINANCE_CATEGORY = '购物/BJD';
+        const _DEFAULT_FINANCE_CATS = ['一日三餐','吃饭','购物/超市','购物/日用品','购物/化妆护肤品','购物/周边',BJD_FINANCE_CATEGORY,'购物/吃的','购物/衣服','购物/玩的','氪金','机票','交通','礼物','医疗','会员','课程'];
+        const getFinanceCategories = (stored = getFinanceStorage()) => {
+            const current = stored.categories?.length > 0
+                ? stored.categories.map(c => typeof c === 'string' ? c : c.name).filter(Boolean)
+                : _DEFAULT_FINANCE_CATS;
+            if (current.includes(BJD_FINANCE_CATEGORY)) return current;
+            const next = [...current];
+            const insertAfter = next.indexOf('购物/周边');
+            next.splice(insertAfter === -1 ? next.length : insertAfter + 1, 0, BJD_FINANCE_CATEGORY);
+            return next;
+        };
+        const isBjdFinanceTransaction = (tx) =>
+            String(tx?.category || '').toLowerCase() === BJD_FINANCE_CATEGORY.toLowerCase()
+            || /\bbjd\b/i.test(String(tx?.name || ''));
+        const migrateBjdFinanceCategory = () => {
+            const stored = getFinanceStorage();
+            const categories = getFinanceCategories(stored);
+            let changedCount = 0;
+            const transactions = (stored.transactions || []).map(tx => {
+                if (!isBjdFinanceTransaction(tx) || tx.category === BJD_FINANCE_CATEGORY) return tx;
+                changedCount += 1;
+                return { ...tx, category: BJD_FINANCE_CATEGORY };
+            });
+            const categoriesChanged = !jsonEqual(stored.categories || [], categories);
+            if (!categoriesChanged && changedCount === 0) return 0;
+            stored.categories = categories;
+            stored.transactions = transactions;
+            saveLifeOSData(stored);
+            refreshTransactionsFromStorage();
+            return Math.max(changedCount, 1);
+        };
 
         // ── 2026-07-29 拼多多截图批量补录（仅会导入一次）──
         // 使用稳定 id + 完整签名双重去重，多设备同步时也不会反复添加。
@@ -4910,10 +4941,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
             const cats = (() => {
                 try {
-                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    return d.categories?.length > 0
-                        ? d.categories.map(c => typeof c === 'string' ? c : c.name)
-                        : _DEFAULT_FINANCE_CATS;
+                    return getFinanceCategories();
                 } catch { return _DEFAULT_FINANCE_CATS; }
             })();
             const exchRate = getFinanceStorage().exchangeRate || 0.048;
@@ -5186,8 +5214,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             // 分类列表（每次渲染读最新）
             const finCats = (() => {
                 try {
-                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    return d.categories?.length > 0 ? d.categories.map(c => typeof c === 'string' ? c : c.name) : _DEFAULT_FINANCE_CATS;
+                    return getFinanceCategories();
                 } catch { return _DEFAULT_FINANCE_CATS; }
             })();
 
@@ -7799,6 +7826,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const syncNow = async () => {
                 const pulled = await syncFromCloud();
                 if (pulled) window.dispatchEvent(new CustomEvent('lifeos:synced'));
+                const migratedBjdCount = migrateBjdFinanceCategory();
+                if (migratedBjdCount > 0) window.dispatchEvent(new CustomEvent('lifeos:reload'));
                 const importedPddCount = importPddScreenshotBatch20260729();
                 if (importedPddCount > 0) {
                     window.dispatchEvent(new CustomEvent('lifeos:reload'));
@@ -7858,8 +7887,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
             const quickCats = (() => {
                 try {
-                    const d = getFinanceStorage();
-                    return d.categories?.length > 0 ? d.categories.map(c => typeof c === 'string' ? c : c.name) : _DEFAULT_FINANCE_CATS;
+                    return getFinanceCategories();
                 } catch { return _DEFAULT_FINANCE_CATS; }
             })();
 
