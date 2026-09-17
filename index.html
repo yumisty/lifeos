@@ -168,10 +168,384 @@
         // 当前登录用户 ID（登录后由 auth 设置）
         let CURRENT_USER_ID = null;
 
-        // ── localStorage 读取（每次调用返回最新数据，不缓存）──
+        // ── 本地数据读写（每次调用返回最新数据，不缓存）──
+        const LIFEOS_STORAGE_KEY = 'visualLifeOS_data';
+        const LIFEOS_USER_STORAGE_PREFIX = 'visualLifeOS_data_user_';
+        const LIFEOS_USER_PENDING_PREFIX = 'visualLifeOS_sync_pending_user_';
+        const LIFEOS_SYNC_META_KEY = '__syncMeta';
+        const LIFEOS_SYNC_ENVELOPE_KEY = '__lifeosSync';
+        const RECORD_ARRAY_FIELDS = new Set([
+            'transactions', 'wishlist', 'lifeEvents', 'projects',
+            'animeOrders', 'animeGoods', 'animeDisplay', 'periodLog',
+            'urgentTodos', 'inventory',
+        ]);
+        const MAP_SYNC_FIELDS = new Set([
+            'fixedItemsByMonth', 'allTodos', 'habits', 'diary', 'smokingLog',
+            'healthData', 'dailyPhotos', 'monthlyRates', 'monthlyPhotos',
+            'goalsByYear', 'yearlyReview',
+        ]);
+        const CLOUD_EXTRA_FIELDS = [
+            'inventory', 'showBalance', 'lang', 'goalsByYear', 'yearlyReview',
+            'monthlyPhotos', 'urgentTodos', 'notifySettings', 'aiReports',
+            'healthData', 'habitsList', 'quoteState', 'dailyPhotos',
+            'widgetConfig', 'charTheme',
+        ];
+
         const getFinanceStorage = () => {
-            try { return JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); }
+            try { return JSON.parse(localStorage.getItem(LIFEOS_STORAGE_KEY) || '{}'); }
             catch { return {}; }
+        };
+
+        const jsonEqual = (a, b) => {
+            if (a === b) return true;
+            try { return JSON.stringify(a) === JSON.stringify(b); }
+            catch { return false; }
+        };
+        const getSyncRecordId = (item) => {
+            if (!item || typeof item !== 'object') return null;
+            const id = item.id ?? item.startDate;
+            return id === undefined || id === null ? null : String(id);
+        };
+        const normalizeSyncMeta = (meta) => ({
+            fields: { ...((meta && meta.fields) || {}) },
+            items: Object.fromEntries(Object.entries((meta && meta.items) || {}).map(([field, values]) => [field, { ...(values || {}) }])),
+            deleted: Object.fromEntries(Object.entries((meta && meta.deleted) || {}).map(([field, values]) => [field, { ...(values || {}) }])),
+            entries: Object.fromEntries(Object.entries((meta && meta.entries) || {}).map(([field, values]) => [field, { ...(values || {}) }])),
+            entryDeleted: Object.fromEntries(Object.entries((meta && meta.entryDeleted) || {}).map(([field, values]) => [field, { ...(values || {}) }])),
+        });
+        const maxSyncTimestamp = (value) => {
+            if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+            if (!value || typeof value !== 'object') return 0;
+            return Object.values(value).reduce((max, item) => Math.max(max, maxSyncTimestamp(item)), 0);
+        };
+        const stampLifeOSChanges = (previous, next) => {
+            const before = previous && typeof previous === 'object' ? previous : {};
+            const result = next && typeof next === 'object' ? { ...next } : {};
+            const meta = normalizeSyncMeta(result[LIFEOS_SYNC_META_KEY] || before[LIFEOS_SYNC_META_KEY]);
+            const changedAt = Math.max(Date.now(), maxSyncTimestamp(meta) + 1);
+            const keys = new Set([...Object.keys(before), ...Object.keys(result)]);
+            keys.delete(LIFEOS_SYNC_META_KEY);
+            keys.forEach(field => {
+                if (jsonEqual(before[field], result[field])) return;
+                meta.fields[field] = changedAt;
+                if (!RECORD_ARRAY_FIELDS.has(field) && field !== 'vault') return;
+                const oldRecords = field === 'vault' ? before[field]?.items : before[field];
+                const newRecords = field === 'vault' ? result[field]?.items : result[field];
+                const oldById = new Map((Array.isArray(oldRecords) ? oldRecords : []).map(item => [getSyncRecordId(item), item]).filter(([id]) => id !== null));
+                const newById = new Map((Array.isArray(newRecords) ? newRecords : []).map(item => [getSyncRecordId(item), item]).filter(([id]) => id !== null));
+                meta.items[field] = { ...(meta.items[field] || {}) };
+                meta.deleted[field] = { ...(meta.deleted[field] || {}) };
+                newById.forEach((item, id) => {
+                    if (!oldById.has(id) || !jsonEqual(oldById.get(id), item)) meta.items[field][id] = changedAt;
+                });
+                oldById.forEach((_item, id) => {
+                    if (!newById.has(id)) meta.deleted[field][id] = changedAt;
+                });
+                return;
+            });
+            keys.forEach(field => {
+                if (!MAP_SYNC_FIELDS.has(field) || jsonEqual(before[field], result[field])) return;
+                const oldMap = before[field] && typeof before[field] === 'object' ? before[field] : {};
+                const newMap = result[field] && typeof result[field] === 'object' ? result[field] : {};
+                meta.entries[field] = { ...(meta.entries[field] || {}) };
+                meta.entryDeleted[field] = { ...(meta.entryDeleted[field] || {}) };
+                const entryKeys = new Set([...Object.keys(oldMap), ...Object.keys(newMap)]);
+                entryKeys.forEach(key => {
+                    const hadOld = Object.prototype.hasOwnProperty.call(oldMap, key);
+                    const hasNew = Object.prototype.hasOwnProperty.call(newMap, key);
+                    if (hasNew && (!hadOld || !jsonEqual(oldMap[key], newMap[key]))) meta.entries[field][key] = changedAt;
+                    if (hadOld && !hasNew) meta.entryDeleted[field][key] = changedAt;
+                });
+            });
+            result[LIFEOS_SYNC_META_KEY] = meta;
+            return result;
+        };
+        const saveLifeOSData = (next) => {
+            const stamped = stampLifeOSChanges(getFinanceStorage(), next);
+            localStorage.setItem(LIFEOS_STORAGE_KEY, JSON.stringify(stamped));
+            // 即使调用方在请求发出前被手机浏览器挂起，下次恢复也知道有本地改动待上传。
+            localStorage.setItem('visualLifeOS_sync_pending', String(Date.now()));
+            if (CURRENT_USER_ID) {
+                try {
+                    localStorage.setItem(`${LIFEOS_USER_STORAGE_PREFIX}${CURRENT_USER_ID}`, JSON.stringify(stamped));
+                    localStorage.setItem(`${LIFEOS_USER_PENDING_PREFIX}${CURRENT_USER_ID}`, String(Date.now()));
+                } catch {}
+            }
+            return stamped;
+        };
+        const applySyncedLifeOSData = (next) => {
+            localStorage.setItem(LIFEOS_STORAGE_KEY, JSON.stringify(next || {}));
+            if (CURRENT_USER_ID) {
+                try { localStorage.setItem(`${LIFEOS_USER_STORAGE_PREFIX}${CURRENT_USER_ID}`, JSON.stringify(next || {})); } catch {}
+            }
+            return next;
+        };
+        const activateLifeOSUser = (userId) => {
+            if (!userId) return false;
+            const current = getFinanceStorage();
+            const currentOwner = current.__ownerId || null;
+            if (!currentOwner) {
+                const claimed = { ...current, __ownerId: userId };
+                localStorage.setItem(LIFEOS_STORAGE_KEY, JSON.stringify(claimed));
+                localStorage.setItem(`${LIFEOS_USER_STORAGE_PREFIX}${userId}`, JSON.stringify(claimed));
+                if (localStorage.getItem('visualLifeOS_sync_pending')) {
+                    localStorage.setItem(`${LIFEOS_USER_PENDING_PREFIX}${userId}`, localStorage.getItem('visualLifeOS_sync_pending'));
+                }
+                return true;
+            }
+            if (currentOwner === userId) return false;
+            localStorage.setItem(`${LIFEOS_USER_STORAGE_PREFIX}${currentOwner}`, JSON.stringify(current));
+            if (localStorage.getItem('visualLifeOS_sync_pending')) {
+                localStorage.setItem(`${LIFEOS_USER_PENDING_PREFIX}${currentOwner}`, localStorage.getItem('visualLifeOS_sync_pending'));
+            }
+            let target = {};
+            try { target = JSON.parse(localStorage.getItem(`${LIFEOS_USER_STORAGE_PREFIX}${userId}`) || '{}'); } catch {}
+            target = { ...target, __ownerId: userId };
+            localStorage.setItem(LIFEOS_STORAGE_KEY, JSON.stringify(target));
+            localStorage.setItem(`${LIFEOS_USER_STORAGE_PREFIX}${userId}`, JSON.stringify(target));
+            const targetPending = localStorage.getItem(`${LIFEOS_USER_PENDING_PREFIX}${userId}`);
+            if (targetPending) localStorage.setItem('visualLifeOS_sync_pending', targetPending);
+            else localStorage.removeItem('visualLifeOS_sync_pending');
+            return true;
+        };
+
+        const mergeSyncMeta = (cloudMeta, localMeta) => {
+            const cloud = normalizeSyncMeta(cloudMeta);
+            const local = normalizeSyncMeta(localMeta);
+            const merged = normalizeSyncMeta();
+            const fieldKeys = new Set([...Object.keys(cloud.fields), ...Object.keys(local.fields)]);
+            fieldKeys.forEach(key => { merged.fields[key] = Math.max(Number(cloud.fields[key]) || 0, Number(local.fields[key]) || 0); });
+            ['items', 'deleted', 'entries', 'entryDeleted'].forEach(section => {
+                const groups = new Set([...Object.keys(cloud[section]), ...Object.keys(local[section])]);
+                groups.forEach(field => {
+                    merged[section][field] = {};
+                    const ids = new Set([...Object.keys(cloud[section][field] || {}), ...Object.keys(local[section][field] || {})]);
+                    ids.forEach(id => {
+                        merged[section][field][id] = Math.max(
+                            Number(cloud[section][field]?.[id]) || 0,
+                            Number(local[section][field]?.[id]) || 0,
+                        );
+                    });
+                });
+            });
+            return merged;
+        };
+
+        const mergeRecordArray = (field, cloudValue, localValue, cloudMeta, localMeta, prefer) => {
+            const cloudItems = Array.isArray(cloudValue) ? cloudValue : [];
+            const localItems = Array.isArray(localValue) ? localValue : [];
+            const cloudById = new Map();
+            const localById = new Map();
+            const unkeyed = [];
+            cloudItems.forEach(item => { const id = getSyncRecordId(item); id === null ? unkeyed.push(item) : cloudById.set(id, item); });
+            localItems.forEach(item => { const id = getSyncRecordId(item); id === null ? unkeyed.push(item) : localById.set(id, item); });
+            const result = [];
+            const ids = new Set([
+                ...cloudById.keys(), ...localById.keys(),
+                ...Object.keys(cloudMeta.deleted?.[field] || {}),
+                ...Object.keys(localMeta.deleted?.[field] || {}),
+            ]);
+            ids.forEach(id => {
+                const cloudItem = cloudById.get(id);
+                const localItem = localById.get(id);
+                const cloudTime = Number(cloudMeta.items?.[field]?.[id]) || 0;
+                const localTime = Number(localMeta.items?.[field]?.[id]) || 0;
+                const deleteTime = Math.max(
+                    Number(cloudMeta.deleted?.[field]?.[id]) || 0,
+                    Number(localMeta.deleted?.[field]?.[id]) || 0,
+                );
+                const liveTime = Math.max(cloudItem ? cloudTime : 0, localItem ? localTime : 0);
+                if (deleteTime >= liveTime && deleteTime > 0) return;
+                if (!cloudItem) { if (localItem) result.push(localItem); return; }
+                if (!localItem) { result.push(cloudItem); return; }
+                if (localTime > cloudTime) result.push(localItem);
+                else if (cloudTime > localTime) result.push(cloudItem);
+                else result.push(prefer === 'local' ? localItem : cloudItem);
+            });
+            unkeyed.forEach(item => {
+                if (!result.some(existing => jsonEqual(existing, item))) result.push(item);
+            });
+            return result;
+        };
+
+        const mergeLegacyArrays = (primary, secondary) => {
+            const result = [...primary];
+            secondary.forEach(item => {
+                const id = getSyncRecordId(item);
+                const exists = id === null
+                    ? result.some(existing => jsonEqual(existing, item))
+                    : result.some(existing => getSyncRecordId(existing) === id);
+                if (!exists) result.push(item);
+            });
+            return result;
+        };
+
+        const mergeMapValue = (field, cloudValue, localValue, cloudMeta, localMeta, prefer) => {
+            const cloud = cloudValue && typeof cloudValue === 'object' && !Array.isArray(cloudValue) ? cloudValue : {};
+            const local = localValue && typeof localValue === 'object' && !Array.isArray(localValue) ? localValue : {};
+            const result = {};
+            const keys = new Set([
+                ...Object.keys(cloud), ...Object.keys(local),
+                ...Object.keys(cloudMeta.entryDeleted?.[field] || {}),
+                ...Object.keys(localMeta.entryDeleted?.[field] || {}),
+            ]);
+            keys.forEach(key => {
+                const hasCloud = Object.prototype.hasOwnProperty.call(cloud, key);
+                const hasLocal = Object.prototype.hasOwnProperty.call(local, key);
+                const cloudTime = Number(cloudMeta.entries?.[field]?.[key]) || 0;
+                const localTime = Number(localMeta.entries?.[field]?.[key]) || 0;
+                const deleteTime = Math.max(
+                    Number(cloudMeta.entryDeleted?.[field]?.[key]) || 0,
+                    Number(localMeta.entryDeleted?.[field]?.[key]) || 0,
+                );
+                const liveTime = Math.max(hasCloud ? cloudTime : 0, hasLocal ? localTime : 0);
+                if (deleteTime >= liveTime && deleteTime > 0) return;
+                if (!hasCloud) { if (hasLocal) result[key] = local[key]; return; }
+                if (!hasLocal) { result[key] = cloud[key]; return; }
+                if (localTime > cloudTime) result[key] = local[key];
+                else if (cloudTime > localTime) result[key] = cloud[key];
+                else if (Array.isArray(cloud[key]) && Array.isArray(local[key])) {
+                    result[key] = prefer === 'local'
+                        ? mergeLegacyArrays(local[key], cloud[key])
+                        : mergeLegacyArrays(cloud[key], local[key]);
+                } else result[key] = prefer === 'local' ? local[key] : cloud[key];
+            });
+            return result;
+        };
+
+        const mergeLifeOSData = (cloudValue, localValue, prefer = 'cloud') => {
+            const cloud = cloudValue && typeof cloudValue === 'object' ? cloudValue : {};
+            const local = localValue && typeof localValue === 'object' ? localValue : {};
+            const cloudMeta = normalizeSyncMeta(cloud[LIFEOS_SYNC_META_KEY]);
+            const localMeta = normalizeSyncMeta(local[LIFEOS_SYNC_META_KEY]);
+            const merged = {};
+            const keys = new Set([...Object.keys(cloud), ...Object.keys(local)]);
+            keys.delete(LIFEOS_SYNC_META_KEY);
+            keys.forEach(field => {
+                const hasCloud = Object.prototype.hasOwnProperty.call(cloud, field);
+                const hasLocal = Object.prototype.hasOwnProperty.call(local, field);
+                if (!hasCloud) { merged[field] = local[field]; return; }
+                if (!hasLocal) { merged[field] = cloud[field]; return; }
+                if (RECORD_ARRAY_FIELDS.has(field)) {
+                    merged[field] = mergeRecordArray(field, cloud[field], local[field], cloudMeta, localMeta, prefer);
+                    return;
+                }
+                if (field === 'allMeals') {
+                    merged[field] = mergeMealsByCell(cloud[field], local[field]);
+                    return;
+                }
+                if (MAP_SYNC_FIELDS.has(field)) {
+                    merged[field] = mergeMapValue(field, cloud[field], local[field], cloudMeta, localMeta, prefer);
+                    return;
+                }
+                if (field === 'vault') {
+                    const cloudVault = cloud[field] && typeof cloud[field] === 'object' ? cloud[field] : {};
+                    const localVault = local[field] && typeof local[field] === 'object' ? local[field] : {};
+                    const cloudTime = Number(cloudMeta.fields[field]) || 0;
+                    const localTime = Number(localMeta.fields[field]) || 0;
+                    const base = localTime > cloudTime
+                        ? localVault
+                        : cloudTime > localTime
+                        ? cloudVault
+                        : prefer === 'local' ? localVault : cloudVault;
+                    merged[field] = {
+                        ...base,
+                        items: mergeRecordArray('vault', cloudVault.items, localVault.items, cloudMeta, localMeta, prefer),
+                    };
+                    return;
+                }
+                const cloudTime = Number(cloudMeta.fields[field]) || 0;
+                const localTime = Number(localMeta.fields[field]) || 0;
+                if (localTime > cloudTime) merged[field] = local[field];
+                else if (cloudTime > localTime) merged[field] = cloud[field];
+                else if (Array.isArray(cloud[field]) && Array.isArray(local[field])) {
+                    // 旧数据还没有同步时间戳时保留两端不重复的简单数组值。
+                    const primary = prefer === 'local' ? local[field] : cloud[field];
+                    const secondary = prefer === 'local' ? cloud[field] : local[field];
+                    merged[field] = mergeLegacyArrays(primary, secondary);
+                } else if (
+                    cloud[field] && local[field] &&
+                    typeof cloud[field] === 'object' && typeof local[field] === 'object'
+                ) {
+                    // 同上，先做一次兼容旧版本的浅合并；之后的修改由字段时间戳裁决。
+                    merged[field] = prefer === 'local'
+                        ? { ...cloud[field], ...local[field] }
+                        : { ...local[field], ...cloud[field] };
+                } else merged[field] = prefer === 'local' ? local[field] : cloud[field];
+            });
+            merged[LIFEOS_SYNC_META_KEY] = mergeSyncMeta(cloudMeta, localMeta);
+            return merged;
+        };
+
+        const decodeCloudLifeOSData = (row) => {
+            if (!row) return null;
+            const cloudVault = row.vault && typeof row.vault === 'object' ? row.vault : { items: [] };
+            const envelope = cloudVault[LIFEOS_SYNC_ENVELOPE_KEY] || {};
+            const vault = { ...cloudVault };
+            delete vault[LIFEOS_SYNC_ENVELOPE_KEY];
+            return {
+                ...(envelope.extra || {}),
+                transactions: row.transactions || [],
+                categories: row.categories || [],
+                fixedItemsByMonth: row.fixed_items_by_month || {},
+                wishlist: row.wishlist || [],
+                allTodos: row.todos || {},
+                habits: row.habits || {},
+                periodLog: row.period_log || [],
+                countdowns: row.countdowns || { name: '回国 🛫', date: '2026-08-31' },
+                nowPlaying: row.now_playing || {},
+                exchangeRate: row.exchange_rate ?? 0.048,
+                monthlyRates: row.monthly_rates || {},
+                theme: row.theme || 'cream',
+                smokingLog: row.smoking_log || {},
+                smokingGoal: row.smoking_goal ?? 20,
+                allMeals: row.all_meals || {},
+                vault,
+                lifeEvents: row.life_events || [],
+                diary: row.diary || {},
+                projects: row.projects || [],
+                animeOrders: row.anime_orders || [],
+                animeGoods: row.anime_goods || [],
+                animeDisplay: row.anime_display || [],
+                [LIFEOS_SYNC_META_KEY]: envelope.meta || {},
+            };
+        };
+
+        const encodeLifeOSCloudRow = (local, userId) => {
+            const vault = local.vault && typeof local.vault === 'object' ? { ...local.vault } : { items: [] };
+            vault[LIFEOS_SYNC_ENVELOPE_KEY] = {
+                version: 2,
+                meta: normalizeSyncMeta(local[LIFEOS_SYNC_META_KEY]),
+                extra: Object.fromEntries(CLOUD_EXTRA_FIELDS
+                    .filter(field => Object.prototype.hasOwnProperty.call(local, field))
+                    .map(field => [field, local[field]])),
+            };
+            return {
+                id: userId,
+                transactions: local.transactions || [],
+                categories: local.categories || [],
+                fixed_items_by_month: local.fixedItemsByMonth || {},
+                wishlist: local.wishlist || [],
+                todos: local.allTodos || {},
+                habits: local.habits || {},
+                period_log: local.periodLog || [],
+                countdowns: local.countdowns || { name: '回国 🛫', date: '2026-08-31' },
+                now_playing: local.nowPlaying || {},
+                exchange_rate: local.exchangeRate ?? 0.048,
+                monthly_rates: local.monthlyRates || {},
+                theme: local.theme || 'cream',
+                smoking_log: local.smokingLog || {},
+                smoking_goal: local.smokingGoal ?? 20,
+                all_meals: local.allMeals || {},
+                vault,
+                life_events: local.lifeEvents || [],
+                diary: local.diary || {},
+                projects: local.projects || [],
+                anime_orders: local.animeOrders || [],
+                anime_goods: local.animeGoods || [],
+                anime_display: local.animeDisplay || [],
+                updated_at: new Date().toISOString(),
+            };
         };
 
         // 触感反馈（Android 支持，iOS 静默忽略）
@@ -223,7 +597,7 @@
             );
             if (missing.length === 0) return 0;
             stored.transactions = [...current, ...missing];
-            localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+            saveLifeOSData(stored);
             refreshTransactionsFromStorage();
             return missing.length;
         };
@@ -257,55 +631,37 @@
             }
             if (!CURRENT_USER_ID) return { ok: false, retryable: false };
             try {
-                const local = getFinanceStorage();
+                let local = getFinanceStorage();
                 console.log('[sync] uploading revision', revision, 'for user:', CURRENT_USER_ID);
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 15000);
                 let error;
                 try {
-                    // 上传整份记录前先合并云端餐食，避免另一台设备新增的餐食被旧快照覆盖。
-                    const { data: remoteMeals, error: mealReadError } = await _supabase
+                    // 上传整份记录前先合并云端完整快照。否则任意模块的一次保存，
+                    // 都可能把另一台设备刚写入的其它模块覆盖掉。
+                    const { data: remoteRow, error: preflightError } = await _supabase
                         .from('lifeos_data')
-                        .select('all_meals')
+                        .select('*')
                         .eq('id', CURRENT_USER_ID)
                         .maybeSingle()
                         .abortSignal(controller.signal);
-                    if (mealReadError) {
-                        console.error('[sync] meal preflight error:', JSON.stringify(mealReadError));
+                    if (preflightError) {
+                        console.error('[sync] preflight error:', JSON.stringify(preflightError));
                         return { ok: false, retryable: true };
                     }
-                    const mergedMeals = mergeMealsByCell(remoteMeals?.all_meals, local.allMeals);
-                    if (JSON.stringify(mergedMeals) !== JSON.stringify(local.allMeals || {})) {
-                        local.allMeals = mergedMeals;
-                        localStorage.setItem('visualLifeOS_data', JSON.stringify(local));
-                        window.dispatchEvent(new CustomEvent('lifeos:reload'));
+                    const remote = decodeCloudLifeOSData(remoteRow);
+                    if (remote) {
+                        const merged = mergeLifeOSData(remote, local, 'local');
+                        if (!jsonEqual(merged, local)) {
+                            local = merged;
+                            applySyncedLifeOSData(local);
+                            refreshTransactionsFromStorage();
+                            window.dispatchEvent(new CustomEvent('lifeos:cloud-applied'));
+                        }
                     }
-                    ({ error } = await _supabase.from('lifeos_data').upsert({
-                        id:                   CURRENT_USER_ID,
-                        transactions:         local.transactions        || [],
-                        categories:           local.categories          || [],
-                        fixed_items_by_month: local.fixedItemsByMonth   || {},
-                        wishlist:             local.wishlist            || [],
-                        todos:                local.allTodos            || {},
-                        habits:               local.habits              || {},
-                        period_log:           local.periodLog           || [],
-                        countdowns:           local.countdowns          || { name: '回国 🛫', date: '2026-08-31' },
-                        now_playing:          local.nowPlaying          || {},
-                        exchange_rate:        local.exchangeRate        || 0.048,
-                        monthly_rates:        local.monthlyRates        || {},
-                        theme:                local.theme               || 'cream',
-                        smoking_log:          local.smokingLog          || {},
-                        smoking_goal:         local.smokingGoal         || 20,
-                        all_meals:            mergedMeals               || {},
-                        vault:                local.vault               || { items: [] },
-                        life_events:          local.lifeEvents           || [],
-                        diary:                local.diary               || {},
-                        projects:             local.projects             || [],
-                        anime_orders:         local.animeOrders          || [],
-                        anime_goods:          local.animeGoods           || [],
-                        anime_display:        local.animeDisplay         || [],
-                        updated_at:           new Date().toISOString(),
-                    }).abortSignal(controller.signal));
+                    ({ error } = await _supabase.from('lifeos_data')
+                        .upsert(encodeLifeOSCloudRow(local, CURRENT_USER_ID))
+                        .abortSignal(controller.signal));
                 } finally {
                     clearTimeout(timeoutId);
                 }
@@ -316,6 +672,7 @@
                 console.log('[sync] success, revision:', revision);
                 if (revision === syncRevision) {
                     localStorage.removeItem(SYNC_PENDING_KEY);
+                    if (CURRENT_USER_ID) localStorage.removeItem(`${LIFEOS_USER_PENDING_PREFIX}${CURRENT_USER_ID}`);
                     syncRetryAttempt = 0;
                 }
                 return { ok: true, retryable: false };
@@ -327,7 +684,9 @@
 
         const syncToCloud = () => {
             const revision = ++syncRevision;
-            localStorage.setItem(SYNC_PENDING_KEY, String(Date.now()));
+            const pendingAt = String(Date.now());
+            localStorage.setItem(SYNC_PENDING_KEY, pendingAt);
+            if (CURRENT_USER_ID) localStorage.setItem(`${LIFEOS_USER_PENDING_PREFIX}${CURRENT_USER_ID}`, pendingAt);
             const queued = syncQueue
                 .catch(() => false)
                 .then(() => performCloudUpload(revision))
@@ -407,6 +766,12 @@
             return merged;
         };
 
+        if (new URLSearchParams(window.location.search).has('sync-test')) {
+            window.__lifeosSyncInternals = {
+                stampLifeOSChanges, mergeLifeOSData, encodeLifeOSCloudRow, decodeCloudLifeOSData,
+            };
+        }
+
         const retryPendingCloudSync = () => {
             if (navigator.onLine !== false && localStorage.getItem(SYNC_PENDING_KEY)) syncToCloud();
         };
@@ -421,71 +786,21 @@
             // 本机还有刚改完、尚未上传的内容时，先让上传完成；否则旧云数据会回头覆盖本机。
             if (localStorage.getItem(SYNC_PENDING_KEY)) {
                 try { await syncQueue; } catch {}
-                if (localStorage.getItem(SYNC_PENDING_KEY)) return null;
+                if (localStorage.getItem(SYNC_PENDING_KEY)) {
+                    const uploaded = await syncToCloud();
+                    if (!uploaded) return null;
+                }
             }
             try {
                 const { data, error } = await _supabase
-                    .from('lifeos_data').select('*').eq('id', CURRENT_USER_ID).single();
+                    .from('lifeos_data').select('*').eq('id', CURRENT_USER_ID).maybeSingle();
                 if (error || !data) return null;
                 const local = getFinanceStorage();
-                const mergeArr = (cloud, loc) => {
-                    const c = Array.isArray(cloud) ? cloud : [];
-                    const l = Array.isArray(loc)   ? loc   : [];
-                    if (c.length === 0) return l;
-                    if (l.length === 0) return c;
-                    const cloudIds = new Set(c.map(i => i.id));
-                    const localOnly = l.filter(i => !cloudIds.has(i.id));
-                    return [...c, ...localOnly];
-                };
-                const mergeObj = (cloud, loc) => {
-                    const c = (cloud && typeof cloud === 'object' && !Array.isArray(cloud)) ? cloud : {};
-                    const l = (loc   && typeof loc   === 'object' && !Array.isArray(loc))   ? loc   : {};
-                    return { ...l, ...c };
-                };
-                const mergePeriodLog = (cloud, loc) => {
-                    const byStart = new Map();
-                    (Array.isArray(loc) ? loc : []).forEach(item => {
-                        if (item?.startDate) byStart.set(item.startDate, item);
-                    });
-                    (Array.isArray(cloud) ? cloud : []).forEach(item => {
-                        if (item?.startDate) byStart.set(item.startDate, item);
-                    });
-                    return [...byStart.values()].sort((a, b) => a.startDate.localeCompare(b.startDate));
-                };
-                const merged = {
-                    ...local,
-                    transactions:      mergeArr(data.transactions,         local.transactions),
-                    categories:        mergeArr(data.categories,           local.categories),
-                    fixedItemsByMonth: mergeObj(data.fixed_items_by_month, local.fixedItemsByMonth),
-                    wishlist:          mergeArr(data.wishlist,              local.wishlist),
-                    allTodos:          (() => {
-                        const c = (data.todos && typeof data.todos === 'object') ? data.todos : {};
-                        const l = (local.allTodos && typeof local.allTodos === 'object') ? local.allTodos : {};
-                        const merged = { ...c };
-                        // 每个周的 todos：本地有就用本地（保留刚改的），本地没有才用云端
-                        Object.keys(l).forEach(k => { merged[k] = l[k]; });
-                        return merged;
-                    })(),
-                    habits:            mergeObj(data.habits,                local.habits),
-                    periodLog:         mergePeriodLog(data.period_log,      local.periodLog),
-                    countdowns:        data.countdowns || local.countdowns || { name: '回国 🛫', date: '2026-08-31' },
-                    nowPlaying:        data.now_playing         || local.nowPlaying   || {},
-                    exchangeRate:      data.exchange_rate       || local.exchangeRate || 0.048,
-                    monthlyRates:      mergeObj(data.monthly_rates,         local.monthlyRates),
-                    theme:             local.theme              || data.theme         || 'cream',
-                    smokingLog:        mergeObj(data.smoking_log,           local.smokingLog),
-                    smokingGoal:       data.smoking_goal        || local.smokingGoal  || 20,
-                    allMeals:          mergeMealsByCell(data.all_meals, local.allMeals),
-                    vault:             { items: mergeArr(data.vault?.items || [], local.vault?.items || []) },
-                    lifeEvents:        mergeArr(data.life_events,            local.lifeEvents),
-                    diary:             mergeObj(data.diary,                 local.diary),
-                    projects:          mergeArr(data.projects,              local.projects),
-                    animeOrders:       mergeArr(data.anime_orders,          local.animeOrders),
-                    animeGoods:        mergeArr(data.anime_goods,           local.animeGoods),
-                    animeDisplay:      mergeArr(data.anime_display,         local.animeDisplay),
-                };
-                localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
+                const cloud = decodeCloudLifeOSData(data);
+                const merged = mergeLifeOSData(cloud, local, 'cloud');
+                applySyncedLifeOSData(merged);
                 refreshTransactionsFromStorage();
+                window.dispatchEvent(new CustomEvent('lifeos:reload'));
                 return merged;
             } catch(e) {
                 console.log('sync from cloud failed:', e);
@@ -583,7 +898,7 @@
             }
         };
         const saveLocalTodoData = (data) => {
-            localStorage.setItem('visualLifeOS_data', JSON.stringify(data));
+            saveLifeOSData(data);
             window.dispatchEvent(new CustomEvent('lifeos:todos-updated'));
         };
         const normalizeLocalTask = (todo) => normalizeTask({
@@ -948,6 +1263,12 @@
                 MOCK_TRANSACTIONS.splice(0, MOCK_TRANSACTIONS.length, ...latest);
             } catch {}
         };
+        // 同一账号在多个标签页打开时，localStorage 的变化也要立刻反映到所有界面。
+        window.addEventListener('storage', event => {
+            if (event.key !== LIFEOS_STORAGE_KEY) return;
+            refreshTransactionsFromStorage();
+            window.dispatchEvent(new CustomEvent('lifeos:synced'));
+        });
 
         // 分类颜色映射（关键词匹配，越长越具体的放前面）
         const FINANCE_CAT_COLOR_MAP = [
@@ -1088,6 +1409,11 @@
             const [saveStatus, setSaveStatus] = useState(null); // null | 'ok' | 'fail'
             const [notify, setNotify] = useState(() => getFinanceStorage().notifySettings || { smokingEnabled: false, smokingTime: '21:00', dailyEnabled: false, dailyTime: '21:00' });
             const [notifySaved, setNotifySaved] = useState(false);
+            useEffect(() => {
+                const reload = () => setNotify(getFinanceStorage().notifySettings || { smokingEnabled: false, smokingTime: '21:00', dailyEnabled: false, dailyTime: '21:00' });
+                window.addEventListener('lifeos:reload', reload);
+                return () => window.removeEventListener('lifeos:reload', reload);
+            }, []);
 
             const saveKey = () => {
                 const trimmed = apiKey.trim();
@@ -1101,7 +1427,8 @@
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     d.notifySettings = notify;
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                    saveLifeOSData(d);
+                    syncToCloud();
                     scheduleSmokingReminder();
                     scheduleDailyReminder();
                     setNotifySaved(true);
@@ -1398,7 +1725,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     const all = [report, ...(d.aiReports || [])].slice(0, 20);
                     d.aiReports = all;
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                    saveLifeOSData(d);
                     syncToCloud();
                     setHistory(all.filter(r => r.type === type));
                     setResult(null);
@@ -1963,36 +2290,59 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const [activeTab, setActiveTab] = useState('life');
             const [newText, setNewText] = useState('');
 
+            const isBjdItem = (item) => {
+                if (item?.tab === 'bjd') return true;
+                const searchable = [item?.name, item?.category, item?.anime, item?.note]
+                    .filter(Boolean).join(' ').toLowerCase();
+                return /\bbjd\b|球形关节|sd娃|娃衣|娃鞋|娃头|头雕|素体|妆面|娃用假发|娃用眼珠/.test(searchable);
+            };
+            const normalizeItem = (item) => {
+                let tab = item?.tab || 'small';
+                if (tab === 'need') tab = 'life';
+                if (tab === 'want') tab = 'small';
+                // 旧数据里的 BJD 通常混在二次元/小东西中，打开清单时自动归到独立分类。
+                if (isBjdItem(item)) tab = 'bjd';
+                const done = Boolean(item?.done ?? item?.purchased ?? false);
+                return { ...item, tab, done, purchased: done };
+            };
+            const readItems = () => (getFinanceStorage().wishlist || []).map(normalizeItem);
+
             const [items, setItems] = useState(() => {
-                try {
-                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    const wl = stored.wishlist || [];
-                    return wl.map(i => {
-                        let tab = i.tab || 'small';
-                        if (tab === 'need') tab = 'life';
-                        if (tab === 'want') tab = 'small';
-                        return { ...i, tab, done: i.purchased || false };
-                    });
-                } catch { return []; }
+                try { return readItems(); }
+                catch { return []; }
             });
 
-            const saveItems = (next) => {
+            useEffect(() => {
+                const reload = () => {
+                    try { setItems(readItems()); } catch {}
+                };
+                window.addEventListener('lifeos:reload', reload);
+                return () => window.removeEventListener('lifeos:reload', reload);
+            }, []);
+
+            const saveItems = (update) => {
+                // 始终基于 localStorage 的最新值修改，避免云同步/连续点击拿旧的 React 闭包覆盖结果。
+                let current = items;
+                try { current = readItems(); } catch {}
+                const next = (typeof update === 'function' ? update(current) : update).map(normalizeItem);
                 setItems(next);
                 try {
-                    const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    stored.wishlist = next.map(i => ({ ...i, purchased: i.done }));
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                    const stored = getFinanceStorage();
+                    stored.wishlist = next.map(i => ({ ...i, done: Boolean(i.done), purchased: Boolean(i.done) }));
+                    saveLifeOSData(stored);
                 } catch {}
                 syncToCloud();
             };
 
             const addItem = () => {
                 if (!newText.trim()) return;
-                saveItems([...items, { id: Date.now(), name: newText.trim(), price: '', currency: 'JPY', category: '', purchased: false, done: false, tab: activeTab }]);
+                saveItems(current => [...current, { id: Date.now(), name: newText.trim(), price: '', currency: 'JPY', category: '', purchased: false, done: false, tab: activeTab }]);
                 setNewText('');
             };
-            const toggleItem = (id) => saveItems(items.map(i => i.id === id ? { ...i, done: !i.done, purchased: !i.done } : i));
-            const deleteItem = (id) => saveItems(items.filter(i => i.id !== id));
+            const toggleItem = (id) => saveItems(current => current.map(i => String(i.id) === String(id)
+                ? { ...i, done: !i.done, purchased: !i.done }
+                : i));
+            const deleteItem = (id) => saveItems(current => current.filter(i => String(i.id) !== String(id)));
 
             const [newPrice, setNewPrice] = useState('');
             const [newAnimeType, setNewAnimeType] = useState('现货');
@@ -2008,6 +2358,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 small:  { label: '小东西',  color: 'text-purple-700', activeBg: 'bg-purple-500',  dot: 'bg-purple-400',  check: 'bg-purple-400 border-purple-400' },
                 food:   { label: '吃的',    color: 'text-orange-700', activeBg: 'bg-orange-500',  dot: 'bg-orange-400',  check: 'bg-orange-400 border-orange-400' },
                 anime:  { label: '二次元',  color: 'text-pink-700',   activeBg: 'bg-pink-500',    dot: 'bg-pink-400',    check: 'bg-pink-400 border-pink-400'     },
+                bjd:    { label: 'BJD',     color: 'text-rose-700',   activeBg: 'bg-rose-500',    dot: 'bg-rose-400',    check: 'bg-rose-400 border-rose-400'     },
             };
             const tabCounts = Object.fromEntries(Object.keys(tabCfg).map(k => [k, items.filter(i => i.tab === k && !i.done).length]));
             const cfg = tabCfg[activeTab];
@@ -2019,7 +2370,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     category: '', purchased: false, done: false, tab: activeTab,
                     ...(activeTab === 'anime' ? { type: newAnimeType, platform: newPlatform.trim(), paid: newPaid, anime: '' } : {})
                 };
-                saveItems([...items, newItem]);
+                saveItems(current => [...current, newItem]);
                 setNewText(''); setNewPrice('');
                 if (activeTab === 'anime') { setNewAnimeType('现货'); setNewPlatform(''); setNewPaid(false); }
             };
@@ -2054,7 +2405,9 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                         )}
                         {tabItems.map(item => (
                             <div key={item.id} className={`flex gap-2 py-0.5 ${activeTab === 'anime' ? 'items-start' : 'items-center'}`}>
-                                <button onClick={() => toggleItem(item.id)}
+                                <button onClick={(event) => { event.stopPropagation(); toggleItem(item.id); }}
+                                    aria-label={`${item.done ? '取消完成' : '标记完成'}：${item.name}`}
+                                    title={item.done ? '取消完成' : '标记完成'}
                                     className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center text-[9px] transition-colors mt-0.5
                                         ${item.done ? cfg.check + ' text-white' : 'border-gray-300'}`}>
                                     {item.done && '✓'}
@@ -2086,7 +2439,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                                         ¥{item.price}
                                     </span>
                                 )}
-                                <button onClick={() => deleteItem(item.id)}
+                                <button onClick={(event) => { event.stopPropagation(); deleteItem(item.id); }}
+                                    aria-label={`删除：${item.name}`} title="删除"
                                     className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-red-400 active:text-red-400 transition-colors text-base flex-shrink-0">×</button>
                             </div>
                         ))}
@@ -2224,9 +2578,9 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const [displays, setDisplays] = React.useState(() => {
                 try { return JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}').animeDisplay || []; } catch { return []; }
             });
-            const saveOrders = (next) => { setOrders(next); try { const d=JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeOrders=next; localStorage.setItem('visualLifeOS_data',JSON.stringify(d)); } catch {} syncToCloud(); };
-            const saveGoods = (next) => { setGoods(next); try { const d=JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeGoods=next; localStorage.setItem('visualLifeOS_data',JSON.stringify(d)); } catch {} syncToCloud(); };
-            const saveDisplays = (next) => { setDisplays(next); try { const d=JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeDisplay=next; localStorage.setItem('visualLifeOS_data',JSON.stringify(d)); } catch {} syncToCloud(); };
+            const saveOrders = (next) => { setOrders(next); try { const d=JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeOrders=next; saveLifeOSData(d); } catch {} syncToCloud(); };
+            const saveGoods = (next) => { setGoods(next); try { const d=JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeGoods=next; saveLifeOSData(d); } catch {} syncToCloud(); };
+            const saveDisplays = (next) => { setDisplays(next); try { const d=JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeDisplay=next; saveLifeOSData(d); } catch {} syncToCloud(); };
             React.useEffect(() => {
                 const reload = () => {
                     const d = getFinanceStorage();
@@ -2550,17 +2904,17 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             });
             const saveOrders = (next) => {
                 setOrders(next);
-                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeOrders = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeOrders = next; saveLifeOSData(d); } catch {}
                 syncToCloud();
             };
             const saveGoods = (next) => {
                 setGoods(next);
-                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeGoods = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeGoods = next; saveLifeOSData(d); } catch {}
                 syncToCloud();
             };
             const saveDisplays = (next) => {
                 setDisplays(next);
-                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeDisplay = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.animeDisplay = next; saveLifeOSData(d); } catch {}
                 syncToCloud();
             };
             React.useEffect(() => {
@@ -3025,6 +3379,11 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     return d.healthData?.[todayStr]?.heatLevel ?? null;
                 } catch { return null; }
             });
+            useEffect(() => {
+                const reload = () => setHeatLevel(getFinanceStorage().healthData?.[todayStr]?.heatLevel ?? null);
+                window.addEventListener('lifeos:reload', reload);
+                return () => window.removeEventListener('lifeos:reload', reload);
+            }, [todayStr]);
 
             const saveHeat = (v) => {
                 setHeatLevel(v);
@@ -3032,8 +3391,9 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     if (!d.healthData) d.healthData = {};
                     d.healthData[todayStr] = { heatLevel: v };
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                    saveLifeOSData(d);
                 } catch {}
+                syncToCloud();
             };
 
             return (
@@ -3440,7 +3800,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     d.periodLog = next;
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                    saveLifeOSData(d);
                 } catch {}
                 syncToCloud();
             };
@@ -3650,7 +4010,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                         [MEALS_SYNC_META_KEY]: nextMeta,
                     };
                     stored.allMeals = nextAll;
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                    saveLifeOSData(stored);
                     setAllMeals(nextAll);
                     syncToCloud();
                 } catch {}
@@ -3788,13 +4148,13 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
             const saveLog = (next) => {
                 setLog(next);
-                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); d.smokingLog = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); d.smokingLog = next; saveLifeOSData(d); } catch {}
                 syncToCloud();
                 window.dispatchEvent(new CustomEvent('lifeos:reload'));
             };
             const saveGoal = (g) => {
                 setGoal(g);
-                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); d.smokingGoal = g; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); d.smokingGoal = g; saveLifeOSData(d); } catch {}
                 syncToCloud();
                 window.dispatchEvent(new CustomEvent('lifeos:reload'));
             };
@@ -3964,6 +4324,15 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const [editMode, setEditMode] = useState(false);
             const [newHabit, setNewHabit] = useState('');
             const [editingHabit, setEditingHabit] = useState(null); // { index, value }
+            useEffect(() => {
+                const reload = () => {
+                    const stored = getFinanceStorage();
+                    setHabitsData(stored.habits || {});
+                    setHabitsList(stored.habitsList || DEFAULT_HABITS);
+                };
+                window.addEventListener('lifeos:reload', reload);
+                return () => window.removeEventListener('lifeos:reload', reload);
+            }, []);
 
             const checked = habitsData[todayStr] || [];
 
@@ -3983,12 +4352,12 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const saveChecked = (next) => {
                 const nextData = { ...habitsData, [todayStr]: next };
                 setHabitsData(nextData);
-                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); d.habits = nextData; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); d.habits = nextData; saveLifeOSData(d); } catch {}
                 syncToCloud();
             };
             const saveHabitsList = (next) => {
                 setHabitsList(next);
-                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); d.habitsList = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}'); d.habitsList = next; saveLifeOSData(d); } catch {}
                 syncToCloud();
             };
             const toggle = (habit) => {
@@ -4094,7 +4463,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     d.countdowns = draft;
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                    saveLifeOSData(d);
                 } catch {}
                 syncToCloud();
                 setEditing(false);
@@ -4143,14 +4512,23 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     return (saved && saved.date === todayKey) ? saved.idx : defaultIdx;
                 } catch { return defaultIdx; }
             });
+            useEffect(() => {
+                const reload = () => {
+                    const saved = getFinanceStorage().quoteState;
+                    setIdx(saved && saved.date === todayKey ? saved.idx : defaultIdx);
+                };
+                window.addEventListener('lifeos:reload', reload);
+                return () => window.removeEventListener('lifeos:reload', reload);
+            }, [todayKey, defaultIdx]);
             const nextQuote = () => {
                 const next = (idx + 1) % QUOTES.length;
                 setIdx(next);
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     d.quoteState = { date: todayKey, idx: next };
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                    saveLifeOSData(d);
                 } catch {}
+                syncToCloud();
             };
             return (
                 <div className="h-full flex flex-col justify-between p-5 rounded-os-xl bg-white shadow-sm relative overflow-hidden">
@@ -4174,6 +4552,11 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             });
             const [editing, setEditing] = useState(false);
             const [draft, setDraft] = useState({ song: '', artist: '' });
+            useEffect(() => {
+                const reload = () => setData(getFinanceStorage().nowPlaying || null);
+                window.addEventListener('lifeos:reload', reload);
+                return () => window.removeEventListener('lifeos:reload', reload);
+            }, []);
 
             const openEdit = () => {
                 setDraft({ song: data?.song || '', artist: data?.artist || '' });
@@ -4186,7 +4569,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 try {
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     d.nowPlaying = next;
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                    saveLifeOSData(d);
                 } catch {}
                 syncToCloud();
                 setEditing(false);
@@ -4266,6 +4649,15 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             const [uploadErr, setUploadErr] = useState(null);
             const [showHistory, setShowHistory] = useState(false);
             const [photos, setPhotos] = useState(getPhotos);
+            useEffect(() => {
+                const reload = () => {
+                    const next = getPhotos();
+                    setPhotos(next);
+                    setPhotoUrl(next[todayStr] || null);
+                };
+                window.addEventListener('lifeos:reload', reload);
+                return () => window.removeEventListener('lifeos:reload', reload);
+            }, [todayStr]);
 
             const displayDate = todayStr.slice(5).replace('-', '/');
 
@@ -4288,9 +4680,10 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     if (!d.dailyPhotos) d.dailyPhotos = {};
                     d.dailyPhotos[dateStr] = url;
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                    saveLifeOSData(d);
                     setPhotos({ ...d.dailyPhotos });
                 } catch {}
+                syncToCloud();
             };
 
             const handleFile = async (e) => {
@@ -4548,7 +4941,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 try {
                     const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     addTransactionToStorage(stored, tx, addForm.animeKind);
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                    saveLifeOSData(stored);
                 } catch {}
                 syncToCloud();
                 MOCK_TRANSACTIONS.push(tx);
@@ -4564,7 +4957,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 try {
                     const s = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     removeTransactionFromStorage(s, id);
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(s));
+                    saveLifeOSData(s);
                 } catch {}
                 syncToCloud();
                 window.dispatchEvent(new CustomEvent('lifeos:reload'));
@@ -4804,7 +5197,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 try {
                     const s = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     removeTransactionFromStorage(s, id);
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(s));
+                    saveLifeOSData(s);
                 } catch {}
                 syncToCloud();
                 window.dispatchEvent(new CustomEvent('lifeos:reload'));
@@ -4826,7 +5219,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     const s = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     s.transactions = (s.transactions || []).map(t => t.id === editingTx.id ? updated : t);
                     syncTransactionToAnimeOrder(s, updated);
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(s));
+                    saveLifeOSData(s);
                 } catch {}
                 syncToCloud();
                 window.dispatchEvent(new CustomEvent('lifeos:reload'));
@@ -4844,6 +5237,8 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             useEffect(() => {
                 const reloadFinanceSettings = () => {
                     const stored = getFinanceStorage();
+                    refreshTransactionsFromStorage();
+                    setTxKey(k => k + 1);
                     setFixedData({ ...(stored.fixedItemsByMonth || {}) });
                     setRatesData({
                         default: stored.exchangeRate ?? 0.048,
@@ -4870,7 +5265,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 try {
                     const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     Object.assign(stored, updates);
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                    saveLifeOSData(stored);
                 } catch {}
                 syncToCloud();
                 window.dispatchEvent(new CustomEvent('lifeos:reload'));
@@ -7296,17 +7691,28 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 const handler = () => {
                     try {
                         const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
+                        refreshTransactionsFromStorage();
                         setDiary(d.diary || {});
                         setEvents(d.lifeEvents || []);
                         setTodos(flattenTodos(d.allTodos || {}));
+                        setVaultItems(d.vault?.items || []);
+                        setProjects(d.projects || []);
+                        if (d.theme) setThemeId(current => current === d.theme ? current : d.theme);
+                        if (d.widgetConfig) setWidgets(current => jsonEqual(current, d.widgetConfig) ? current : d.widgetConfig);
+                        if (d.charTheme) {
+                            setCharTheme(current => jsonEqual(current, d.charTheme) ? current : d.charTheme);
+                            localStorage.setItem('lifeos_char_theme', JSON.stringify(d.charTheme));
+                        }
                         // 强制 Finance/Smoking/Period widget 重新读取 localStorage
                         window.dispatchEvent(new CustomEvent('lifeos:reload'));
                     } catch {}
                 };
                 window.addEventListener('lifeos:synced', handler);
+                window.addEventListener('lifeos:cloud-applied', handler);
                 window.addEventListener('lifeos:todos-updated', handler);
                 return () => {
                     window.removeEventListener('lifeos:synced', handler);
+                    window.removeEventListener('lifeos:cloud-applied', handler);
                     window.removeEventListener('lifeos:todos-updated', handler);
                 };
             }, []);
@@ -7323,7 +7729,11 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     } catch {}
                 };
                 window.addEventListener('lifeos:synced', handler);
-                return () => window.removeEventListener('lifeos:synced', handler);
+                window.addEventListener('lifeos:reload', handler);
+                return () => {
+                    window.removeEventListener('lifeos:synced', handler);
+                    window.removeEventListener('lifeos:reload', handler);
+                };
             }, []);
 
             const [widgets, setWidgets] = useState(() => {
@@ -7336,12 +7746,16 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
             // 角色主题
             const [charTheme, setCharTheme] = React.useState(() => {
-                try { return JSON.parse(localStorage.getItem('lifeos_char_theme') || 'null') || { url: '', opacity: 0.18, particles: true, particleType: 'sakura', border: true }; }
+                try { return getFinanceStorage().charTheme || JSON.parse(localStorage.getItem('lifeos_char_theme') || 'null') || { url: '', opacity: 0.18, particles: true, particleType: 'sakura', border: true }; }
                 catch { return { url: '', opacity: 0.18, particles: true, particleType: 'sakura', border: true }; }
             });
             const saveCharTheme = (next) => {
                 setCharTheme(next);
                 localStorage.setItem('lifeos_char_theme', JSON.stringify(next));
+                const d = getFinanceStorage();
+                d.charTheme = next;
+                saveLifeOSData(d);
+                syncToCloud();
             };
 
             // 主题
@@ -7350,6 +7764,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 catch { return 'cream'; }
             });
             const themeInitializedRef = useRef(false);
+            const widgetsInitializedRef = useRef(false);
             const [showThemePicker, setShowThemePicker] = useState(false);
             const [showWidgetLib, setShowWidgetLib] = useState(false);
 
@@ -7419,7 +7834,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 try {
                     const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                     addTransactionToStorage(stored, tx, quickTxForm.animeKind);
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(stored));
+                    saveLifeOSData(stored);
                 } catch {}
                 syncToCloud();
                 MOCK_TRANSACTIONS.push(tx);
@@ -7459,20 +7874,32 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 document.documentElement.style.setProperty('--finance-bg', theme.financeBg);
                 document.documentElement.style.setProperty('--finance-border', theme.financeBorder);
                 try {
-                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    d.theme = themeId;
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
-                    if (themeInitializedRef.current) syncToCloud();
-                    themeInitializedRef.current = true;
+                    if (!themeInitializedRef.current) {
+                        themeInitializedRef.current = true;
+                        return;
+                    }
+                    const d = getFinanceStorage();
+                    if (d.theme !== themeId) {
+                        d.theme = themeId;
+                        saveLifeOSData(d);
+                        syncToCloud();
+                    }
                 } catch {}
             }, [themeId]);
 
             // widgets 持久化
             useEffect(() => {
                 try {
-                    const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    d.widgetConfig = widgets;
-                    localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                    if (!widgetsInitializedRef.current) {
+                        widgetsInitializedRef.current = true;
+                        return;
+                    }
+                    const d = getFinanceStorage();
+                    if (!jsonEqual(d.widgetConfig, widgets)) {
+                        d.widgetConfig = widgets;
+                        saveLifeOSData(d);
+                        syncToCloud();
+                    }
                 } catch {}
             }, [widgets]);
 
@@ -7489,14 +7916,18 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
             useEffect(() => {
                 _supabase.auth.getSession().then(({ data: { session } }) => {
                     const u = session?.user ?? null;
+                    const switched = activateLifeOSUser(u?.id);
                     setUser(u);
                     CURRENT_USER_ID = u?.id ?? null;
+                    if (switched) window.dispatchEvent(new CustomEvent('lifeos:synced'));
                     setAuthChecked(true);
                 });
                 const { data: { subscription } } = _supabase.auth.onAuthStateChange((_event, session) => {
                     const u = session?.user ?? null;
+                    const switched = activateLifeOSUser(u?.id);
                     setUser(u);
                     CURRENT_USER_ID = u?.id ?? null;
+                    if (switched) window.dispatchEvent(new CustomEvent('lifeos:synced'));
                 });
                 return () => subscription.unsubscribe();
             }, []);
@@ -7528,11 +7959,23 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 const onVisibility = () => {
                     if (document.visibilityState === 'visible') refreshFromCloud();
                 };
+                const channel = _supabase
+                    .channel(`lifeos-data:${user.id}`)
+                    .on('postgres_changes', {
+                        event: '*',
+                        schema: 'public',
+                        table: 'lifeos_data',
+                        filter: `id=eq.${user.id}`,
+                    }, refreshFromCloud)
+                    .subscribe();
+                const pollTimer = setInterval(refreshFromCloud, 45000);
                 window.addEventListener('focus', refreshFromCloud);
                 document.addEventListener('visibilitychange', onVisibility);
                 return () => {
+                    clearInterval(pollTimer);
                     window.removeEventListener('focus', refreshFromCloud);
                     document.removeEventListener('visibilitychange', onVisibility);
+                    _supabase.removeChannel(channel);
                 };
             }, [user]);
 
@@ -7592,7 +8035,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                             wishlist, exchangeRate, monthlyRates,
                             migratedAt: new Date().toISOString(),
                         };
-                        localStorage.setItem('visualLifeOS_data', JSON.stringify(merged));
+                        saveLifeOSData(merged);
                         refreshTransactionsFromStorage();
                         window.dispatchEvent(new CustomEvent('lifeos:reload'));
 
@@ -7896,19 +8339,19 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                                 onSaveProject={(p) => {
                                     const next = projects.some(x => x.id === p.id) ? projects.map(x => x.id === p.id ? p : x) : [...projects, p];
                                     setProjects(next);
-                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.projects = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.projects = next; saveLifeOSData(d); } catch {}
                                     syncToCloud();
                                 }}
                                 onDeleteProject={(id) => {
                                     const next = projects.filter(x => x.id !== id);
                                     setProjects(next);
-                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.projects = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.projects = next; saveLifeOSData(d); } catch {}
                                     syncToCloud();
                                 }}
                                 onSaveDiary={(date, text) => {
                                     const next = { ...diary, [date]: text };
                                     setDiary(next);
-                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.diary = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.diary = next; saveLifeOSData(d); } catch {}
                                     syncToCloud();
                                 }}
                                 onOpenReport={(year, month) => {
@@ -7930,13 +8373,13 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                                 onUpdateEvent={(updated) => {
                                     const next = events.map(e => e.id === updated.id ? updated : e);
                                     setEvents(next);
-                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.lifeEvents = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.lifeEvents = next; saveLifeOSData(d); } catch {}
                                     syncToCloud();
                                 }}
                                 onDeleteEvent={(id) => {
                                     const next = events.filter(e => e.id !== id);
                                     setEvents(next);
-                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.lifeEvents = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                                    try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.lifeEvents = next; saveLifeOSData(d); } catch {}
                                     syncToCloud();
                                 }}
                             />}
@@ -7964,13 +8407,13 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                                     onSave={(item) => {
                                         const next = events.map(e => e.id === item.id ? item : e);
                                         setEvents(next);
-                                        try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.lifeEvents = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                                        try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.lifeEvents = next; saveLifeOSData(d); } catch {}
                                         syncToCloud();
                                     }}
                                     onDelete={(id) => {
                                         const next = events.filter(e => e.id !== id);
                                         setEvents(next);
-                                        try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.lifeEvents = next; localStorage.setItem('visualLifeOS_data', JSON.stringify(d)); } catch {}
+                                        try { const d = JSON.parse(localStorage.getItem('visualLifeOS_data')||'{}'); d.lifeEvents = next; saveLifeOSData(d); } catch {}
                                         syncToCloud();
                                     }}
                                     onAdd={() => setShowAddCenter(true)}
@@ -8059,7 +8502,7 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
                         try {
                             const d = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
                             d.lifeEvents = next;
-                            localStorage.setItem('visualLifeOS_data', JSON.stringify(d));
+                            saveLifeOSData(d);
                         } catch {}
                         syncToCloud();
                     }} />
@@ -8306,8 +8749,16 @@ Todo完成了${doneTodos}件${undoneTodos > 0 ? `，还有${undoneTodos}件没�
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/sw.js')
-                    .then(r => console.log('SW registered:', r.scope))
+                    .then(r => {
+                        console.log('SW registered:', r.scope);
+                        r.update();
+                    })
                     .catch(e => console.log('SW failed:', e));
+            });
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (sessionStorage.getItem('lifeos_sw_reloaded')) return;
+                sessionStorage.setItem('lifeos_sw_reloaded', '1');
+                window.location.reload();
             });
         }
     </script>

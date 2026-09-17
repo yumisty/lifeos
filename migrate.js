@@ -41,6 +41,7 @@
   };
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+  localStorage.setItem('visualLifeOS_sync_pending', String(Date.now()));
 
   console.log('✅ 迁移完成！');
   console.log('📊 交易记录：' + transactions.length + ' 条');

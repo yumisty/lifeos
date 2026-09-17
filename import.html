@@ -432,6 +432,8 @@
 
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+            // 主应用下次打开时会继续执行完整字段合并与上传。
+            localStorage.setItem('visualLifeOS_sync_pending', String(Date.now()));
         } catch (err) {
             showResult('error', '❌ 写入本地失败', ['localStorage 空间不足：' + err.message]);
             return;
