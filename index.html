@@ -564,17 +564,24 @@
             next.splice(insertAfter === -1 ? next.length : insertAfter + 1, 0, BJD_FINANCE_CATEGORY);
             return next;
         };
-        const isBjdFinanceTransaction = (tx) =>
-            String(tx?.category || '').toLowerCase() === BJD_FINANCE_CATEGORY.toLowerCase()
-            || /\bbjd\b/i.test(String(tx?.name || ''));
+        const isBjdFinanceTransaction = (tx) => {
+            if (String(tx?.category || '').toLowerCase() === BJD_FINANCE_CATEGORY.toLowerCase()) return true;
+            const name = String(tx?.name || '').trim();
+            // “娃娃菜 / 抓娃娃”等不是娃体消费，不能因为含“娃娃”就误归类。
+            if (/娃娃菜|娃娃机|抓娃娃|娃娃领|娃娃鱼/.test(name)) return false;
+            return /\bbjd\b|\bob11\b|\bmjd\b|sd娃|dd娃|球形关节|娃衣|娃服|娃鞋|娃头|娃体|娃包|娃柜|娃架|娃用|娃假发|娃眼|头雕|素体|妆面|树脂眼|娃娃(?!菜|机|领|鱼)|(?:三|四|六)分娃|1\s*\/\s*[346]\s*娃/i.test(name);
+        };
+        const normalizeBjdFinanceTransaction = (tx) =>
+            isBjdFinanceTransaction(tx) ? { ...tx, category: BJD_FINANCE_CATEGORY } : tx;
         const migrateBjdFinanceCategory = () => {
             const stored = getFinanceStorage();
             const categories = getFinanceCategories(stored);
             let changedCount = 0;
             const transactions = (stored.transactions || []).map(tx => {
-                if (!isBjdFinanceTransaction(tx) || tx.category === BJD_FINANCE_CATEGORY) return tx;
+                const normalized = normalizeBjdFinanceTransaction(tx);
+                if (normalized.category === tx.category) return tx;
                 changedCount += 1;
-                return { ...tx, category: BJD_FINANCE_CATEGORY };
+                return normalized;
             });
             const categoriesChanged = !jsonEqual(stored.categories || [], categories);
             if (!categoriesChanged && changedCount === 0) return 0;
@@ -2590,8 +2597,10 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                 : orders.map((order, index) => index === linkedIndex ? linkedOrder : order);
         };
         const addTransactionToStorage = (stored, tx, itemKind = 'goods') => {
-            stored.transactions = [...(stored.transactions || []), tx];
-            syncTransactionToAnimeOrder(stored, tx, itemKind);
+            const normalizedTx = normalizeBjdFinanceTransaction(tx);
+            stored.transactions = [...(stored.transactions || []), normalizedTx];
+            syncTransactionToAnimeOrder(stored, normalizedTx, itemKind);
+            return normalizedTx;
         };
         const removeTransactionFromStorage = (stored, transactionId) => {
             stored.transactions = (stored.transactions || []).filter(tx => tx.id !== transactionId);
@@ -4966,13 +4975,14 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     currency: addForm.currency,
                     category: addForm.category,
                 };
+                let savedTx = tx;
                 try {
                     const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    addTransactionToStorage(stored, tx, addForm.animeKind);
+                    savedTx = addTransactionToStorage(stored, tx, addForm.animeKind);
                     saveLifeOSData(stored);
                 } catch {}
                 syncToCloud();
-                MOCK_TRANSACTIONS.push(tx);
+                MOCK_TRANSACTIONS.push(savedTx);
                 window.dispatchEvent(new CustomEvent('lifeos:reload'));
                 setAddForm({ amount: '', currency: 'JPY', category: '', name: '', date: liveToday, animeKind: 'goods' });
                 setShowAdd(false);
@@ -5239,7 +5249,7 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
 
             const saveTxEdit = () => {
                 if (!editingTx) return;
-                const updated = { ...editingTx, amount: parseFloat(editForm.amount) || 0, currency: editForm.currency, category: editForm.category, name: editForm.name.trim() || editForm.category || '记账', date: editForm.date };
+                const updated = normalizeBjdFinanceTransaction({ ...editingTx, amount: parseFloat(editForm.amount) || 0, currency: editForm.currency, category: editForm.category, name: editForm.name.trim() || editForm.category || '记账', date: editForm.date });
                 const idx = MOCK_TRANSACTIONS.findIndex(t => t.id === editingTx.id);
                 if (idx !== -1) MOCK_TRANSACTIONS[idx] = updated;
                 try {
@@ -7860,13 +7870,14 @@ ${yearSmoke>0?`我爸这一年总共抽了${yearSmoke}根烟。`:''}
                     currency: quickTxForm.currency,
                     category: quickTxForm.category,
                 };
+                let savedTx = tx;
                 try {
                     const stored = JSON.parse(localStorage.getItem('visualLifeOS_data') || '{}');
-                    addTransactionToStorage(stored, tx, quickTxForm.animeKind);
+                    savedTx = addTransactionToStorage(stored, tx, quickTxForm.animeKind);
                     saveLifeOSData(stored);
                 } catch {}
                 syncToCloud();
-                MOCK_TRANSACTIONS.push(tx);
+                MOCK_TRANSACTIONS.push(savedTx);
                 window.dispatchEvent(new CustomEvent('lifeos:reload'));
                 setQuickTxForm({ amount: '', currency: 'JPY', category: '', name: '', date: liveToday, animeKind: 'goods' });
                 setShowQuickTx(false);
